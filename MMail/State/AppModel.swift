@@ -48,6 +48,7 @@ final class AppModel: ObservableObject {
     private let kSidebar = "mmail.sidebar"
     private let kReadingPane = "mmail.readingPane"
     private let kJournalRecent = "mmail.journal.recent"
+    private let kTemplates = "mmail.templates"
 
     // Core state
     @Published var onboarding: Bool
@@ -81,6 +82,9 @@ final class AppModel: ObservableObject {
     @Published var journal: String
     @Published var journalRecent: [JournalEntry]
 
+    // Reply templates
+    @Published var templates: [ReplyTemplate]
+
     private static let seedJournalRecent: [JournalEntry] = [
         JournalEntry(id: "jr-yesterday", date: "Yesterday", text: "Crit went well. Sarah's instinct on the empty state was right — copy carries it. Need to write down the lighter ring decision before I forget."),
         JournalEntry(id: "jr-mar-18", date: "Mon · Mar 18", text: "Started the week underwater but the Lumen sign-off felt great. Need to make space tomorrow for the Q3 roadmap doc Theo shared.")
@@ -107,6 +111,12 @@ final class AppModel: ObservableObject {
             journalRecent = decoded
         } else {
             journalRecent = AppModel.seedJournalRecent
+        }
+        if let data = d.data(forKey: kTemplates),
+           let decoded = try? JSONDecoder().decode([ReplyTemplate].self, from: data), !decoded.isEmpty {
+            templates = decoded
+        } else {
+            templates = SampleData.replyTemplates
         }
     }
 
@@ -200,6 +210,27 @@ final class AppModel: ObservableObject {
         journalRecent.removeAll { $0.id == id }
         persistJournalRecent()
     }
+    func persistTemplates() {
+        if let data = try? JSONEncoder().encode(templates) {
+            UserDefaults.standard.set(data, forKey: kTemplates)
+        }
+    }
+    @discardableResult
+    func addTemplate(name: String, body: String) -> Bool {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty, !body.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        let used = Set(templates.map { $0.shortcut })
+        var shortcut = ""
+        for i in 1...9 where !used.contains(String(i)) { shortcut = String(i); break }
+        templates.append(ReplyTemplate(id: "tpl-user-\(Int(Date().timeIntervalSince1970 * 1000))",
+                                       name: n, shortcut: shortcut, body: body, custom: true))
+        persistTemplates()
+        return true
+    }
+    func removeTemplate(_ id: String) {
+        templates.removeAll { $0.id == id }
+        persistTemplates()
+    }
 
     // MARK: - Selection / read
 
@@ -270,11 +301,15 @@ final class AppModel: ObservableObject {
                                titleLabel: titleLabel, fromId: fromId ?? defaultFrom)
     }
 
-    func sendDraft(_ draft: ComposeDraft) {
+    func sendDraft(_ draft: ComposeDraft, scheduleLabel: String? = nil) {
         compose = nil
         let acct = accountsById[draft.fromId]
         let dest = draft.to.isEmpty ? "(unknown)" : draft.to
-        showToast("Sent to \(dest) from \(acct?.email ?? "you")")
+        if let label = scheduleLabel {
+            showToast("Scheduled for \(label) · \(dest)")
+        } else {
+            showToast("Sent to \(dest) from \(acct?.email ?? "you")")
+        }
     }
 
     func reply() {

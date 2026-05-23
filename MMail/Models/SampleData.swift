@@ -77,6 +77,21 @@ enum SampleData {
     static let weather = WeatherInfo(temp: 72, feels: 72, hi: 75, lo: 64,
                                      condition: "Partly sunny", location: "San Francisco, CA")
 
+    static let replyTemplates: [ReplyTemplate] = [
+        ReplyTemplate(id: "tpl-thanks", name: "Thanks", shortcut: "1",
+                      body: "Thanks for sending this over — really appreciate it.\n\nWill take a closer look and get back to you shortly."),
+        ReplyTemplate(id: "tpl-got-it", name: "Got it, will follow up", shortcut: "2",
+                      body: "Got it — thanks for the note.\n\nGive me a day or two to think it through and I'll come back with a proper reply."),
+        ReplyTemplate(id: "tpl-looks-good", name: "Looks great, ship it", shortcut: "3",
+                      body: "This looks great. No notes from my end — happy to ship as-is.\n\nLet me know once it's live."),
+        ReplyTemplate(id: "tpl-need-more", name: "Need more info", shortcut: "4",
+                      body: "A few quick questions before I can answer properly:\n\n1.\n2.\n3.\n\nOnce I have those I should be able to turn this around quickly."),
+        ReplyTemplate(id: "tpl-cant-make-it", name: "Can't make it", shortcut: "5",
+                      body: "Thanks for the invite — unfortunately I won't be able to make this one.\n\nHappy to catch up over the notes afterward if useful."),
+        ReplyTemplate(id: "tpl-intro", name: "Warm intro", shortcut: "6",
+                      body: "Wanted to put the two of you in touch — I think there's a useful conversation to be had here.\n\nI'll let you take it from here.")
+    ]
+
     static let seedTodos: [Todo] = [
         Todo(id: "td1", text: "Review the launch note before the afternoon sync", done: false, source: "sarah"),
         Todo(id: "td2", text: "Reply to Marcus about reading-pane spacing", done: false, source: "marcus"),

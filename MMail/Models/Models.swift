@@ -87,6 +87,14 @@ struct JournalEntry: Identifiable, Codable {
     var text: String
 }
 
+struct ReplyTemplate: Identifiable, Codable {
+    var id: String
+    var name: String
+    var shortcut: String
+    var body: String
+    var custom: Bool = false
+}
+
 struct Folder: Identifiable {
     let id: String
     let name: String

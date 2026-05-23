@@ -32,6 +32,7 @@ struct HelpSheetView: View {
             Shortcut(label: "Reply all", keys: ["A"]),
             Shortcut(label: "Forward", keys: ["F"]),
             Shortcut(label: "Send", keys: ["⌘", "↵"]),
+            Shortcut(label: "Reply templates", keys: ["⌘", "/"]),
             Shortcut(label: "Discard draft", keys: ["⌘", "⌫"])
         ]),
         Section(title: "App", items: [
