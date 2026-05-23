@@ -44,7 +44,7 @@ private struct ReaderContent: View {
     @State private var copied = false
 
     private var sender: Sender? { email.resolvedSender }
-    private var thread: [ThreadItem] { email.thread ?? [] }
+    private var thread: [ThreadItem] { email.thread ?? model.relatedThread(for: email) }
     private let stackMax = 4
     private var stackVisible: [ThreadItem] { expanded ? thread : Array(thread.prefix(stackMax)) }
     private var hiddenInStack: Int { max(0, thread.count - stackMax) }

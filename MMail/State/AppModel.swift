@@ -124,6 +124,8 @@ final class AppModel: ObservableObject {
     private var pollTimer: Timer?
     private var imapSessions: [String: IMAPSession] = [:]
     private var didBootstrap = false
+    private var pageLimits: [String: Int] = [:]
+    @Published var weather: WeatherInfo?
 
     private static let seedJournalRecent: [JournalEntry] = [
         JournalEntry(id: "jr-yesterday", date: "Yesterday", text: "Crit went well. Sarah's instinct on the empty state was right — copy carries it. Need to write down the lighter ring decision before I forget."),
@@ -709,6 +711,54 @@ final class AppModel: ObservableObject {
         loadForCurrentScope(folder, silent: silent)
     }
 
+    // MARK: - Pagination
+
+    func pageLimit(_ account: String, _ folderId: String) -> Int { pageLimits["\(account)#\(folderId)"] ?? 50 }
+
+    var canLoadMore: Bool {
+        guard isServerFolder(folder), serverSearchResults == nil,
+              !(searchActive && !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty) else { return false }
+        let scope = currentAccount == "all" ? realConfigs.map { $0.id } : [currentAccount]
+        for a in scope where isRealAccount(a) {
+            if emails.filter({ $0.account == a && $0.folder == folder }).count >= pageLimit(a, folder) { return true }
+        }
+        return false
+    }
+
+    func loadMore() {
+        guard isServerFolder(folder) else { return }
+        let ids = currentAccount == "all" ? realConfigs.map { $0.id } : (isRealAccount(currentAccount) ? [currentAccount] : [])
+        for a in ids { pageLimits["\(a)#\(folder)"] = pageLimit(a, folder) + 50 }
+        loadForCurrentScope(folder, silent: true)
+    }
+
+    // MARK: - Threading (client-side, from loaded mail)
+
+    static func normalizeSubject(_ s: String) -> String {
+        var t = s.lowercased().trimmingCharacters(in: .whitespaces)
+        while true {
+            if t.hasPrefix("re:") { t = String(t.dropFirst(3)).trimmingCharacters(in: .whitespaces) }
+            else if t.hasPrefix("fwd:") { t = String(t.dropFirst(4)).trimmingCharacters(in: .whitespaces) }
+            else if t.hasPrefix("fw:") { t = String(t.dropFirst(3)).trimmingCharacters(in: .whitespaces) }
+            else { break }
+        }
+        return t
+    }
+
+    func relatedThread(for email: Email) -> [ThreadItem] {
+        guard isRealAccount(email.account) else { return [] }
+        let norm = AppModel.normalizeSubject(email.subject)
+        guard !norm.isEmpty else { return [] }
+        let related = emails.filter {
+            $0.account == email.account && $0.id != email.id &&
+            AppModel.normalizeSubject($0.subject) == norm
+        }
+        return related.prefix(8).map {
+            ThreadItem(from: $0.resolvedSender.name, time: $0.time,
+                       preview: $0.preview.isEmpty ? $0.subject : $0.preview)
+        }
+    }
+
     /// Long-lived IMAP connection per account (reused across operations).
     private func session(for accountId: String) -> IMAPSession? {
         if let s = imapSessions[accountId] { return s }
@@ -724,6 +774,7 @@ final class AppModel: ObservableObject {
         didBootstrap = true
         if notificationsEnabled { Notifier.requestAuthorization() }
         processScheduledSends()
+        Task { let w = await WeatherService.fetch(); await MainActor.run { if let w { self.weather = w } } }
         for cfg in realConfigs {
             if let cached = MailCache.load(account: cfg.id, folder: "inbox"), !cached.isEmpty {
                 emails.removeAll { $0.account == cfg.id && $0.folder == "inbox" }
@@ -748,6 +799,7 @@ final class AppModel: ObservableObject {
         if !silent && !hasContent { loadingAccounts.insert(accountId) }
         accountErrors[accountId] = nil
         let needDiscover = realMailboxes[accountId] == nil
+        let limit = pageLimit(accountId, folderId)
         Task {
             do {
                 if needDiscover {
@@ -769,13 +821,13 @@ final class AppModel: ObservableObject {
 
                 let msgs: [IMAPMessage]
                 switch folderId {
-                case "inbox": msgs = try await session.fetchRecent(mailbox: "INBOX", limit: 50)
-                case "starred": msgs = try await session.searchFlagged(mailbox: "INBOX", limit: 50)
+                case "inbox": msgs = try await session.fetchRecent(mailbox: "INBOX", limit: limit)
+                case "starred": msgs = try await session.searchFlagged(mailbox: "INBOX", limit: limit)
                 case "done":
-                    if let arch = map["archive"] { msgs = try await session.fetchRecent(mailbox: arch, limit: 50) }
+                    if let arch = map["archive"] { msgs = try await session.fetchRecent(mailbox: arch, limit: limit) }
                     else { msgs = [] }
                 default:
-                    if let name = map[folderId] { msgs = try await session.fetchRecent(mailbox: name, limit: 50) }
+                    if let name = map[folderId] { msgs = try await session.fetchRecent(mailbox: name, limit: limit) }
                     else { msgs = [] }
                 }
                 let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }

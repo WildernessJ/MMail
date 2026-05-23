@@ -132,6 +132,14 @@ struct EmailListView: View {
                                         .id(e.id)
                                 }
                             }
+                            if model.canLoadMore {
+                                Button { model.loadMore() } label: {
+                                    Text("Load more")
+                                        .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.brandBlue)
+                                        .frame(maxWidth: .infinity).padding(.vertical, 14)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                     .onChange(of: model.selectedId) { _, id in

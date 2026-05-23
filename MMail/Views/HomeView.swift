@@ -113,7 +113,7 @@ struct HomeView: View {
     }
 
     private var weatherCard: some View {
-        let w = SampleData.weather
+        let w = model.weather ?? SampleData.weather
         return card(square: true) {
             cardHead(icon: "sun", title: "Weather", trailing: w.location.split(separator: ",").first.map(String.init))
             WeatherGlyph(size: 56)
