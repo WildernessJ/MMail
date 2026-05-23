@@ -1075,7 +1075,6 @@ final class AppModel: ObservableObject {
         do {
             try fm.copyItem(at: source, to: dest)
             showToast("Saved \(dest.lastPathComponent) to Downloads")
-            NSWorkspace.shared.activateFileViewerSelecting([dest])
         } catch {
             showToast("Couldn't save: \(error.localizedDescription)")
         }
