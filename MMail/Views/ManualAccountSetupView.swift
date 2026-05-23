@@ -197,7 +197,7 @@ struct ManualAccountSetupView: View {
             do {
                 let imap = IMAPService(config: cfg, password: imapPw)
                 try await imap.connectAndLogin()
-                _ = try await imap.selectInbox()
+                _ = try await imap.select("INBOX")
                 await imap.disconnect()
                 await MainActor.run {
                     connecting = false

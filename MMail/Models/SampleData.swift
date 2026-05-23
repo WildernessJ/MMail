@@ -66,6 +66,7 @@ enum SampleData {
         Folder(id: "starred", name: "Starred", shortcut: "g s"),
         Folder(id: "snoozed", name: "Snoozed", shortcut: "g z"),
         Folder(id: "done", name: "Done", shortcut: "g e"),
+        Folder(id: "archive", name: "Archive", shortcut: nil),
         Folder(id: "sent", name: "Sent", shortcut: "g t"),
         Folder(id: "drafts", name: "Drafts", shortcut: "g d"),
         Folder(id: "spam", name: "Spam", shortcut: nil),

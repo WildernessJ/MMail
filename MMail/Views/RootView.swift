@@ -21,7 +21,7 @@ struct RootView: View {
             }
         }
         .toolbar { toolbarContent }
-        .onAppear { model.installKeyMonitor() }
+        .onAppear { model.installKeyMonitor(); model.startPolling() }
         .onChange(of: model.searchFocusRequested) { _, req in
             if req {
                 searchFocused = true
@@ -128,6 +128,10 @@ struct RootView: View {
                 .font(.system(size: 12.5))
                 .focused($searchFocused)
                 .foregroundStyle(p.fg1)
+                .onSubmit { model.runServerSearch() }
+                .onChange(of: model.searchQuery) { _, q in
+                    if q.isEmpty { model.serverSearchResults = nil }
+                }
             if !model.searchActive {
                 Kbd("/")
             }

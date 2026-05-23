@@ -91,6 +91,10 @@ final class AppModel: ObservableObject {
     @Published var realConfigs: [MailAccountConfig] = []
     @Published var loadingAccounts: Set<String> = []
     @Published var accountErrors: [String: String] = [:]
+    // accountId -> canonical folder id ("sent"/"drafts"/"trash"/"spam"/"archive") -> server mailbox name
+    @Published var realMailboxes: [String: [String: String]] = [:]
+    @Published var serverSearchResults: [Email]?
+    private var pollTimer: Timer?
 
     private static let seedJournalRecent: [JournalEntry] = [
         JournalEntry(id: "jr-yesterday", date: "Yesterday", text: "Crit went well. Sarah's instinct on the empty state was right — copy carries it. Need to write down the lighter ring decision before I forget."),
@@ -150,6 +154,7 @@ final class AppModel: ObservableObject {
 
     var visibleEmails: [Email] {
         if searchIsActive {
+            if let results = serverSearchResults { return results }
             let ql = searchQuery.lowercased()
             return accountFiltered.filter { e in
                 e.subject.lowercased().contains(ql) ||
@@ -291,12 +296,27 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func archive(_ id: String? = nil) { moveTo(id ?? selectedId, dest: "archive", verb: "Archived") }
-    func markDone(_ id: String? = nil) { moveTo(id ?? selectedId, dest: "done", verb: "Marked done") }
+    func archive(_ id: String? = nil) {
+        let target = id ?? selectedId
+        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account),
+           mailboxName(e.account, "archive") != nil {
+            realMove(e, to: "archive")
+        }
+        moveTo(target, dest: "archive", verb: "Archived")
+    }
+    func markDone(_ id: String? = nil) {
+        let target = id ?? selectedId
+        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account),
+           mailboxName(e.account, "archive") != nil {
+            realMove(e, to: "archive")
+        }
+        moveTo(target, dest: "done", verb: "Marked done")
+    }
     func delete(_ id: String? = nil) {
         let target = id ?? selectedId
-        if let target, let e = emails.first(where: { $0.id == target }) {
-            applyRealFlag(e, .deleted, add: true)
+        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account) {
+            if mailboxName(e.account, "trash") != nil { realMove(e, to: "trash") }
+            else { applyRealFlag(e, .deleted, add: true) }
         }
         moveTo(target, dest: "trash", verb: "Deleted")
     }
@@ -340,22 +360,31 @@ final class AppModel: ObservableObject {
         showToast("Sent to \(dest) from \(acct?.email ?? "you")")
     }
 
+    private func quotedBody(_ e: Email) -> String {
+        let s = e.resolvedSender
+        let header = "On \(e.time), \(s.name) wrote:"
+        let quoted = e.body.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { "> \($0)" }.joined(separator: "\n")
+        return "\n\n\(header)\n\(quoted)"
+    }
     func reply() {
         guard let e = selectedEmail else { return }
-        let s = SampleData.senders[e.from]
-        startCompose(to: s?.email ?? "", subject: "Re: \(e.subject)",
-                     titleLabel: "Reply · \(s?.name ?? "message")", fromId: e.account)
+        let s = e.resolvedSender
+        startCompose(to: s.email, subject: e.subject.hasPrefix("Re:") ? e.subject : "Re: \(e.subject)",
+                     body: quotedBody(e),
+                     titleLabel: "Reply · \(s.name)", fromId: e.account)
     }
     func replyAll() {
         guard let e = selectedEmail else { return }
-        let s = SampleData.senders[e.from]
-        let recipients = ([s?.email] + (e.to ?? [])).compactMap { $0 }.joined(separator: ", ")
-        startCompose(to: recipients, subject: "Re: \(e.subject)",
-                     titleLabel: "Reply all · \(s?.name ?? "message")", fromId: e.account)
+        let s = e.resolvedSender
+        let recipients = ([s.email] + (e.to ?? [])).filter { !$0.isEmpty }.joined(separator: ", ")
+        startCompose(to: recipients, subject: e.subject.hasPrefix("Re:") ? e.subject : "Re: \(e.subject)",
+                     body: quotedBody(e),
+                     titleLabel: "Reply all · \(s.name)", fromId: e.account)
     }
     func forward() {
         guard let e = selectedEmail else { return }
-        startCompose(subject: "Fwd: \(e.subject)",
+        startCompose(subject: e.subject.hasPrefix("Fwd:") ? e.subject : "Fwd: \(e.subject)",
                      body: "\n\n--- Forwarded message ---\n\(e.body)",
                      titleLabel: "Forward", fromId: e.account)
     }
@@ -406,6 +435,8 @@ final class AppModel: ObservableObject {
         folder = f
         searchActive = false
         searchQuery = ""
+        serverSearchResults = nil
+        if isRealAccount(currentAccount) { loadFolder(currentAccount, f) }
     }
 
     // MARK: - Commands (palette)
@@ -485,59 +516,129 @@ final class AppModel: ObservableObject {
         if onboarding { persistOnboarded(); onboarding = false }
         currentAccount = config.id
         folder = "inbox"
-        loadInbox(config.id)
+        loadFolder(config.id, "inbox")
     }
 
-    /// Called whenever the selected account changes; refreshes real inboxes.
+    /// Called whenever the selected account changes; refreshes the current folder.
     func didSelectAccount(_ id: String) {
         guard id != "all", isRealAccount(id), !loadingAccounts.contains(id) else { return }
-        loadInbox(id)
+        loadFolder(id, folder == "home" ? "inbox" : folder)
     }
 
-    func loadInbox(_ accountId: String) {
-        guard let cfg = config(for: accountId), let pw = cfg.imapPassword else {
-            accountErrors[accountId] = "Missing saved password."
+    /// Resolve a canonical folder id to a server mailbox name.
+    func mailboxName(_ accountId: String, _ folderId: String) -> String? {
+        if folderId == "inbox" { return "INBOX" }
+        return realMailboxes[accountId]?[folderId]
+    }
+
+    /// Folders that map to a real server mailbox / search and can be loaded.
+    private func isServerFolder(_ folderId: String) -> Bool {
+        !["home", "snoozed"].contains(folderId)
+    }
+
+    func refreshCurrentRealFolder(silent: Bool = false) {
+        guard isRealAccount(currentAccount), isServerFolder(folder) else { return }
+        loadFolder(currentAccount, folder, silent: silent)
+    }
+
+    func loadFolder(_ accountId: String, _ folderId: String, silent: Bool = false) {
+        guard isRealAccount(accountId), isServerFolder(folderId),
+              let cfg = config(for: accountId), let pw = cfg.imapPassword else {
+            if config(for: accountId)?.imapPassword == nil { accountErrors[accountId] = "Missing saved password." }
             return
         }
-        loadingAccounts.insert(accountId)
-        accountErrors[accountId] = nil
+        if !silent { loadingAccounts.insert(accountId); accountErrors[accountId] = nil }
+        let needDiscover = realMailboxes[accountId] == nil
         Task {
             do {
                 let imap = IMAPService(config: cfg, password: pw)
                 try await imap.connectAndLogin()
-                let count = try await imap.selectInbox()
-                let msgs = try await imap.fetchRecent(limit: 50, total: count)
+
+                if needDiscover {
+                    let boxes = try await imap.listMailboxes()
+                    var m: [String: String] = [:]
+                    for b in boxes where b.selectable {
+                        switch b.kind {
+                        case .sent: m["sent"] = b.name
+                        case .drafts: m["drafts"] = b.name
+                        case .trash: m["trash"] = b.name
+                        case .junk: m["spam"] = b.name
+                        case .archive: m["archive"] = b.name
+                        default: break
+                        }
+                    }
+                    await MainActor.run { self.realMailboxes[accountId] = m }
+                }
+                let map = await MainActor.run { self.realMailboxes[accountId] ?? [:] }
+
+                let msgs: [IMAPMessage]
+                switch folderId {
+                case "inbox": msgs = try await imap.fetchRecent(mailbox: "INBOX", limit: 50)
+                case "starred": msgs = try await imap.searchFlagged(mailbox: "INBOX", limit: 50)
+                case "done":
+                    if let arch = map["archive"] { msgs = try await imap.fetchRecent(mailbox: arch, limit: 50) }
+                    else { msgs = [] }
+                default:
+                    if let name = map[folderId] { msgs = try await imap.fetchRecent(mailbox: name, limit: 50) }
+                    else { msgs = [] }
+                }
                 await imap.disconnect()
-                let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId) }
+                let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
                 await MainActor.run {
-                    self.mergeRealInbox(mapped, accountId: accountId)
+                    self.mergeRealFolder(mapped, accountId: accountId, folderId: folderId)
                     self.loadingAccounts.remove(accountId)
                 }
             } catch {
                 await MainActor.run {
-                    self.accountErrors[accountId] = error.localizedDescription
+                    if !silent { self.accountErrors[accountId] = error.localizedDescription }
                     self.loadingAccounts.remove(accountId)
                 }
             }
         }
     }
 
-    private func mergeRealInbox(_ newEmails: [Email], accountId: String) {
-        emails.removeAll { $0.account == accountId }
-        emails.append(contentsOf: newEmails)
-        if currentAccount == accountId && folder == "inbox" {
-            selectedId = filteredEmails.first?.id
+    func runServerSearch() {
+        guard searchActive, isRealAccount(currentAccount),
+              let cfg = config(for: currentAccount), let pw = cfg.imapPassword else { return }
+        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { serverSearchResults = nil; return }
+        let acct = currentAccount
+        let box = mailboxName(acct, folder) ?? "INBOX"
+        Task {
+            do {
+                let imap = IMAPService(config: cfg, password: pw)
+                try await imap.connectAndLogin()
+                let msgs = try await imap.searchText(mailbox: box, query: q, limit: 50)
+                await imap.disconnect()
+                let mapped = msgs.map { AppModel.makeEmail($0, accountId: acct, folder: self.folder) }
+                await MainActor.run {
+                    self.serverSearchResults = mapped
+                    self.selectedId = mapped.first?.id
+                }
+            } catch {
+                await MainActor.run { self.serverSearchResults = [] }
+            }
         }
     }
 
-    static func makeEmail(_ m: IMAPMessage, accountId: String) -> Email {
+    private func mergeRealFolder(_ newEmails: [Email], accountId: String, folderId: String) {
+        emails.removeAll { $0.account == accountId && $0.folder == folderId }
+        emails.append(contentsOf: newEmails)
+        if currentAccount == accountId && folder == folderId && serverSearchResults == nil {
+            if !filteredEmails.contains(where: { $0.id == selectedId }) {
+                selectedId = filteredEmails.first?.id
+            }
+        }
+    }
+
+    static func makeEmail(_ m: IMAPMessage, accountId: String, folder: String) -> Email {
         let (day, time) = dayAndTime(m.date)
         let fromKey = m.fromEmail.isEmpty ? "imap-unknown" : m.fromEmail
-        return Email(id: "\(accountId)#\(m.uid)", account: accountId, from: fromKey, to: nil,
+        return Email(id: "\(accountId)#\(folder)#\(m.uid)", account: accountId, from: fromKey, to: nil,
                      subject: m.subject.isEmpty ? "(no subject)" : m.subject,
                      preview: "", body: "", time: time, day: day,
                      unread: !m.seen, starred: m.flagged, hasAttachment: false,
-                     labels: [], folder: "inbox", thread: nil, snoozeUntil: nil,
+                     labels: [], folder: folder, thread: nil, snoozeUntil: nil,
                      fromName: m.fromName, fromEmail: m.fromEmail, uid: m.uid, bodyLoaded: false)
     }
 
@@ -552,24 +653,28 @@ final class AppModel: ObservableObject {
         f.dateFormat = "MMM d"; return ("earlier", f.string(from: date))
     }
 
-    /// Fetch the body (and mark \Seen) the first time a real message is opened.
+    /// Fetch the body (and mark seen) the first time a real message is opened.
     func loadBodyIfNeeded() {
         guard let e = selectedEmail, isRealAccount(e.account), !e.bodyLoaded, let uid = e.uid,
               let cfg = config(for: e.account), let pw = cfg.imapPassword else { return }
+        let box = mailboxName(e.account, e.folder) ?? "INBOX"
         let id = e.id
         Task {
             do {
                 let imap = IMAPService(config: cfg, password: pw)
                 try await imap.connectAndLogin()
-                _ = try await imap.selectInbox()
-                let body = try await imap.fetchBody(uid: uid)
-                try? await imap.store(uid: uid, .seen, add: true)
+                let body = try await imap.fetchBody(mailbox: box, uid: uid)
+                try? await imap.store(mailbox: box, uid: uid, .seen, add: true)
                 await imap.disconnect()
                 await MainActor.run {
                     guard let i = self.emails.firstIndex(where: { $0.id == id }) else { return }
                     self.emails[i].body = body
                     self.emails[i].preview = String(body.replacingOccurrences(of: "\n", with: " ").prefix(140))
                     self.emails[i].bodyLoaded = true
+                    if let j = self.serverSearchResults?.firstIndex(where: { $0.id == id }) {
+                        self.serverSearchResults?[j].body = body
+                        self.serverSearchResults?[j].bodyLoaded = true
+                    }
                 }
             } catch { /* leave placeholder; surfaced via empty body */ }
         }
@@ -578,14 +683,36 @@ final class AppModel: ObservableObject {
     func applyRealFlag(_ email: Email, _ kind: MailFlagKind, add: Bool) {
         guard isRealAccount(email.account), let uid = email.uid,
               let cfg = config(for: email.account), let pw = cfg.imapPassword else { return }
+        let box = mailboxName(email.account, email.folder) ?? "INBOX"
         Task {
             let imap = IMAPService(config: cfg, password: pw)
             do {
                 try await imap.connectAndLogin()
-                _ = try await imap.selectInbox()
-                try await imap.store(uid: uid, kind, add: add)
+                try await imap.store(mailbox: box, uid: uid, kind, add: add)
                 await imap.disconnect()
             } catch { /* best-effort */ }
+        }
+    }
+
+    func realMove(_ email: Email, to folderId: String) {
+        guard isRealAccount(email.account), let uid = email.uid,
+              let cfg = config(for: email.account), let pw = cfg.imapPassword,
+              let from = mailboxName(email.account, email.folder),
+              let to = mailboxName(email.account, folderId) else { return }
+        Task {
+            let imap = IMAPService(config: cfg, password: pw)
+            do {
+                try await imap.connectAndLogin()
+                try await imap.move(uid: uid, from: from, to: to)
+                await imap.disconnect()
+            } catch { /* best-effort */ }
+        }
+    }
+
+    func startPolling() {
+        guard pollTimer == nil else { return }
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.refreshCurrentRealFolder(silent: true)
         }
     }
 

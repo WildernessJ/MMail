@@ -43,8 +43,21 @@ struct EmailListView: View {
         }()
 
         return VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 22, weight: .bold))
-                .foregroundStyle(p.fg1)
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(p.fg1)
+                Spacer()
+                if model.isRealAccount(model.currentAccount) {
+                    Button { model.refreshCurrentRealFolder() } label: {
+                        if model.loadingAccounts.contains(model.currentAccount) {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Icon(name: "refresh", size: 14).foregroundStyle(p.fg3)
+                        }
+                    }
+                    .buttonStyle(.plain).help("Refresh")
+                }
+            }
             Text(sub).font(.system(size: 12.5)).foregroundStyle(p.fg3)
             if model.folder == "inbox" && !isSearch {
                 HStack(spacing: 4) {
@@ -132,7 +145,7 @@ struct EmailListView: View {
             Text("Couldn't connect").font(.system(size: 18, weight: .bold)).foregroundStyle(p.fg2)
             Text(message).font(.system(size: 12.5)).foregroundStyle(p.fg3)
                 .multilineTextAlignment(.center).frame(maxWidth: 320)
-            Button { model.loadInbox(model.currentAccount) } label: {
+            Button { model.refreshCurrentRealFolder() } label: {
                 Text("Retry").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.white)
                     .padding(.horizontal, 14).padding(.vertical, 7)
                     .background(p.brandBlue).clipShape(Capsule())

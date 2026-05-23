@@ -7,7 +7,7 @@ struct SidebarView: View {
 
     private let folderIcons: [String: String] = [
         "home": "home", "inbox": "inbox", "starred": "star", "snoozed": "clock",
-        "done": "done", "sent": "send", "drafts": "draft", "spam": "spam", "trash": "trash"
+        "done": "done", "archive": "archive", "sent": "send", "drafts": "draft", "spam": "spam", "trash": "trash"
     ]
 
     var body: some View {

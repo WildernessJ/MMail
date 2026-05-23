@@ -35,6 +35,14 @@ struct IMAPMessage {
 // NIO-free flag kind so the app layer doesn't import NIOIMAPCore.
 enum MailFlagKind { case seen, flagged, deleted }
 
+enum MailboxKind: String { case inbox, sent, drafts, trash, junk, archive, other }
+
+struct IMAPMailbox {
+    let name: String          // server mailbox path (used for SELECT/MOVE)
+    let kind: MailboxKind
+    let selectable: Bool
+}
+
 // Collects responses per command, matching the FIFO of issued tags.
 final class IMAPResponseHandler: ChannelInboundHandler {
     typealias InboundIn = Response
@@ -143,15 +151,37 @@ final class IMAPService {
 
     // MARK: Commands
 
-    func selectInbox() async throws -> Int {
-        let responses = try await send(.select(.inbox))
+    private func mailbox(_ name: String) -> MailboxName {
+        name.uppercased() == "INBOX" ? .inbox : MailboxName(ByteBuffer(string: name))
+    }
+
+    func listMailboxes() async throws -> [IMAPMailbox] {
+        let responses = try await send(.list(nil, reference: MailboxName(ByteBuffer(string: "")),
+                                             .mailbox(ByteBuffer(string: "*")), []))
+        var out: [IMAPMailbox] = []
+        for r in responses {
+            guard case .untagged(.mailboxData(.list(let info))) = r else { continue }
+            let sep = info.path.pathSeparator.map(String.init) ?? "/"
+            let name = info.path.displayStringComponents(omittingEmptySubsequences: false).joined(separator: sep)
+            if name.isEmpty { continue }
+            let attrs = info.attributes
+            let selectable = !attrs.contains(MailboxInfo.Attribute("\\Noselect"))
+            out.append(IMAPMailbox(name: name, kind: Self.classify(name: name, attributes: attrs), selectable: selectable))
+        }
+        return out
+    }
+
+    @discardableResult
+    func select(_ name: String) async throws -> Int {
+        let responses = try await send(.select(mailbox(name)))
         for r in responses {
             if case .untagged(.mailboxData(.exists(let n))) = r { return n }
         }
         return 0
     }
 
-    func fetchRecent(limit: Int, total: Int) async throws -> [IMAPMessage] {
+    func fetchRecent(mailbox name: String, limit: Int) async throws -> [IMAPMessage] {
+        let total = try await select(name)
         guard total > 0 else { return [] }
         let hi = UInt32(total)
         let lo = UInt32(max(1, total - limit + 1))
@@ -160,7 +190,33 @@ final class IMAPService {
         return parseMessages(responses).sorted { $0.date > $1.date }
     }
 
-    func fetchBody(uid: UInt32) async throws -> String {
+    func search(mailbox name: String, key: SearchKey, limit: Int) async throws -> [IMAPMessage] {
+        _ = try await select(name)
+        let responses = try await send(.uidSearch(key: key))
+        var uids: [UInt32] = []
+        for r in responses {
+            if case .untagged(.mailboxData(.search(let ids, _))) = r {
+                uids.append(contentsOf: ids.map { $0.rawValue })
+            }
+        }
+        guard !uids.isEmpty else { return [] }
+        let chosen = Array(uids.sorted(by: >).prefix(limit))
+        let ranges = chosen.map { MessageIdentifierRange<UID>(UID(rawValue: $0)...UID(rawValue: $0)) }
+        guard let set = MessageIdentifierSetNonEmpty(set: MessageIdentifierSet(ranges)) else { return [] }
+        let responses2 = try await send(.uidFetch(.set(set), [.uid, .flags, .envelope, .internalDate], []))
+        return parseMessages(responses2).sorted { $0.date > $1.date }
+    }
+
+    func searchText(mailbox name: String, query: String, limit: Int) async throws -> [IMAPMessage] {
+        try await search(mailbox: name, key: .text(ByteBuffer(string: query)), limit: limit)
+    }
+
+    func searchFlagged(mailbox name: String, limit: Int) async throws -> [IMAPMessage] {
+        try await search(mailbox: name, key: .flagged, limit: limit)
+    }
+
+    func fetchBody(mailbox name: String, uid: UInt32) async throws -> String {
+        _ = try await select(name)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
         let responses = try await send(.uidFetch(.range(range), [.bodySection(peek: true, .complete, nil)], []))
         var raw = ByteBuffer()
@@ -173,11 +229,35 @@ final class IMAPService {
         return MIME.extractText(from: data)
     }
 
-    func store(uid: UInt32, _ kind: MailFlagKind, add: Bool) async throws {
+    func store(mailbox name: String, uid: UInt32, _ kind: MailFlagKind, add: Bool) async throws {
+        _ = try await select(name)
         let flag: Flag = kind == .seen ? .seen : (kind == .flagged ? .flagged : .deleted)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
         let storeFlags: StoreFlags = add ? .add(silent: true, list: [flag]) : .remove(silent: true, list: [flag])
         _ = try await send(.uidStore(.range(range), [], .flags(storeFlags)))
+    }
+
+    func move(uid: UInt32, from: String, to: String) async throws {
+        _ = try await select(from)
+        let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
+        _ = try await send(.uidMove(.range(range), mailbox(to)))
+    }
+
+    static func classify(name: String, attributes: [MailboxInfo.Attribute]) -> MailboxKind {
+        if name.uppercased() == "INBOX" { return .inbox }
+        if attributes.contains(MailboxInfo.Attribute("\\Sent")) { return .sent }
+        if attributes.contains(MailboxInfo.Attribute("\\Drafts")) { return .drafts }
+        if attributes.contains(MailboxInfo.Attribute("\\Trash")) { return .trash }
+        if attributes.contains(MailboxInfo.Attribute("\\Junk")) { return .junk }
+        if attributes.contains(MailboxInfo.Attribute("\\Archive")) { return .archive }
+        switch name.lowercased() {
+        case "sent", "sent items", "sent mail", "sent messages": return .sent
+        case "drafts", "draft": return .drafts
+        case "trash", "deleted", "deleted items", "deleted messages", "bin": return .trash
+        case "junk", "spam", "junk e-mail", "junk email": return .junk
+        case "archive", "archives", "all mail": return .archive
+        default: return .other
+        }
     }
 
     // MARK: Plumbing
