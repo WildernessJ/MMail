@@ -67,6 +67,8 @@ struct Email: Identifiable, Codable {
     var uid: UInt32?
     var bodyLoaded: Bool
     var attachments: [AttachmentMeta] = []
+    var messageID: String?
+    var inReplyTo: String?
 
     init(id: String, account: String, from: String, to: [String]? = nil,
          subject: String, preview: String, body: String, time: String, day: String,

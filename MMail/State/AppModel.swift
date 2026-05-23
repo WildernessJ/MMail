@@ -745,15 +745,42 @@ final class AppModel: ObservableObject {
         return t
     }
 
+    private static func normMessageID(_ s: String?) -> String? {
+        guard let s else { return nil }
+        let t = s.trimmingCharacters(in: CharacterSet(charactersIn: "<> \t")).trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? nil : t
+    }
+
     func relatedThread(for email: Email) -> [ThreadItem] {
         guard isRealAccount(email.account) else { return [] }
-        let norm = AppModel.normalizeSubject(email.subject)
-        guard !norm.isEmpty else { return [] }
-        let related = emails.filter {
-            $0.account == email.account && $0.id != email.id &&
-            AppModel.normalizeSubject($0.subject) == norm
+        let pool = emails.filter { $0.account == email.account }
+
+        // Build a graph linking replies to parents via In-Reply-To -> Message-ID.
+        var byMID: [String: Email] = [:]
+        for e in pool { if let m = AppModel.normMessageID(e.messageID) { byMID[m] = e } }
+        var adj: [String: Set<String>] = [:]
+        for e in pool {
+            if let irt = AppModel.normMessageID(e.inReplyTo), let parent = byMID[irt], parent.id != e.id {
+                adj[e.id, default: []].insert(parent.id)
+                adj[parent.id, default: []].insert(e.id)
+            }
         }
-        return related.prefix(8).map {
+        // Connected component containing this email (its conversation).
+        var seen: Set<String> = [email.id]
+        var stack = [email.id]
+        while let cur = stack.popLast() {
+            for n in adj[cur] ?? [] where seen.insert(n).inserted { stack.append(n) }
+        }
+        let byId = Dictionary(uniqueKeysWithValues: pool.map { ($0.id, $0) })
+        var thread = seen.compactMap { byId[$0] }.filter { $0.id != email.id }
+
+        // Fall back to normalized-subject grouping when there are no header links.
+        if thread.isEmpty {
+            let norm = AppModel.normalizeSubject(email.subject)
+            guard !norm.isEmpty else { return [] }
+            thread = pool.filter { $0.id != email.id && AppModel.normalizeSubject($0.subject) == norm }
+        }
+        return thread.prefix(8).map {
             ThreadItem(from: $0.resolvedSender.name, time: $0.time,
                        preview: $0.preview.isEmpty ? $0.subject : $0.preview)
         }
@@ -915,12 +942,15 @@ final class AppModel: ObservableObject {
     static func makeEmail(_ m: IMAPMessage, accountId: String, folder: String) -> Email {
         let (day, time) = dayAndTime(m.date)
         let fromKey = m.fromEmail.isEmpty ? "imap-unknown" : m.fromEmail
-        return Email(id: "\(accountId)#\(folder)#\(m.uid)", account: accountId, from: fromKey, to: nil,
-                     subject: m.subject.isEmpty ? "(no subject)" : m.subject,
-                     preview: "", body: "", time: time, day: day,
-                     unread: !m.seen, starred: m.flagged, hasAttachment: false,
-                     labels: [], folder: folder, thread: nil, snoozeUntil: nil,
-                     fromName: m.fromName, fromEmail: m.fromEmail, uid: m.uid, bodyLoaded: false)
+        var email = Email(id: "\(accountId)#\(folder)#\(m.uid)", account: accountId, from: fromKey, to: nil,
+                          subject: m.subject.isEmpty ? "(no subject)" : m.subject,
+                          preview: "", body: "", time: time, day: day,
+                          unread: !m.seen, starred: m.flagged, hasAttachment: false,
+                          labels: [], folder: folder, thread: nil, snoozeUntil: nil,
+                          fromName: m.fromName, fromEmail: m.fromEmail, uid: m.uid, bodyLoaded: false)
+        email.messageID = m.messageID.isEmpty ? nil : m.messageID
+        email.inReplyTo = m.inReplyTo.isEmpty ? nil : m.inReplyTo
+        return email
     }
 
     static func dayAndTime(_ date: Date) -> (String, String) {

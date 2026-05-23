@@ -30,6 +30,8 @@ struct IMAPMessage {
     var date: Date
     var seen: Bool
     var flagged: Bool
+    var messageID: String
+    var inReplyTo: String
 }
 
 // NIO-free flag kind so the app layer doesn't import NIOIMAPCore.
@@ -319,8 +321,13 @@ final class IMAPService {
         var date = Date()
         var seen = false
         var flagged = false
+        var messageID = ""
+        var inReplyTo = ""
 
-        func reset() { uid = 0; subject = ""; fromName = ""; fromEmail = ""; date = Date(); seen = false; flagged = false }
+        func reset() {
+            uid = 0; subject = ""; fromName = ""; fromEmail = ""; date = Date()
+            seen = false; flagged = false; messageID = ""; inReplyTo = ""
+        }
 
         for r in responses {
             guard case .fetch(let fr) = r else { continue }
@@ -343,6 +350,8 @@ final class IMAPService {
                         if !mailbox.isEmpty { fromEmail = hostPart.isEmpty ? mailbox : "\(mailbox)@\(hostPart)" }
                     }
                     if let d = env.date, let parsed = Self.parseRFC2822(String(d)) { date = parsed }
+                    if let mid = env.messageID { messageID = String(mid) }
+                    if let irt = env.inReplyTo { inReplyTo = String(irt) }
                 case .internalDate(let serverDate):
                     if let built = Self.dateFrom(serverDate.components) { date = built }
                 default:
@@ -351,7 +360,8 @@ final class IMAPService {
             case .finish:
                 if uid > 0 {
                     out.append(IMAPMessage(uid: uid, subject: subject, fromName: fromName,
-                                           fromEmail: fromEmail, date: date, seen: seen, flagged: flagged))
+                                           fromEmail: fromEmail, date: date, seen: seen, flagged: flagged,
+                                           messageID: messageID, inReplyTo: inReplyTo))
                 }
             default:
                 break
