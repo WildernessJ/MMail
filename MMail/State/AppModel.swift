@@ -112,6 +112,7 @@ final class AppModel: ObservableObject {
     @Published var searchFocusRequested = false
     @Published var advancedSearchOpen = false
     @Published var advForm = AdvancedSearchForm()
+    @Published var searchModalOpen = false
     @Published var toast: ToastModel?
     @Published var pendingG = false
     @Published var journalArchiveOpen = false
@@ -283,7 +284,7 @@ final class AppModel: ObservableObject {
     var total: Int { filteredEmails.count }
 
     var anyOverlayOpen: Bool {
-        palette || help || settings || compose != nil || addingAccount || journalArchiveOpen || manualSetupOpen || advancedSearchOpen || peopleOpen
+        palette || help || settings || compose != nil || addingAccount || journalArchiveOpen || manualSetupOpen || advancedSearchOpen || peopleOpen || searchModalOpen
     }
 
     // MARK: - Persistence side-effects
@@ -735,6 +736,7 @@ final class AppModel: ObservableObject {
     func closeOverlays() {
         palette = false; help = false; settings = false; compose = nil; addingAccount = false
         journalArchiveOpen = false; manualSetupOpen = false; advancedSearchOpen = false; peopleOpen = false
+        searchModalOpen = false
     }
 
     func setFolder(_ f: String) {
@@ -1052,6 +1054,40 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Enter in the search field: open the results modal and run the query.
+    func submitSearch() {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return }
+        searchActive = true
+        serverSearchResults = []
+        searchModalOpen = true
+        runServerSearch()
+    }
+
+    /// Dismiss the search modal and clear the query/results.
+    func dismissSearch() {
+        searchModalOpen = false
+        searchActive = false
+        searchQuery = ""
+        serverSearchResults = nil
+        searching = false
+    }
+
+    /// Open a tapped search result in the reader, leaving search behind.
+    func openSearchResult(_ email: Email) {
+        if !emails.contains(where: { $0.id == email.id }) { emails.append(email) }
+        searchModalOpen = false
+        searchActive = false
+        searchQuery = ""
+        serverSearchResults = nil
+        searching = false
+        labelFilter = nil
+        if currentAccount != "all" && currentAccount != email.account { currentAccount = email.account }
+        folder = email.folder
+        selectedId = email.id
+        loadBodyIfNeeded()
+    }
+
     /// Server-side full-text search across the whole mailbox (instant local
     /// filtering already covers loaded mail as you type; this augments it).
     func runServerSearch() {
@@ -1114,6 +1150,7 @@ final class AppModel: ObservableObject {
         searchQuery = describeAdvanced(f)
         searching = true
         serverSearchResults = []
+        searchModalOpen = true
         let fld = folder == "home" ? "inbox" : folder
         Task {
             var results: [Email] = []
@@ -1476,6 +1513,7 @@ final class AppModel: ObservableObject {
 
         // Escape (keyCode 53)
         if event.keyCode == 53 {
+            if searchModalOpen { dismissSearch(); return true }
             if anyOverlayOpen { closeOverlays(); return true }
             if searchActive { searchActive = false; searchQuery = ""; return true }
             return false

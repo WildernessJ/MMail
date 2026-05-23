@@ -104,6 +104,9 @@ struct RootView: View {
         if model.peopleOpen {
             PeopleView()
         }
+        if model.searchModalOpen {
+            SearchResultsView()
+        }
     }
 
     // MARK: - Toolbar
@@ -134,7 +137,7 @@ struct RootView: View {
                 .font(.system(size: 12.5))
                 .focused($searchFocused)
                 .foregroundStyle(p.fg1)
-                .onSubmit { model.runServerSearch() }
+                .onSubmit { model.submitSearch() }
                 .onChange(of: model.searchQuery) { _, q in
                     if q.isEmpty { model.serverSearchResults = nil; model.searching = false }
                 }
