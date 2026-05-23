@@ -1133,7 +1133,11 @@ final class AppModel: ObservableObject {
 
     private var isTyping: Bool {
         guard let r = NSApp.keyWindow?.firstResponder else { return false }
-        return r is NSText || r is NSTextView
+        // Only treat *editable* text as typing — a selectable (read-only) text
+        // view like the reader body shouldn't swallow single-key shortcuts.
+        if let tv = r as? NSTextView { return tv.isEditable }
+        if let t = r as? NSText { return t.isEditable }
+        return false
     }
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {

@@ -177,6 +177,7 @@ struct ComposeView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .fixedSize()
             Spacer()
         }
