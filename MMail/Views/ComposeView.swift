@@ -29,6 +29,7 @@ struct ComposeView: View {
     @State private var customWhen = Date()
     // Local key monitor (Escape routing for popovers/sheets)
     @State private var escMonitor: Any?
+    @State private var fromPickerOpen = false
 
     enum Field { case to, subject, body }
 
@@ -44,8 +45,8 @@ struct ComposeView: View {
         _attachments = State(initialValue: draft.attachments)
     }
 
-    private var fromAcct: Account {
-        model.accounts.first { $0.id == fromId } ?? model.accounts[0]
+    private var fromAcct: Account? {
+        model.accounts.first { $0.id == fromId } ?? model.accounts.first
     }
 
     private func currentDraft() -> ComposeDraft {
@@ -162,23 +163,44 @@ struct ComposeView: View {
     private var fromField: some View {
         HStack(spacing: 0) {
             Text("From").font(.system(size: 12)).foregroundStyle(p.fg3).frame(width: 56, alignment: .leading)
-            Menu {
-                ForEach(model.accounts) { a in
-                    Button { fromId = a.id } label: { Text("\(a.name) · \(a.email)") }
-                }
-            } label: {
+            Button { fromPickerOpen.toggle() } label: {
                 HStack(spacing: 8) {
-                    GradientTile(colors: fromAcct.gradientColors, text: fromAcct.initials, size: 18, cornerRadius: 5, fontSize: 10)
-                    Text(fromAcct.email).font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg1).lineLimit(1)
+                    if let acct = fromAcct {
+                        GradientTile(colors: acct.gradientColors, text: acct.initials, size: 18, cornerRadius: 5, fontSize: 10)
+                        Text(acct.email).font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg1).lineLimit(1)
+                    } else {
+                        Text("No account").font(.system(size: 12.5)).foregroundStyle(p.fg3)
+                    }
                     Icon(name: "chevronDown", size: 12).foregroundStyle(p.fg3)
                 }
                 .padding(.horizontal, 8).padding(.vertical, 4)
                 .background(p.bg3)
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
+            .buttonStyle(.plain)
+            .disabled(model.accounts.count <= 1)
+            .popover(isPresented: $fromPickerOpen, arrowEdge: .bottom) {
+                VStack(spacing: 2) {
+                    ForEach(model.accounts) { a in
+                        Button { fromId = a.id; fromPickerOpen = false } label: {
+                            HStack(spacing: 10) {
+                                GradientTile(colors: a.gradientColors, text: a.initials, size: 22, cornerRadius: 6, fontSize: 11)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(a.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(p.fg1)
+                                    Text(a.email).font(.system(size: 11)).foregroundStyle(p.fg3)
+                                }
+                                Spacer(minLength: 12)
+                                if a.id == fromId { Icon(name: "check", size: 13).foregroundStyle(p.brandBlue) }
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 7)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(HoverRowButtonStyle())
+                    }
+                }
+                .padding(6).frame(width: 280)
+            }
             Spacer()
         }
         .padding(.horizontal, 14).frame(height: 40)
@@ -555,6 +577,7 @@ struct ComposeView: View {
             if customOpen { customOpen = false; return nil }
             if templatesOpen { templatesOpen = false; return nil }
             if scheduleOpen { scheduleOpen = false; return nil }
+            if fromPickerOpen { fromPickerOpen = false; return nil }
             return event
         }
     }

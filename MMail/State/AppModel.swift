@@ -413,7 +413,8 @@ final class AppModel: ObservableObject {
 
     func startCompose(to: String = "", subject: String = "", body: String = "",
                       titleLabel: String = "New message", fromId: String? = nil) {
-        let defaultFrom = currentAccount != "all" ? currentAccount : (accounts.first?.id ?? "work")
+        // Reply/forward pass the receiving account; a fresh compose uses the first account.
+        let defaultFrom = accounts.first?.id ?? "work"
         compose = ComposeDraft(to: to, subject: subject, body: body,
                                titleLabel: titleLabel, fromId: fromId ?? defaultFrom)
     }
