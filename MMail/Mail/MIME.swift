@@ -46,8 +46,8 @@ enum MIME {
 
     // MARK: Outgoing message
 
-    static func buildMessage(from: String, fromName: String?, to: String, subject: String,
-                             body: String, date: Date = Date()) -> String {
+    static func buildMessage(from: String, fromName: String?, to: String, cc: String = "",
+                             subject: String, body: String, date: Date = Date()) -> String {
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")
         df.dateFormat = "EEE, d MMM yyyy HH:mm:ss Z"
@@ -65,6 +65,7 @@ enum MIME {
         var headers: [String] = []
         headers.append("From: \(fromHeader)")
         headers.append("To: \(to)")
+        if !cc.trimmingCharacters(in: .whitespaces).isEmpty { headers.append("Cc: \(cc)") }
         headers.append("Subject: \(encodeWordIfNeeded(subject))")
         headers.append("Date: \(dateStr)")
         headers.append("Message-ID: \(messageID)")

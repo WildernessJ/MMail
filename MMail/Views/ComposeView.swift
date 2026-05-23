@@ -7,6 +7,9 @@ struct ComposeView: View {
     let draft: ComposeDraft
 
     @State private var to: String
+    @State private var cc: String
+    @State private var bcc: String
+    @State private var showCcBcc: Bool
     @State private var subject: String
     @State private var messageBody: String
     @State private var fromId: String
@@ -30,6 +33,9 @@ struct ComposeView: View {
     init(draft: ComposeDraft) {
         self.draft = draft
         _to = State(initialValue: draft.to)
+        _cc = State(initialValue: draft.cc)
+        _bcc = State(initialValue: draft.bcc)
+        _showCcBcc = State(initialValue: !draft.cc.isEmpty || !draft.bcc.isEmpty)
         _subject = State(initialValue: draft.subject)
         _messageBody = State(initialValue: draft.body)
         _fromId = State(initialValue: draft.fromId)
@@ -41,7 +47,7 @@ struct ComposeView: View {
 
     private func currentDraft() -> ComposeDraft {
         var d = draft
-        d.to = to; d.subject = subject; d.body = messageBody; d.fromId = fromId
+        d.to = to; d.cc = cc; d.bcc = bcc; d.subject = subject; d.body = messageBody; d.fromId = fromId
         return d
     }
 
@@ -56,8 +62,22 @@ struct ComposeView: View {
                 TextField("someone@example.com", text: $to)
                     .textFieldStyle(.plain).font(.system(size: 13.5))
                     .focused($focus, equals: .to)
+                if !showCcBcc {
+                    Button("Cc/Bcc") { showCcBcc = true }
+                        .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(p.fg3)
+                }
             }
             Divider().overlay(p.border)
+            if showCcBcc {
+                field(label: "Cc") {
+                    TextField("", text: $cc).textFieldStyle(.plain).font(.system(size: 13.5))
+                }
+                Divider().overlay(p.border)
+                field(label: "Bcc") {
+                    TextField("", text: $bcc).textFieldStyle(.plain).font(.system(size: 13.5))
+                }
+                Divider().overlay(p.border)
+            }
             field(label: "Subject") {
                 TextField("", text: $subject)
                     .textFieldStyle(.plain).font(.system(size: 13.5))
@@ -113,8 +133,8 @@ struct ComposeView: View {
         HStack(spacing: 8) {
             Text(draft.titleLabel).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.fg2)
             Spacer()
-            Button { model.compose = nil } label: { Icon(name: "x", size: 14).foregroundStyle(p.fg2) }
-                .buttonStyle(.plain)
+            Button { model.saveDraftAndClose(currentDraft()) } label: { Icon(name: "x", size: 14).foregroundStyle(p.fg2) }
+                .buttonStyle(.plain).help("Save draft & close")
         }
         .padding(.horizontal, 14).frame(height: 42)
         .background(p.bg2)

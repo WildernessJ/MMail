@@ -57,6 +57,9 @@ actor IMAPSession {
     func move(uid: UInt32, from: String, to: String) async throws {
         try await run { try await $0.move(uid: uid, from: from, to: to) }
     }
+    func append(mailbox: String, rawMessage: String, seen: Bool, draft: Bool) async throws {
+        try await run { try await $0.append(mailbox: mailbox, rawMessage: rawMessage, seen: seen, draft: draft) }
+    }
     func close() async {
         if let s = service { await s.disconnect() }
         service = nil

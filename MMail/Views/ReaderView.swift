@@ -88,6 +88,7 @@ private struct ReaderContent: View {
             Divider()
             Button { model.archive() } label: { Label("Archive", systemImage: "archivebox") }
             Button { model.snooze() } label: { Label("Snooze", systemImage: "clock") }
+            Button { model.markSpam() } label: { Label("Mark as Spam", systemImage: "exclamationmark.triangle") }
             Divider()
             Button(role: .destructive) { model.delete() } label: { Label("Delete", systemImage: "trash") }
         } label: {

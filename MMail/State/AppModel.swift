@@ -16,6 +16,8 @@ enum InboxFilter: String, CaseIterable {
 struct ComposeDraft: Identifiable {
     let id = UUID()
     var to: String
+    var cc: String = ""
+    var bcc: String = ""
     var subject: String
     var body: String
     var titleLabel: String
@@ -322,6 +324,14 @@ final class AppModel: ObservableObject {
             else { applyRealFlag(e, .deleted, add: true) }
         }
         moveTo(target, dest: "trash", verb: "Deleted")
+    }
+    func markSpam(_ id: String? = nil) {
+        let target = id ?? selectedId
+        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account),
+           mailboxName(e.account, "spam") != nil {
+            realMove(e, to: "spam")
+        }
+        moveTo(target, dest: "spam", verb: "Marked as spam")
     }
     func snooze(_ id: String? = nil) { moveTo(id ?? selectedId, dest: "snoozed", verb: "Snoozed") }
 
@@ -644,24 +654,28 @@ final class AppModel: ObservableObject {
     /// Server-side full-text search across the whole mailbox (instant local
     /// filtering already covers loaded mail as you type; this augments it).
     func runServerSearch() {
-        guard searchActive, isRealAccount(currentAccount), let session = session(for: currentAccount) else { return }
+        guard searchActive else { return }
         let q = searchQuery.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { serverSearchResults = nil; searching = false; return }
-        let acct = currentAccount
-        let box = mailboxName(acct, folder) ?? "INBOX"
         let f = folder
+        let accountIds: [String] = currentAccount == "all"
+            ? realConfigs.map { $0.id }
+            : (isRealAccount(currentAccount) ? [currentAccount] : [])
+        guard !accountIds.isEmpty else { return }
         searching = true
         Task {
-            do {
-                let msgs = try await session.searchText(mailbox: box, query: q, limit: 50)
-                let mapped = msgs.map { AppModel.makeEmail($0, accountId: acct, folder: f) }
-                await MainActor.run {
-                    self.serverSearchResults = mapped
-                    self.selectedId = mapped.first?.id
-                    self.searching = false
+            var results: [Email] = []
+            for acct in accountIds {
+                guard let session = await MainActor.run(body: { self.session(for: acct) }) else { continue }
+                let box = await MainActor.run { self.mailboxName(acct, f) } ?? "INBOX"
+                if let msgs = try? await session.searchText(mailbox: box, query: q, limit: 50) {
+                    results.append(contentsOf: msgs.map { AppModel.makeEmail($0, accountId: acct, folder: f) })
                 }
-            } catch {
-                await MainActor.run { self.serverSearchResults = []; self.searching = false }
+            }
+            await MainActor.run {
+                self.serverSearchResults = results
+                self.selectedId = results.first?.id
+                self.searching = false
             }
         }
     }
@@ -769,21 +783,68 @@ final class AppModel: ObservableObject {
     func sendViaSMTP(_ draft: ComposeDraft, cfg: MailAccountConfig) {
         guard let pw = cfg.smtpPassword else { showToast("Missing SMTP password."); return }
         let recipients = AppModel.parseRecipients(draft.to)
+            + AppModel.parseRecipients(draft.cc) + AppModel.parseRecipients(draft.bcc)
         guard !recipients.isEmpty else { showToast("Add a recipient first."); return }
         compose = nil
         showToast("Sending…")
         let display = accountsById[cfg.id]?.name
-        let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to,
+        let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to, cc: draft.cc,
                                         subject: draft.subject, body: draft.body)
+        let session = session(for: cfg.id)
         Task {
             do {
                 let smtp = SMTPService(config: cfg, password: pw)
                 try await smtp.send(from: cfg.email, fromName: display, recipients: recipients, message: message)
+                // Best-effort: save a copy into the Sent mailbox.
+                if let session, let sentBox = await self.resolveMailbox(cfg.id, kind: .sent, session: session) {
+                    try? await session.append(mailbox: sentBox, rawMessage: message, seen: true, draft: false)
+                    await MainActor.run { self.loadFolder(cfg.id, "sent", silent: true) }
+                }
                 await MainActor.run { self.showToast("Sent to \(draft.to)") }
             } catch {
                 await MainActor.run { self.showToast("Send failed: \(error.localizedDescription)") }
             }
         }
+    }
+
+    /// Save the compose contents as a draft (best-effort APPEND to Drafts), then close.
+    func saveDraftAndClose(_ draft: ComposeDraft) {
+        compose = nil
+        let hasContent = !draft.to.isEmpty || !draft.subject.isEmpty
+            || !draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard hasContent, isRealAccount(draft.fromId), let cfg = config(for: draft.fromId),
+              let session = session(for: draft.fromId) else { return }
+        let display = accountsById[cfg.id]?.name
+        let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to, cc: draft.cc,
+                                        subject: draft.subject, body: draft.body)
+        Task {
+            if let draftsBox = await self.resolveMailbox(cfg.id, kind: .drafts, session: session) {
+                try? await session.append(mailbox: draftsBox, rawMessage: message, seen: false, draft: true)
+                await MainActor.run { self.showToast("Draft saved"); self.loadFolder(cfg.id, "drafts", silent: true) }
+            }
+        }
+    }
+
+    /// Resolve a special mailbox name, discovering the folder list if needed.
+    private func resolveMailbox(_ accountId: String, kind: MailboxKind, session: IMAPSession) async -> String? {
+        let folderId: String = {
+            switch kind {
+            case .sent: return "sent"; case .drafts: return "drafts"; case .trash: return "trash"
+            case .junk: return "spam"; case .archive: return "archive"; default: return ""
+            }
+        }()
+        if let name = await MainActor.run(body: { self.realMailboxes[accountId]?[folderId] }) { return name }
+        guard let boxes = try? await session.listMailboxes() else { return nil }
+        var m: [String: String] = [:]
+        for b in boxes where b.selectable {
+            switch b.kind {
+            case .sent: m["sent"] = b.name; case .drafts: m["drafts"] = b.name
+            case .trash: m["trash"] = b.name; case .junk: m["spam"] = b.name
+            case .archive: m["archive"] = b.name; default: break
+            }
+        }
+        await MainActor.run { self.realMailboxes[accountId] = m }
+        return m[folderId]
     }
 
     static func parseRecipients(_ field: String) -> [String] {

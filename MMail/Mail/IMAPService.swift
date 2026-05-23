@@ -245,6 +245,36 @@ final class IMAPService {
         _ = try await send(.uidMove(.range(range), mailbox(to)))
     }
 
+    /// APPEND a raw RFC822 message into a mailbox (used to save Sent/Drafts copies).
+    func append(mailbox name: String, rawMessage: String, seen: Bool, draft: Bool) async throws {
+        guard let channel = self.channel else { throw MailError.notConnected }
+        var flags: [Flag] = []
+        if seen { flags.append(.seen) }
+        if draft { flags.append(.draft) }
+        let bytes = ByteBuffer(string: rawMessage)
+        let tag = nextTag()
+        let promise = channel.eventLoop.makePromise(of: [Response].self)
+        try await channel.eventLoop.submit { [collector] in collector.enqueue(tag: tag, promise: promise) }.get()
+
+        let message = AppendMessage(options: AppendOptions(flagList: flags),
+                                    data: AppendData(byteCount: bytes.readableBytes))
+        let parts: [AppendCommand] = [
+            .start(tag: tag, appendingTo: mailbox(name)),
+            .beginMessage(message: message),
+            .messageBytes(bytes),
+            .endMessage,
+            .finish
+        ]
+        for p in parts {
+            channel.write(IMAPClientHandler.Message.part(.append(p)), promise: nil)
+        }
+        channel.flush()
+
+        let responses = try await promise.futureResult.get()
+        if let last = responses.last, case .tagged(let t) = last, case .ok = t.state { return }
+        throw MailError.commandFailed("APPEND rejected")
+    }
+
     static func classify(name: String, attributes: [MailboxInfo.Attribute]) -> MailboxKind {
         if name.uppercased() == "INBOX" { return .inbox }
         if attributes.contains(MailboxInfo.Attribute("\\Sent")) { return .sent }
