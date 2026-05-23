@@ -440,7 +440,7 @@ final class AppModel: ObservableObject {
         searchQuery = ""
         serverSearchResults = nil
         searching = false
-        if isRealAccount(currentAccount) { loadFolder(currentAccount, f) }
+        loadForCurrentScope(f)
     }
 
     // MARK: - Commands (palette)
@@ -525,8 +525,24 @@ final class AppModel: ObservableObject {
 
     /// Called whenever the selected account changes; refreshes the current folder.
     func didSelectAccount(_ id: String) {
-        guard id != "all", isRealAccount(id), !loadingAccounts.contains(id) else { return }
-        loadFolder(id, folder == "home" ? "inbox" : folder)
+        let f = folder == "home" ? "inbox" : folder
+        guard isServerFolder(f) else { return }
+        if id == "all" {
+            for cfg in realConfigs { loadFolder(cfg.id, f, silent: true) }
+        } else if isRealAccount(id) {
+            loadFolder(id, f)
+        }
+    }
+
+    /// Load a folder for whatever account scope is selected — a single real
+    /// account, or every real account when the unified "All inboxes" is active.
+    func loadForCurrentScope(_ folderId: String, silent: Bool = false) {
+        guard isServerFolder(folderId) else { return }
+        if currentAccount == "all" {
+            for cfg in realConfigs { loadFolder(cfg.id, folderId, silent: silent) }
+        } else if isRealAccount(currentAccount) {
+            loadFolder(currentAccount, folderId, silent: silent)
+        }
     }
 
     /// Resolve a canonical folder id to a server mailbox name.
@@ -541,8 +557,7 @@ final class AppModel: ObservableObject {
     }
 
     func refreshCurrentRealFolder(silent: Bool = false) {
-        guard isRealAccount(currentAccount), isServerFolder(folder) else { return }
-        loadFolder(currentAccount, folder, silent: silent)
+        loadForCurrentScope(folder, silent: silent)
     }
 
     /// Long-lived IMAP connection per account (reused across operations).
@@ -668,7 +683,8 @@ final class AppModel: ObservableObject {
         emails.removeAll { $0.account == accountId && $0.folder == folderId }
         emails.append(contentsOf: merged)
         if persist { MailCache.save(merged, account: accountId, folder: folderId) }
-        if currentAccount == accountId && folder == folderId && serverSearchResults == nil {
+        let inScope = (currentAccount == accountId || currentAccount == "all")
+        if inScope && folder == folderId && serverSearchResults == nil {
             if !filteredEmails.contains(where: { $0.id == selectedId }) {
                 selectedId = filteredEmails.first?.id
             }

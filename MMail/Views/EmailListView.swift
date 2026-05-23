@@ -10,6 +10,12 @@ struct EmailListView: View {
     private var folderName: String {
         SampleData.folders.first { $0.id == model.folder }?.name ?? model.folder
     }
+    private var scopeLoading: Bool {
+        model.currentAccount == "all" ? !model.loadingAccounts.isEmpty : model.loadingAccounts.contains(model.currentAccount)
+    }
+    private var scopeIsRealMail: Bool {
+        model.isRealAccount(model.currentAccount) || (model.currentAccount == "all" && !model.realConfigs.isEmpty)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,9 +53,9 @@ struct EmailListView: View {
                 Text(title).font(.system(size: 22, weight: .bold))
                     .foregroundStyle(p.fg1)
                 Spacer()
-                if model.isRealAccount(model.currentAccount) {
+                if scopeIsRealMail {
                     Button { model.refreshCurrentRealFolder() } label: {
-                        if model.loadingAccounts.contains(model.currentAccount) {
+                        if scopeLoading {
                             ProgressView().controlSize(.small)
                         } else {
                             Icon(name: "refresh", size: 14).foregroundStyle(p.fg3)
@@ -99,7 +105,7 @@ struct EmailListView: View {
     private var list: some View {
         let visible = model.filteredEmails
         return Group {
-            if visible.isEmpty && model.loadingAccounts.contains(model.currentAccount) {
+            if visible.isEmpty && scopeLoading {
                 loadingState
             } else if visible.isEmpty, let err = model.accountErrors[model.currentAccount] {
                 errorState(err)
