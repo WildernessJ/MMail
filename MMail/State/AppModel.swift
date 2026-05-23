@@ -92,6 +92,8 @@ final class AppModel: ObservableObject {
     @Published var emails: [Email] = []
     @Published var selectedId: String?
     @Published var filter: InboxFilter = .all
+    // When the reading pane is off, this opens the selected message full-width.
+    @Published var readerFullScreen = false
 
     // Tweaks / appearance
     @Published var dark: Bool
@@ -340,6 +342,14 @@ final class AppModel: ObservableObject {
         markSelectedReadSoon()
         loadBodyIfNeeded()
     }
+
+    /// A row tap: select, and when the reading pane is off, open the full reader.
+    func activate(_ id: String) {
+        select(id)
+        if !readingPane { readerFullScreen = true }
+    }
+
+    func closeFullReader() { readerFullScreen = false }
 
     func markSelectedReadSoon() {
         guard let e = selectedEmail, e.unread else { return }
@@ -742,6 +752,7 @@ final class AppModel: ObservableObject {
     func setFolder(_ f: String) {
         folder = f
         labelFilter = nil
+        readerFullScreen = false
         searchActive = false
         searchQuery = ""
         serverSearchResults = nil
@@ -789,7 +800,7 @@ final class AppModel: ObservableObject {
 
     func setDark(_ v: Bool) { dark = v; persistTweaks() }
     func setSidebar(_ v: Bool) { sidebarVisible = v; persistTweaks() }
-    func setReadingPane(_ v: Bool) { readingPane = v; persistTweaks() }
+    func setReadingPane(_ v: Bool) { readingPane = v; readerFullScreen = false; persistTweaks() }
     func setVimNav(_ v: Bool) { vimNav = v; UserDefaults.standard.set(v, forKey: kVimNav) }
     func setConfirmDiscard(_ v: Bool) { confirmDiscard = v; UserDefaults.standard.set(v, forKey: kConfirmDiscard) }
     func setNotifications(_ v: Bool) {
@@ -1085,6 +1096,7 @@ final class AppModel: ObservableObject {
         if currentAccount != "all" && currentAccount != email.account { currentAccount = email.account }
         folder = email.folder
         selectedId = email.id
+        readerFullScreen = !readingPane
         loadBodyIfNeeded()
     }
 
@@ -1516,12 +1528,21 @@ final class AppModel: ObservableObject {
             if searchModalOpen { dismissSearch(); return true }
             if anyOverlayOpen { closeOverlays(); return true }
             if searchActive { searchActive = false; searchQuery = ""; return true }
+            if readerFullScreen { readerFullScreen = false; return true }
             return false
         }
 
         // Below: single-key. Don't intercept when typing, an overlay owns focus,
         // or the user has turned off keyboard (vim) navigation in Settings.
         if isTyping || anyOverlayOpen || onboarding || !vimNav { return false }
+
+        // Return: open the selected message full-width when the reading pane is off.
+        if event.keyCode == 36 {
+            if !readingPane && !readerFullScreen && folder != "home" && selectedId != nil {
+                readerFullScreen = true; return true
+            }
+            return false
+        }
 
         // ? help
         if chars == "?" { help = true; return true }

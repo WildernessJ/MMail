@@ -303,7 +303,7 @@ struct EmailRowView: View {
         }
         .overlay(Rectangle().fill(p.border).frame(height: 1), alignment: .bottom)
         .contentShape(Rectangle())
-        .onTapGesture { model.select(email.id) }
+        .onTapGesture { model.activate(email.id) }
         .onHover { hovered = $0 }
     }
 

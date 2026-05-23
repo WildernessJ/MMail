@@ -85,6 +85,18 @@ private struct ReaderContent: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
+            if !model.readingPane {
+                Button { model.closeFullReader() } label: {
+                    HStack(spacing: 4) {
+                        Icon(name: "chevronLeft", size: 13)
+                        Text("Back").font(.system(size: 12.5, weight: .medium))
+                    }
+                    .foregroundStyle(p.fg2).padding(.horizontal, 8).frame(height: 30)
+                    .background(p.bg3).clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .help("Back to list (esc)")
+            }
             PrimaryToolbarButton(icon: "check", label: "Done", kbd: "H") { model.markDone() }
             PrimaryToolbarButton(icon: "replyAll", label: "Reply all", kbd: "A") { model.replyAll() }
             Button { model.toggleStar(email.id) } label: {

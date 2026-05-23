@@ -49,11 +49,13 @@ struct RootView: View {
             }
             if model.folder == "home" {
                 HomeView()
+            } else if model.readingPane {
+                EmailListView()
+                ReaderView()
+            } else if model.readerFullScreen {
+                ReaderView()
             } else {
                 EmailListView()
-                if model.readingPane {
-                    ReaderView()
-                }
             }
         }
     }

@@ -26,6 +26,7 @@ enum Icons {
         "attach": "paperclip",
         "x": "xmark",
         "chevronRight": "chevron.right",
+        "chevronLeft": "chevron.left",
         "chevronDown": "chevron.down",
         "arrowRight": "arrow.right",
         "alert": "exclamationmark.circle",
