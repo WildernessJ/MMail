@@ -1,0 +1,422 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		17BB225EB35F1847D5C57B7E /* AddAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3415F5DC40ADAD49F09977A1 /* AddAccountView.swift */; };
+		482809988F6EB437DA58D4CD /* MiscViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903AD651E0AA8087A7D60DFF /* MiscViews.swift */; };
+		4981A459A999FC4B8E9F5803 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2217A8D681EDC9DC08448B20 /* RootView.swift */; };
+		5B6226FBAB07AC5F325B9A40 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EABA6D5E51F2CB475040F67 /* HomeView.swift */; };
+		63C8FFCEDFECD21D7D7C351D /* EmailListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FBA6EAD89232491D6FF8AAF /* EmailListView.swift */; };
+		65C5F6F9035EF1353DB9307A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C44FF3EE733F7A86D87AE28 /* SettingsView.swift */; };
+		6AB5697973DD2DFA70DCD13A /* MMailApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18C7B40E3AD387E3CF1B9256 /* MMailApp.swift */; };
+		6F7B251114D6AC0C0EC1DFCA /* HelpSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B669678B83AECA83BA6DF4CD /* HelpSheetView.swift */; };
+		70289C8E18AFF23A0FF1E46B /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2CF45DFB8B78E1224BD9514 /* ComposeView.swift */; };
+		7816788B343DCF37413C00FA /* AccountRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067FDA44372798C7B298D335 /* AccountRailView.swift */; };
+		8240DB9802A6B1CF6F49FCD3 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1839AA4256AD539B7E201FD /* OnboardingView.swift */; };
+		B7635E5A653911A58EC8EC63 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE36DEB176137963E3CA7FE9 /* SampleData.swift */; };
+		B7A899BAA4C3DD629951E464 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4AF498A0E6F2A7C049FDFD /* SidebarView.swift */; };
+		BE505C010C09F6AFB384E8C9 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E339A5381F119E119D179F2 /* AppModel.swift */; };
+		C2E07547425A80AD42EAD413 /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9FE22A6CEE48BF1C394B2A /* CommandPaletteView.swift */; };
+		CC7DF28D10C2AA0AD23C18C8 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68E9DF829AD4EBED12B2F2E /* Theme.swift */; };
+		D913BC78DC57ACB3CFAEAA8E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1584790EAAE22906433DB5A3 /* Models.swift */; };
+		EDF6BA1F4277388005EA5BDA /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B303764555CA0F1AA5D6431 /* ReaderView.swift */; };
+		F7178A73DD13D48B77E377D0 /* Atoms.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC7062ED4848255AFB2D1992 /* Atoms.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		067FDA44372798C7B298D335 /* AccountRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRailView.swift; sourceTree = "<group>"; };
+		1584790EAAE22906433DB5A3 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		18C7B40E3AD387E3CF1B9256 /* MMailApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MMailApp.swift; sourceTree = "<group>"; };
+		1EABA6D5E51F2CB475040F67 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		2217A8D681EDC9DC08448B20 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		3415F5DC40ADAD49F09977A1 /* AddAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountView.swift; sourceTree = "<group>"; };
+		3717DE86372DA2EB6CD1D04A /* MMail.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MMail.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3B303764555CA0F1AA5D6431 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
+		3FBA6EAD89232491D6FF8AAF /* EmailListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailListView.swift; sourceTree = "<group>"; };
+		4E339A5381F119E119D179F2 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		4F9FE22A6CEE48BF1C394B2A /* CommandPaletteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteView.swift; sourceTree = "<group>"; };
+		7B4AF498A0E6F2A7C049FDFD /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		903AD651E0AA8087A7D60DFF /* MiscViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiscViews.swift; sourceTree = "<group>"; };
+		9C44FF3EE733F7A86D87AE28 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B1839AA4256AD539B7E201FD /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		B669678B83AECA83BA6DF4CD /* HelpSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpSheetView.swift; sourceTree = "<group>"; };
+		E2CF45DFB8B78E1224BD9514 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
+		E68E9DF829AD4EBED12B2F2E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		EE36DEB176137963E3CA7FE9 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
+		FC7062ED4848255AFB2D1992 /* Atoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atoms.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		00C7D008849F7386CC957B8A /* State */ = {
+			isa = PBXGroup;
+			children = (
+				4E339A5381F119E119D179F2 /* AppModel.swift */,
+			);
+			path = State;
+			sourceTree = "<group>";
+		};
+		1B6D7051DE94829C05B1057E /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				1584790EAAE22906433DB5A3 /* Models.swift */,
+				EE36DEB176137963E3CA7FE9 /* SampleData.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		46660F53D031ECF79743F93C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3717DE86372DA2EB6CD1D04A /* MMail.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5EE6176948ACCAD6823E2F20 = {
+			isa = PBXGroup;
+			children = (
+				89BC115E030851168966F292 /* MMail */,
+				46660F53D031ECF79743F93C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		89BC115E030851168966F292 /* MMail */ = {
+			isa = PBXGroup;
+			children = (
+				FFA451DEF86DBE796013DCE8 /* Components */,
+				1B6D7051DE94829C05B1057E /* Models */,
+				00C7D008849F7386CC957B8A /* State */,
+				BBB7813289CF9AAB1A4610BA /* Theme */,
+				A62B340AB6D22DC678C64DE6 /* Views */,
+				18C7B40E3AD387E3CF1B9256 /* MMailApp.swift */,
+			);
+			path = MMail;
+			sourceTree = "<group>";
+		};
+		A62B340AB6D22DC678C64DE6 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				067FDA44372798C7B298D335 /* AccountRailView.swift */,
+				3415F5DC40ADAD49F09977A1 /* AddAccountView.swift */,
+				4F9FE22A6CEE48BF1C394B2A /* CommandPaletteView.swift */,
+				E2CF45DFB8B78E1224BD9514 /* ComposeView.swift */,
+				3FBA6EAD89232491D6FF8AAF /* EmailListView.swift */,
+				B669678B83AECA83BA6DF4CD /* HelpSheetView.swift */,
+				1EABA6D5E51F2CB475040F67 /* HomeView.swift */,
+				B1839AA4256AD539B7E201FD /* OnboardingView.swift */,
+				3B303764555CA0F1AA5D6431 /* ReaderView.swift */,
+				2217A8D681EDC9DC08448B20 /* RootView.swift */,
+				9C44FF3EE733F7A86D87AE28 /* SettingsView.swift */,
+				7B4AF498A0E6F2A7C049FDFD /* SidebarView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		BBB7813289CF9AAB1A4610BA /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				E68E9DF829AD4EBED12B2F2E /* Theme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		FFA451DEF86DBE796013DCE8 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				FC7062ED4848255AFB2D1992 /* Atoms.swift */,
+				903AD651E0AA8087A7D60DFF /* MiscViews.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		148FB4CA6DD5085BB9C5EE7B /* MMail */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4B3635B7371636B85C988679 /* Build configuration list for PBXNativeTarget "MMail" */;
+			buildPhases = (
+				CBECEB013E788022F17ADD98 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MMail;
+			packageProductDependencies = (
+			);
+			productName = MMail;
+			productReference = 3717DE86372DA2EB6CD1D04A /* MMail.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7F210DE68C92080F2962BB1C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					148FB4CA6DD5085BB9C5EE7B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 43348D316485994AFE82BECB /* Build configuration list for PBXProject "MMail" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 5EE6176948ACCAD6823E2F20;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 46660F53D031ECF79743F93C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				148FB4CA6DD5085BB9C5EE7B /* MMail */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CBECEB013E788022F17ADD98 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7816788B343DCF37413C00FA /* AccountRailView.swift in Sources */,
+				17BB225EB35F1847D5C57B7E /* AddAccountView.swift in Sources */,
+				BE505C010C09F6AFB384E8C9 /* AppModel.swift in Sources */,
+				F7178A73DD13D48B77E377D0 /* Atoms.swift in Sources */,
+				C2E07547425A80AD42EAD413 /* CommandPaletteView.swift in Sources */,
+				70289C8E18AFF23A0FF1E46B /* ComposeView.swift in Sources */,
+				63C8FFCEDFECD21D7D7C351D /* EmailListView.swift in Sources */,
+				6F7B251114D6AC0C0EC1DFCA /* HelpSheetView.swift in Sources */,
+				5B6226FBAB07AC5F325B9A40 /* HomeView.swift in Sources */,
+				6AB5697973DD2DFA70DCD13A /* MMailApp.swift in Sources */,
+				482809988F6EB437DA58D4CD /* MiscViews.swift in Sources */,
+				D913BC78DC57ACB3CFAEAA8E /* Models.swift in Sources */,
+				8240DB9802A6B1CF6F49FCD3 /* OnboardingView.swift in Sources */,
+				EDF6BA1F4277388005EA5BDA /* ReaderView.swift in Sources */,
+				4981A459A999FC4B8E9F5803 /* RootView.swift in Sources */,
+				B7635E5A653911A58EC8EC63 /* SampleData.swift in Sources */,
+				65C5F6F9035EF1353DB9307A /* SettingsView.swift in Sources */,
+				B7A899BAA4C3DD629951E464 /* SidebarView.swift in Sources */,
+				CC7DF28D10C2AA0AD23C18C8 /* Theme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		44A1B7AD2C942FE2F89E8875 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		774E9B38E666D16DA370DCB7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		7D2879C17203073B38685440 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MMail;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = "";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = studio.cobalt.MMail;
+				PRODUCT_NAME = MMail;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		E753678EB17468C3A11F8FF3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MMail;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = "";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = studio.cobalt.MMail;
+				PRODUCT_NAME = MMail;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		43348D316485994AFE82BECB /* Build configuration list for PBXProject "MMail" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				44A1B7AD2C942FE2F89E8875 /* Debug */,
+				774E9B38E666D16DA370DCB7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4B3635B7371636B85C988679 /* Build configuration list for PBXNativeTarget "MMail" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7D2879C17203073B38685440 /* Debug */,
+				E753678EB17468C3A11F8FF3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 7F210DE68C92080F2962BB1C /* Project object */;
+}
