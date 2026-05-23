@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
+    @State private var newLabelDraft = ""
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -63,6 +64,29 @@ struct SettingsView: View {
                                 .foregroundStyle(p.brandBlue)
                         }.buttonStyle(.plain).padding(.vertical, 12)
                     }
+                    section("Labels") {
+                        if model.labels.isEmpty {
+                            Text("No labels yet. Create one below.").font(.system(size: 13)).foregroundStyle(p.fg3).padding(.vertical, 12)
+                        } else {
+                            ForEach(model.labels) { l in
+                                LabelEditRow(label: l)
+                                if l.id != model.labels.last?.id { Rectangle().fill(p.border).frame(height: 1) }
+                            }
+                        }
+                        Rectangle().fill(p.border).frame(height: 1)
+                        HStack(spacing: 8) {
+                            Icon(name: "tag", size: 13).foregroundStyle(p.fg3)
+                            TextField("New label name", text: $newLabelDraft)
+                                .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(p.fg1)
+                                .onSubmit { addNewLabel() }
+                            Button { addNewLabel() } label: {
+                                Text("Add").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.brandBlue)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(newLabelDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+                        .padding(.vertical, 12)
+                    }
                     section("Keyboard & alerts") {
                         toggleRow("Keyboard (vim) navigation", "J / K to move, G-prefix to go to folders, single-key triage.",
                                   on: Binding(get: { model.vimNav }, set: { model.setVimNav($0) }))
@@ -81,6 +105,13 @@ struct SettingsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.borderStrong, lineWidth: 1))
         .shadow(color: .black.opacity(0.4), radius: 48, y: 24)
+    }
+
+    private func addNewLabel() {
+        let name = newLabelDraft.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        model.addLabel(name)
+        newLabelDraft = ""
     }
 
     private func section<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
@@ -103,6 +134,53 @@ struct SettingsView: View {
             .padding(.vertical, 12)
             if !last { Rectangle().fill(p.border).frame(height: 1) }
         }
+    }
+}
+
+struct LabelEditRow: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.palette) private var p
+    let label: MailLabel
+    @State private var name = ""
+    @State private var colorOpen = false
+
+    private let swatchCols = Array(repeating: GridItem(.fixed(24), spacing: 8), count: 5)
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button { colorOpen.toggle() } label: {
+                Circle().fill(label.color).frame(width: 16, height: 16)
+                    .overlay(Circle().stroke(p.border, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $colorOpen, arrowEdge: .bottom) { swatches }
+
+            TextField("Label name", text: $name)
+                .textFieldStyle(.plain).font(.system(size: 13.5)).foregroundStyle(p.fg1)
+                .onSubmit { model.renameLabel(label.id, to: name) }
+
+            Spacer(minLength: 8)
+            Button { model.deleteLabel(label.id) } label: {
+                Icon(name: "trash", size: 13).foregroundStyle(p.danger)
+            }
+            .buttonStyle(.plain).help("Delete label")
+        }
+        .padding(.vertical, 10)
+        .onAppear { name = label.name }
+        .onChange(of: label.name) { _, v in name = v }
+    }
+
+    private var swatches: some View {
+        LazyVGrid(columns: swatchCols, spacing: 8) {
+            ForEach(AppModel.labelPalette, id: \.self) { hex in
+                Button { model.setLabelColor(label.id, hex: hex); colorOpen = false } label: {
+                    Circle().fill(Color(hex: hex)).frame(width: 22, height: 22)
+                        .overlay(Circle().stroke(label.colorHex == hex ? p.fg1 : Color.clear, lineWidth: 2))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
     }
 }
 

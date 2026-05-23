@@ -37,6 +37,7 @@
 		B7A899BAA4C3DD629951E464 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4AF498A0E6F2A7C049FDFD /* SidebarView.swift */; };
 		BE505C010C09F6AFB384E8C9 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E339A5381F119E119D179F2 /* AppModel.swift */; };
 		C2E07547425A80AD42EAD413 /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9FE22A6CEE48BF1C394B2A /* CommandPaletteView.swift */; };
+		CC5ED000189ABA9C357BED33 /* PeopleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9E1FBE4FCEF6BB8A40762A /* PeopleView.swift */; };
 		CC7DF28D10C2AA0AD23C18C8 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68E9DF829AD4EBED12B2F2E /* Theme.swift */; };
 		D913BC78DC57ACB3CFAEAA8E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1584790EAAE22906433DB5A3 /* Models.swift */; };
 		E2BA25DBDE230E7D13F17556 /* NIOSSL in Frameworks */ = {isa = PBXBuildFile; productRef = 7F67843ADB475401132163CE /* NIOSSL */; };
@@ -49,6 +50,7 @@
 /* Begin PBXFileReference section */
 		067FDA44372798C7B298D335 /* AccountRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRailView.swift; sourceTree = "<group>"; };
 		0D01C5709231036FDB9444F7 /* ManualAccountSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualAccountSetupView.swift; sourceTree = "<group>"; };
+		0F9E1FBE4FCEF6BB8A40762A /* PeopleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleView.swift; sourceTree = "<group>"; };
 		1584790EAAE22906433DB5A3 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		18C7B40E3AD387E3CF1B9256 /* MMailApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MMailApp.swift; sourceTree = "<group>"; };
 		1B99833A4A34A3B059F965D2 /* JournalArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalArchiveView.swift; sourceTree = "<group>"; };
@@ -159,6 +161,7 @@
 				1B99833A4A34A3B059F965D2 /* JournalArchiveView.swift */,
 				0D01C5709231036FDB9444F7 /* ManualAccountSetupView.swift */,
 				B1839AA4256AD539B7E201FD /* OnboardingView.swift */,
+				0F9E1FBE4FCEF6BB8A40762A /* PeopleView.swift */,
 				3B303764555CA0F1AA5D6431 /* ReaderView.swift */,
 				2217A8D681EDC9DC08448B20 /* RootView.swift */,
 				9C44FF3EE733F7A86D87AE28 /* SettingsView.swift */,
@@ -294,6 +297,7 @@
 				D913BC78DC57ACB3CFAEAA8E /* Models.swift in Sources */,
 				A531BB607FF979E32825D772 /* Notifier.swift in Sources */,
 				8240DB9802A6B1CF6F49FCD3 /* OnboardingView.swift in Sources */,
+				CC5ED000189ABA9C357BED33 /* PeopleView.swift in Sources */,
 				839C08C0B268C946970A9C32 /* QuickLook.swift in Sources */,
 				EDF6BA1F4277388005EA5BDA /* ReaderView.swift in Sources */,
 				4981A459A999FC4B8E9F5803 /* RootView.swift in Sources */,

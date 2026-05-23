@@ -101,6 +101,9 @@ struct RootView: View {
         if model.advancedSearchOpen {
             AdvancedSearchView()
         }
+        if model.peopleOpen {
+            PeopleView()
+        }
     }
 
     // MARK: - Toolbar

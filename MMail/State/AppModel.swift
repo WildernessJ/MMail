@@ -148,6 +148,9 @@ final class AppModel: ObservableObject {
     private var didBootstrap = false
     private var pageLimits: [String: Int] = [:]
     @Published var weather: WeatherInfo?
+    @Published var weatherCity = ""   // empty = auto (IP geolocation)
+    @Published var peopleOpen = false
+    private let kWeatherCity = "mmail.weatherCity"
 
     private static let seedJournalRecent: [JournalEntry] = [
         JournalEntry(id: "jr-yesterday", date: "Yesterday", text: "Crit went well. Sarah's instinct on the empty state was right — copy carries it. Need to write down the lighter ring decision before I forget."),
@@ -196,6 +199,7 @@ final class AppModel: ObservableObject {
             realConfigs = decoded
             for cfg in decoded { accounts.append(AppModel.uiAccount(for: cfg)) }
         }
+        weatherCity = d.string(forKey: kWeatherCity) ?? ""
         if let data = d.data(forKey: kScheduled),
            let decoded = try? JSONDecoder().decode([ScheduledSend].self, from: data) { scheduled = decoded }
         if let data = d.data(forKey: kSnoozed),
@@ -279,7 +283,7 @@ final class AppModel: ObservableObject {
     var total: Int { filteredEmails.count }
 
     var anyOverlayOpen: Bool {
-        palette || help || settings || compose != nil || addingAccount || journalArchiveOpen || manualSetupOpen || advancedSearchOpen
+        palette || help || settings || compose != nil || addingAccount || journalArchiveOpen || manualSetupOpen || advancedSearchOpen || peopleOpen
     }
 
     // MARK: - Persistence side-effects
@@ -523,6 +527,67 @@ final class AppModel: ObservableObject {
         selectedId = filteredEmails.first?.id
     }
 
+    static let labelPalette = ["E5484D", "1FB36B", "7A5AE0", "F4A52A", "2D3DEC",
+                               "0EA5E9", "D946EF", "06B6D4", "B25A2A", "635BFF"]
+
+    func renameLabel(_ id: String, to newName: String) {
+        guard let i = labels.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = newName.trimmingCharacters(in: .whitespaces)
+        labels[i] = MailLabel(id: id, name: trimmed.isEmpty ? AppModel.prettifyLabel(id) : trimmed,
+                              colorHex: labels[i].colorHex)
+        persistLabels()
+    }
+
+    func setLabelColor(_ id: String, hex: String) {
+        guard let i = labels.firstIndex(where: { $0.id == id }) else { return }
+        labels[i] = MailLabel(id: id, name: labels[i].name, colorHex: hex)
+        persistLabels()
+    }
+
+    /// Delete a label: strip the keyword off every loaded message (local + server)
+    /// then drop the definition.
+    func deleteLabel(_ id: String) {
+        let targets = emails.filter { $0.labels.contains(id) }
+        for e in targets { applyLabel(e, id, add: false) }
+        labels.removeAll { $0.id == id }
+        if labelFilter == id { labelFilter = nil }
+        persistLabels()
+    }
+
+    // MARK: - Weather
+
+    func setWeatherCity(_ city: String) {
+        weatherCity = city.trimmingCharacters(in: .whitespaces)
+        UserDefaults.standard.set(weatherCity, forKey: kWeatherCity)
+        refreshWeather()
+    }
+
+    func refreshWeather() {
+        let city = weatherCity
+        Task {
+            let w = await WeatherService.fetch(city: city.isEmpty ? nil : city)
+            await MainActor.run { if let w { self.weather = w } }
+        }
+    }
+
+    // MARK: - Contacts (derived from the inbox)
+
+    /// Distinct human senders from the current account scope's inbox, most recent first.
+    func contacts(limit: Int? = nil) -> [Sender] {
+        let scope = currentAccount == "all" ? emails : emails.filter { $0.account == currentAccount }
+        var seen = Set<String>()
+        var result: [Sender] = []
+        for e in scope where e.folder == "inbox" {
+            let s = e.resolvedSender
+            guard !s.email.isEmpty, s.id != "you", s.org != .bot else { continue }
+            if seen.insert(s.email).inserted {
+                result.append(s)
+                if let limit, result.count == limit { break }
+            }
+        }
+        return result
+    }
+
     // MARK: - Compose
 
     func startCompose(to: String = "", subject: String = "", body: String = "",
@@ -669,7 +734,7 @@ final class AppModel: ObservableObject {
 
     func closeOverlays() {
         palette = false; help = false; settings = false; compose = nil; addingAccount = false
-        journalArchiveOpen = false; manualSetupOpen = false; advancedSearchOpen = false
+        journalArchiveOpen = false; manualSetupOpen = false; advancedSearchOpen = false; peopleOpen = false
     }
 
     func setFolder(_ f: String) {
@@ -917,7 +982,7 @@ final class AppModel: ObservableObject {
         didBootstrap = true
         if notificationsEnabled { Notifier.requestAuthorization() }
         processScheduledSends()
-        Task { let w = await WeatherService.fetch(); await MainActor.run { if let w { self.weather = w } } }
+        refreshWeather()
         for cfg in realConfigs {
             if let cached = MailCache.load(account: cfg.id, folder: "inbox"), !cached.isEmpty {
                 emails.removeAll { $0.account == cfg.id && $0.folder == "inbox" }

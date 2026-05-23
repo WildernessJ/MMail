@@ -2,8 +2,15 @@ import Foundation
 
 // Live weather via IP geolocation (no permission prompt) + Open-Meteo (no key).
 enum WeatherService {
-    static func fetch() async -> WeatherInfo? {
-        guard let (lat, lon, city) = await geolocate() else { return nil }
+    /// `city` non-nil/non-empty geocodes that place; otherwise IP geolocation.
+    static func fetch(city: String? = nil) async -> WeatherInfo? {
+        let located: (Double, Double, String)?
+        if let city, !city.trimmingCharacters(in: .whitespaces).isEmpty {
+            located = await geocode(city)
+        } else {
+            located = await geolocate()
+        }
+        guard let (lat, lon, city) = located else { return nil }
         var c = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
         c.queryItems = [
             .init(name: "latitude", value: String(lat)),
@@ -28,6 +35,25 @@ enum WeatherService {
         }
         return WeatherInfo(temp: temp, feels: feels, hi: hi, lo: lo,
                            condition: condition(for: code), location: city)
+    }
+
+    /// Resolve a city name to coordinates via Open-Meteo geocoding (no key).
+    private static func geocode(_ name: String) async -> (Double, Double, String)? {
+        var c = URLComponents(string: "https://geocoding-api.open-meteo.com/v1/search")!
+        c.queryItems = [
+            .init(name: "name", value: name),
+            .init(name: "count", value: "1"),
+            .init(name: "language", value: "en"),
+            .init(name: "format", value: "json")
+        ]
+        guard let url = c.url, let (data, _) = try? await URLSession.shared.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let results = json["results"] as? [[String: Any]], let first = results.first,
+              let lat = first["latitude"] as? Double, let lon = first["longitude"] as? Double else { return nil }
+        var label = (first["name"] as? String) ?? name
+        if let admin = first["admin1"] as? String, !admin.isEmpty { label = "\(label), \(admin)" }
+        else if let country = first["country_code"] as? String, !country.isEmpty { label = "\(label), \(country)" }
+        return (lat, lon, label)
     }
 
     private static func geolocate() async -> (Double, Double, String)? {

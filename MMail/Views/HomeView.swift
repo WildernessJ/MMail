@@ -4,6 +4,8 @@ struct HomeView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
     @State private var draftTodo = ""
+    @State private var cityPromptOpen = false
+    @State private var cityDraft = ""
 
     private let months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
     private let dows = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
@@ -29,18 +31,8 @@ struct HomeView: View {
         model.currentAccount == "all" ? model.emails : model.emails.filter { $0.account == model.currentAccount }
     }
     private var people: [Sender] {
-        // Derive the most recent distinct human senders from the real inbox.
-        var seen = Set<String>()
-        var result: [Sender] = []
-        for e in homeEmails where e.folder == "inbox" {
-            let s = e.resolvedSender
-            guard !s.email.isEmpty, s.id != "you", s.org != .bot else { continue }
-            if seen.insert(s.email).inserted {
-                result.append(s)
-                if result.count == 6 { break }
-            }
-        }
-        return result.isEmpty ? SampleData.homePeople.compactMap { SampleData.senders[$0] } : result
+        let derived = model.contacts(limit: 6)
+        return derived.isEmpty ? SampleData.homePeople.compactMap { SampleData.senders[$0] } : derived
     }
     private var unreadFrom: Set<String> {
         Set(homeEmails.filter { $0.unread && $0.folder == "inbox" }.map { $0.from })
@@ -80,12 +72,20 @@ struct HomeView: View {
 
     // MARK: Cards
 
-    private func cardHead(icon: String, title: String, trailing: String? = nil) -> some View {
+    private func cardHead(icon: String, title: String, trailing: String? = nil, trailingAction: (() -> Void)? = nil) -> some View {
         HStack(spacing: 8) {
             Icon(name: icon, size: 14).foregroundStyle(p.fg3)
             Text(title.uppercased()).font(.system(size: 10.5, weight: .bold)).tracking(0.8).foregroundStyle(p.fg3)
             Spacer()
-            if let trailing { Text(trailing).font(.system(size: 11)).foregroundStyle(p.fg3) }
+            if let trailing {
+                if let trailingAction {
+                    Button(action: trailingAction) {
+                        Text(trailing).font(.system(size: 11, weight: .semibold)).foregroundStyle(p.brandBlue)
+                    }.buttonStyle(.plain)
+                } else {
+                    Text(trailing).font(.system(size: 11)).foregroundStyle(p.fg3)
+                }
+            }
         }
         .padding(.bottom, 14)
     }
@@ -104,18 +104,47 @@ struct HomeView: View {
     private var dateCard: some View {
         card(square: true) {
             cardHead(icon: "clock", title: "Date")
-            Text(parts.dow).font(.system(size: 20, weight: .bold)).foregroundStyle(p.danger)
-            Text("\(parts.num)").font(.system(size: 96, weight: .heavy)).foregroundStyle(p.fg1)
-                .minimumScaleFactor(0.5).lineLimit(1)
-            Text("\(parts.month) \(parts.year)").font(.system(size: 12.5)).foregroundStyle(p.fg3).padding(.top, 8)
             Spacer(minLength: 0)
+            Text(parts.dow.uppercased()).font(.system(size: 26, weight: .bold)).tracking(1)
+                .foregroundStyle(p.danger)
+            Text("\(parts.num)").font(.system(size: 150, weight: .heavy)).foregroundStyle(p.fg1)
+                .minimumScaleFactor(0.4).lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, -10)
+            Spacer(minLength: 0)
+            Text("\(parts.month) \(parts.year)").font(.system(size: 14, weight: .medium)).foregroundStyle(p.fg3)
         }
     }
 
     private var weatherCard: some View {
         let w = model.weather ?? SampleData.weather
+        let cityShort = w.location.split(separator: ",").first.map(String.init) ?? "Set city"
         return card(square: true) {
-            cardHead(icon: "sun", title: "Weather", trailing: w.location.split(separator: ",").first.map(String.init))
+            HStack(spacing: 8) {
+                Icon(name: "sun", size: 14).foregroundStyle(p.fg3)
+                Text("WEATHER").font(.system(size: 10.5, weight: .bold)).tracking(0.8).foregroundStyle(p.fg3)
+                Spacer()
+                Button {
+                    cityDraft = model.weatherCity
+                    cityPromptOpen = true
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(cityShort).font(.system(size: 11, weight: .medium)).foregroundStyle(p.fg2).lineLimit(1)
+                        Icon(name: "chevronDown", size: 9).foregroundStyle(p.fg3)
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Set city for weather")
+            }
+            .padding(.bottom, 14)
+            .alert("Weather city", isPresented: $cityPromptOpen) {
+                TextField("City name (blank = auto-detect)", text: $cityDraft)
+                Button("Cancel", role: .cancel) {}
+                Button("Use my location") { model.setWeatherCity("") }
+                Button("Set") { model.setWeatherCity(cityDraft) }
+            } message: {
+                Text("Enter a city to show its weather, or use your approximate location.")
+            }
             WeatherGlyph(size: 56)
             Text("\(w.temp)°F").font(.system(size: 60, weight: .heavy)).foregroundStyle(p.fg1)
                 .minimumScaleFactor(0.5).lineLimit(1).padding(.top, 4)
@@ -133,7 +162,7 @@ struct HomeView: View {
 
     private var peopleCard: some View {
         card(square: true) {
-            cardHead(icon: "user", title: "People", trailing: "View all →")
+            cardHead(icon: "user", title: "People", trailing: "View all →") { model.peopleOpen = true }
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                 ForEach(people) { person in
                     Button { model.startCompose(to: person.email, titleLabel: "To \(person.name)") } label: {
