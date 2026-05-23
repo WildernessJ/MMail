@@ -57,10 +57,19 @@ struct HomeView: View {
                     weatherCard
                     peopleCard
                 }
-                HStack(alignment: .top, spacing: 16) {
-                    journalCard
-                        .frame(width: rowWidth > 0 ? max(0, 2 * (rowWidth - 32) / 3 + 16) : nil)
-                    todoCard
+                Group {
+                    if rowWidth > 0 && rowWidth < 760 {
+                        VStack(spacing: 16) {
+                            journalCard
+                            todoCard
+                        }
+                    } else {
+                        HStack(alignment: .top, spacing: 16) {
+                            journalCard
+                                .frame(width: rowWidth > 0 ? max(0, 2 * (rowWidth - 32) / 3 + 16) : nil)
+                            todoCard
+                        }
+                    }
                 }
                 .padding(.top, 16)
                 .background(GeometryReader { geo in
