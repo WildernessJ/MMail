@@ -108,6 +108,7 @@ struct AccountRailView: View {
             }
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .help(tooltip)
     }
 }
