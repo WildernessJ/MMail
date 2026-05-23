@@ -29,7 +29,7 @@ struct HelpSheetView: View {
         Section(title: "Composition", items: [
             Shortcut(label: "Compose new", keys: ["C"]),
             Shortcut(label: "Reply", keys: ["R"]),
-            Shortcut(label: "Reply all", keys: ["⇧", "R"]),
+            Shortcut(label: "Reply all", keys: ["A"]),
             Shortcut(label: "Forward", keys: ["F"]),
             Shortcut(label: "Send", keys: ["⌘", "↵"]),
             Shortcut(label: "Discard draft", keys: ["⌘", "⌫"])

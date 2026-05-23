@@ -239,13 +239,7 @@ struct EmailRowView: View {
     }
 
     private var avatar: some View {
-        ZStack(alignment: .topLeading) {
-            Avatar(sender: sender, size: 36)
-            if email.unread {
-                Circle().fill(p.brandBlue).frame(width: 8, height: 8)
-                    .offset(x: -14, y: 4)
-            }
-        }
+        Avatar(sender: sender, size: 36)
     }
 
     private var rowBackground: Color {

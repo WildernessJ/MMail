@@ -41,7 +41,9 @@ enum Icons {
         "home": "house",
         "sparkles": "sparkles",
         "sun": "sun.max",
-        "plus": "plus"
+        "plus": "plus",
+        "more": "ellipsis",
+        "copy": "doc.on.doc"
     ]
 }
 

@@ -49,8 +49,11 @@ struct SidebarView: View {
         .padding(.vertical, 10)
         .frame(width: 232)
         .frame(maxHeight: .infinity)
-        .background(p.bg2)
-        .overlay(Rectangle().fill(p.border).frame(width: 1), alignment: .trailing)
+        .background(p.bg1)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.border, lineWidth: 1))
+        .shadow(color: .black.opacity(p.isDark ? 0.4 : 0.06), radius: 4, y: 1)
+        .padding(EdgeInsets(top: 10, leading: 6, bottom: 10, trailing: 10))
     }
 
     private var composeButton: some View {

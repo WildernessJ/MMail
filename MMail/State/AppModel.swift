@@ -47,6 +47,7 @@ final class AppModel: ObservableObject {
     private let kDark = "mmail.dark"
     private let kSidebar = "mmail.sidebar"
     private let kReadingPane = "mmail.readingPane"
+    private let kJournalRecent = "mmail.journal.recent"
 
     // Core state
     @Published var onboarding: Bool
@@ -73,14 +74,16 @@ final class AppModel: ObservableObject {
     @Published var searchFocusRequested = false
     @Published var toast: ToastModel?
     @Published var pendingG = false
+    @Published var journalArchiveOpen = false
 
     // Home dashboard
     @Published var todos: [Todo]
     @Published var journal: String
+    @Published var journalRecent: [JournalEntry]
 
-    let journalRecent: [(date: String, text: String)] = [
-        ("Yesterday", "Crit went well. Sarah's instinct on the empty state was right — copy carries it. Need to write down the lighter ring decision before I forget."),
-        ("Mon · Mar 18", "Started the week underwater but the Lumen sign-off felt great. Need to make space tomorrow for the Q3 roadmap doc Theo shared.")
+    private static let seedJournalRecent: [JournalEntry] = [
+        JournalEntry(id: "jr-yesterday", date: "Yesterday", text: "Crit went well. Sarah's instinct on the empty state was right — copy carries it. Need to write down the lighter ring decision before I forget."),
+        JournalEntry(id: "jr-mar-18", date: "Mon · Mar 18", text: "Started the week underwater but the Lumen sign-off felt great. Need to make space tomorrow for the Q3 roadmap doc Theo shared.")
     ]
 
     private var keyMonitor: Any?
@@ -98,6 +101,12 @@ final class AppModel: ObservableObject {
             todos = decoded
         } else {
             todos = SampleData.seedTodos
+        }
+        if let data = d.data(forKey: kJournalRecent),
+           let decoded = try? JSONDecoder().decode([JournalEntry].self, from: data) {
+            journalRecent = decoded
+        } else {
+            journalRecent = AppModel.seedJournalRecent
         }
     }
 
@@ -164,7 +173,7 @@ final class AppModel: ObservableObject {
     var total: Int { filteredEmails.count }
 
     var anyOverlayOpen: Bool {
-        palette || help || settings || compose != nil || addingAccount
+        palette || help || settings || compose != nil || addingAccount || journalArchiveOpen
     }
 
     // MARK: - Persistence side-effects
@@ -182,6 +191,15 @@ final class AppModel: ObservableObject {
         }
     }
     func persistJournal() { UserDefaults.standard.set(journal, forKey: kJournal) }
+    func persistJournalRecent() {
+        if let data = try? JSONEncoder().encode(journalRecent) {
+            UserDefaults.standard.set(data, forKey: kJournalRecent)
+        }
+    }
+    func removeJournalEntry(_ id: String) {
+        journalRecent.removeAll { $0.id == id }
+        persistJournalRecent()
+    }
 
     // MARK: - Selection / read
 
@@ -317,7 +335,7 @@ final class AppModel: ObservableObject {
     }
 
     func closeOverlays() {
-        palette = false; help = false; settings = false; compose = nil; addingAccount = false
+        palette = false; help = false; settings = false; compose = nil; addingAccount = false; journalArchiveOpen = false
     }
 
     func setFolder(_ f: String) {
@@ -332,7 +350,7 @@ final class AppModel: ObservableObject {
         var cmds: [Command] = [
             Command(id: "compose", group: "Mail", label: "Compose new message", icon: "pencil", shortcut: "C") { [weak self] in self?.startCompose() },
             Command(id: "reply", group: "Mail", label: "Reply to current message", icon: "reply", shortcut: "R") { [weak self] in self?.reply() },
-            Command(id: "replyAll", group: "Mail", label: "Reply all", icon: "replyAll", shortcut: "⇧R") { [weak self] in self?.replyAll() },
+            Command(id: "replyAll", group: "Mail", label: "Reply all", icon: "replyAll", shortcut: "A") { [weak self] in self?.replyAll() },
             Command(id: "forward", group: "Mail", label: "Forward", icon: "forward", shortcut: "F") { [weak self] in self?.forward() },
             Command(id: "archive", group: "Triage", label: "Archive", icon: "archive", shortcut: "E") { [weak self] in self?.archive() },
             Command(id: "done", group: "Triage", label: "Mark as done", icon: "check", shortcut: "H") { [weak self] in self?.markDone() },
@@ -460,7 +478,7 @@ final class AppModel: ObservableObject {
         case "z": if listActive { snooze() }; return listActive
         case "c": startCompose(); return true
         case "r": reply(); return true
-        case "R": replyAll(); return true
+        case "a": replyAll(); return true
         case "f": forward(); return true
         default: return false
         }

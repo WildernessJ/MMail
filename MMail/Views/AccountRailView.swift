@@ -47,7 +47,6 @@ struct AccountRailView: View {
         .frame(width: 56)
         .frame(maxHeight: .infinity)
         .background(p.bg2)
-        .overlay(Rectangle().fill(p.border).frame(width: 1), alignment: .trailing)
     }
 
     private var allTile: some View {

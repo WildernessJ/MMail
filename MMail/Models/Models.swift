@@ -81,6 +81,12 @@ struct Todo: Identifiable, Codable {
     var source: String?
 }
 
+struct JournalEntry: Identifiable, Codable {
+    var id: String
+    var date: String
+    var text: String
+}
+
 struct Folder: Identifiable {
     let id: String
     let name: String

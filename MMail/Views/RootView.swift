@@ -7,7 +7,7 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            p.bg1.ignoresSafeArea()
+            p.bg2.ignoresSafeArea()
 
             if model.onboarding {
                 OnboardingView()
@@ -87,6 +87,9 @@ struct RootView: View {
         }
         if model.addingAccount {
             AddAccountView()
+        }
+        if model.journalArchiveOpen {
+            JournalArchiveView()
         }
     }
 

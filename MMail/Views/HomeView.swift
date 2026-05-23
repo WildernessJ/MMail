@@ -51,8 +51,11 @@ struct HomeView: View {
                     weatherCard
                     peopleCard
                 }
-                journalCard.padding(.top, 16)
-                todoCard.padding(.top, 16)
+                HStack(alignment: .top, spacing: 16) {
+                    journalCard
+                    todoCard
+                }
+                .padding(.top, 16)
             }
             .frame(maxWidth: 1100, alignment: .leading)
             .padding(.horizontal, 40).padding(.top, 32).padding(.bottom, 56)
@@ -171,20 +174,25 @@ struct HomeView: View {
             .overlay(Rectangle().fill(p.border).frame(height: 1), alignment: .top)
             .padding(.top, 12)
 
-            VStack(spacing: 6) {
-                ForEach(Array(model.journalRecent.enumerated()), id: \.offset) { _, j in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(j.date.uppercased()).font(.system(size: 10.5, weight: .semibold)).tracking(0.4).foregroundStyle(p.fg3)
-                        Text(j.text).font(.system(size: 12.5)).foregroundStyle(p.fg2)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 10).padding(.vertical, 8)
-                    .background(p.bg2)
-                    .overlay(Rectangle().fill(p.magenta).frame(width: 2), alignment: .leading)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Button { model.journalArchiveOpen = true } label: {
+                HStack(spacing: 8) {
+                    Icon(name: "file", size: 13).foregroundStyle(p.fg3)
+                    Text("Saved journal").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.fg1)
+                    Text("\(model.journalRecent.count)")
+                        .font(.system(size: 11, weight: .bold)).monospacedDigit()
+                        .foregroundStyle(p.magenta)
+                        .padding(.horizontal, 6).frame(minWidth: 18, minHeight: 18)
+                        .background(p.magenta100)
+                        .clipShape(Capsule())
+                    Icon(name: "chevronRight", size: 12).foregroundStyle(p.fg3)
                 }
+                .padding(.init(top: 8, leading: 12, bottom: 8, trailing: 10))
+                .background(p.bg2)
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(p.border, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-            .padding(.top, 12)
+            .buttonStyle(.plain)
+            .padding(.top, 14)
         }
     }
 
