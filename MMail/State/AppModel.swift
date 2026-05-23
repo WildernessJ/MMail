@@ -31,6 +31,17 @@ struct ToastModel: Identifiable {
     var action: (() -> Void)?
 }
 
+struct ScheduledSend: Codable, Identifiable {
+    var id: String
+    var fromId: String
+    var to: String
+    var cc: String
+    var bcc: String
+    var subject: String
+    var body: String
+    var sendAt: Date
+}
+
 struct Command: Identifiable {
     let id: String
     let group: String
@@ -104,6 +115,10 @@ final class AppModel: ObservableObject {
     @Published var realMailboxes: [String: [String: String]] = [:]
     @Published var serverSearchResults: [Email]?
     @Published var searching = false
+    @Published var scheduled: [ScheduledSend] = []
+    @Published var snoozedUntil: [String: Date] = [:]   // "accountId#uid" -> wake date
+    private let kScheduled = "mmail.scheduled"
+    private let kSnoozed = "mmail.snoozed"
     private var pollTimer: Timer?
     private var imapSessions: [String: IMAPSession] = [:]
     private var didBootstrap = false
@@ -149,6 +164,10 @@ final class AppModel: ObservableObject {
             realConfigs = decoded
             for cfg in decoded { accounts.append(AppModel.uiAccount(for: cfg)) }
         }
+        if let data = d.data(forKey: kScheduled),
+           let decoded = try? JSONDecoder().decode([ScheduledSend].self, from: data) { scheduled = decoded }
+        if let data = d.data(forKey: kSnoozed),
+           let decoded = try? JSONDecoder().decode([String: Date].self, from: data) { snoozedUntil = decoded }
         // Welcome shows on first launch and whenever no account is connected.
         onboarding = accounts.isEmpty
     }
@@ -178,10 +197,17 @@ final class AppModel: ObservableObject {
                 (SampleData.senders[e.from]?.name.lowercased().contains(ql) ?? false)
             }
         }
+        if folder == "snoozed" { return accountFiltered.filter { isSnoozed($0) } }
         return accountFiltered.filter { e in
+            if isSnoozed(e) { return false }
             if folder == "starred" { return e.starred && e.folder != "trash" }
             return e.folder == folder
         }
+    }
+
+    func isSnoozed(_ e: Email) -> Bool {
+        guard let uid = e.uid, let until = snoozedUntil["\(e.account)#\(uid)"] else { return false }
+        return until > Date()
     }
 
     var filteredEmails: [Email] {
@@ -343,7 +369,28 @@ final class AppModel: ObservableObject {
         }
         moveTo(target, dest: "spam", verb: "Marked as spam")
     }
-    func snooze(_ id: String? = nil) { moveTo(id ?? selectedId, dest: "snoozed", verb: "Snoozed") }
+    func snooze(_ id: String? = nil) {
+        let target = id ?? selectedId
+        guard let target, let e = emails.first(where: { $0.id == target }) else { return }
+        if isRealAccount(e.account), let uid = e.uid {
+            // Snooze until tomorrow morning (8am).
+            let cal = Calendar.current
+            let wake = cal.date(byAdding: .day, value: 1, to: Date())
+                .flatMap { cal.date(bySettingHour: 8, minute: 0, second: 0, of: $0) } ?? Date().addingTimeInterval(57600)
+            let key = "\(e.account)#\(uid)"
+            // pick next selection before it disappears from view
+            let fe = filteredEmails
+            let idx = fe.firstIndex { $0.id == target }
+            snoozedUntil[key] = wake
+            persistSnoozed()
+            if let idx { selectedId = (fe[safe: idx + 1] ?? fe[safe: idx - 1])?.id }
+            showToast("Snoozed until tomorrow", actionLabel: "Undo") { [weak self] in
+                self?.snoozedUntil[key] = nil; self?.persistSnoozed()
+            }
+        } else {
+            moveTo(target, dest: "snoozed", verb: "Snoozed")
+        }
+    }
 
     func markUnread(_ id: String? = nil) {
         guard let id = id ?? selectedId, let i = emails.firstIndex(where: { $0.id == id }) else { return }
@@ -367,20 +414,72 @@ final class AppModel: ObservableObject {
                                titleLabel: titleLabel, fromId: fromId ?? defaultFrom)
     }
 
-    func sendDraft(_ draft: ComposeDraft, scheduleLabel: String? = nil) {
+    func sendDraft(_ draft: ComposeDraft) {
         let dest = draft.to.isEmpty ? "(unknown)" : draft.to
-        if let label = scheduleLabel {
+        if isRealAccount(draft.fromId) {
+            guard let cfg = config(for: draft.fromId), cfg.smtpPassword != nil else { showToast("Missing SMTP password."); return }
+            let recipients = AppModel.parseRecipients(draft.to) + AppModel.parseRecipients(draft.cc) + AppModel.parseRecipients(draft.bcc)
+            guard !recipients.isEmpty else { showToast("Add a recipient first."); return }
             compose = nil
-            showToast("Scheduled for \(label) · \(dest)")
-            return
-        }
-        if isRealAccount(draft.fromId), let cfg = config(for: draft.fromId) {
-            sendViaSMTP(draft, cfg: cfg)
+            showToast("Sending…")
+            performSend(draft)
             return
         }
         compose = nil
         let acct = accountsById[draft.fromId]
         showToast("Sent to \(dest) from \(acct?.email ?? "you")")
+    }
+
+    // MARK: - Scheduled send
+
+    func scheduleSend(_ draft: ComposeDraft, at date: Date, label: String) {
+        compose = nil
+        scheduled.append(ScheduledSend(id: UUID().uuidString, fromId: draft.fromId, to: draft.to,
+                                       cc: draft.cc, bcc: draft.bcc, subject: draft.subject,
+                                       body: draft.body, sendAt: date))
+        persistScheduled()
+        showToast("Scheduled for \(label) · \(draft.to.isEmpty ? "(unknown)" : draft.to)")
+    }
+
+    func processScheduledSends() {
+        let now = Date()
+        let due = scheduled.filter { $0.sendAt <= now }
+        guard !due.isEmpty else { return }
+        scheduled.removeAll { s in due.contains { $0.id == s.id } }
+        persistScheduled()
+        for s in due {
+            let draft = ComposeDraft(to: s.to, cc: s.cc, bcc: s.bcc, subject: s.subject,
+                                     body: s.body, titleLabel: "", fromId: s.fromId)
+            performSend(draft)
+        }
+    }
+
+    private func persistScheduled() {
+        if let data = try? JSONEncoder().encode(scheduled) { UserDefaults.standard.set(data, forKey: kScheduled) }
+    }
+
+    /// The actual SMTP send + Sent-copy, shared by immediate and scheduled sends.
+    private func performSend(_ draft: ComposeDraft) {
+        guard isRealAccount(draft.fromId), let cfg = config(for: draft.fromId), let pw = cfg.smtpPassword else { return }
+        let recipients = AppModel.parseRecipients(draft.to) + AppModel.parseRecipients(draft.cc) + AppModel.parseRecipients(draft.bcc)
+        guard !recipients.isEmpty else { return }
+        let display = accountsById[cfg.id]?.name
+        let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to, cc: draft.cc,
+                                        subject: draft.subject, body: draft.body)
+        let session = session(for: cfg.id)
+        Task {
+            do {
+                let smtp = SMTPService(config: cfg, password: pw)
+                try await smtp.send(from: cfg.email, fromName: display, recipients: recipients, message: message)
+                if let session, let sentBox = await self.resolveMailbox(cfg.id, kind: .sent, session: session) {
+                    try? await session.append(mailbox: sentBox, rawMessage: message, seen: true, draft: false)
+                    await MainActor.run { self.loadFolder(cfg.id, "sent", silent: true) }
+                }
+                await MainActor.run { self.showToast("Sent to \(draft.to)") }
+            } catch {
+                await MainActor.run { self.showToast("Send failed: \(error.localizedDescription)") }
+            }
+        }
     }
 
     private func quotedBody(_ e: Email) -> String {
@@ -622,6 +721,7 @@ final class AppModel: ObservableObject {
         guard !didBootstrap else { return }
         didBootstrap = true
         if notificationsEnabled { Notifier.requestAuthorization() }
+        processScheduledSends()
         for cfg in realConfigs {
             if let cached = MailCache.load(account: cfg.id, folder: "inbox"), !cached.isEmpty {
                 emails.removeAll { $0.account == cfg.id && $0.folder == "inbox" }
@@ -828,36 +928,26 @@ final class AppModel: ObservableObject {
 
     func startPolling() {
         guard pollTimer == nil else { return }
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            self?.refreshCurrentRealFolder(silent: true)
+        // Every 30s: refresh current folder, fire any due scheduled sends, wake snoozed.
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.refreshCurrentRealFolder(silent: true)
+            self.processScheduledSends()
+            self.wakeSnoozedIfDue()
         }
     }
 
-    func sendViaSMTP(_ draft: ComposeDraft, cfg: MailAccountConfig) {
-        guard let pw = cfg.smtpPassword else { showToast("Missing SMTP password."); return }
-        let recipients = AppModel.parseRecipients(draft.to)
-            + AppModel.parseRecipients(draft.cc) + AppModel.parseRecipients(draft.bcc)
-        guard !recipients.isEmpty else { showToast("Add a recipient first."); return }
-        compose = nil
-        showToast("Sending…")
-        let display = accountsById[cfg.id]?.name
-        let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to, cc: draft.cc,
-                                        subject: draft.subject, body: draft.body)
-        let session = session(for: cfg.id)
-        Task {
-            do {
-                let smtp = SMTPService(config: cfg, password: pw)
-                try await smtp.send(from: cfg.email, fromName: display, recipients: recipients, message: message)
-                // Best-effort: save a copy into the Sent mailbox.
-                if let session, let sentBox = await self.resolveMailbox(cfg.id, kind: .sent, session: session) {
-                    try? await session.append(mailbox: sentBox, rawMessage: message, seen: true, draft: false)
-                    await MainActor.run { self.loadFolder(cfg.id, "sent", silent: true) }
-                }
-                await MainActor.run { self.showToast("Sent to \(draft.to)") }
-            } catch {
-                await MainActor.run { self.showToast("Send failed: \(error.localizedDescription)") }
-            }
-        }
+    private func wakeSnoozedIfDue() {
+        let now = Date()
+        let expired = snoozedUntil.filter { $0.value <= now }
+        guard !expired.isEmpty else { return }
+        for key in expired.keys { snoozedUntil[key] = nil }
+        persistSnoozed()
+        refreshCurrentRealFolder(silent: true)
+    }
+
+    func persistSnoozed() {
+        if let data = try? JSONEncoder().encode(snoozedUntil) { UserDefaults.standard.set(data, forKey: kSnoozed) }
     }
 
     /// Save the compose contents as a draft (best-effort APPEND to Drafts), then close.
@@ -1004,5 +1094,11 @@ final class AppModel: ObservableObject {
         case "f": forward(); return true
         default: return false
         }
+    }
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

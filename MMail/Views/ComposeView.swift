@@ -270,7 +270,7 @@ struct ComposeView: View {
 
     private func scheduleSend(_ opt: ScheduleOption) {
         scheduleOpen = false
-        model.sendDraft(currentDraft(), scheduleLabel: opt.label)
+        model.scheduleSend(currentDraft(), at: opt.when, label: opt.label)
     }
 
     private func openCustom() {
@@ -287,7 +287,7 @@ struct ComposeView: View {
         let f = DateFormatter(); f.dateFormat = "MMM d, h:mm a"
         let label = f.string(from: customWhen)
         customOpen = false
-        model.sendDraft(currentDraft(), scheduleLabel: label)
+        model.scheduleSend(currentDraft(), at: customWhen, label: label)
     }
 
     // MARK: Templates
