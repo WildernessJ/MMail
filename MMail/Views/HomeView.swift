@@ -28,7 +28,20 @@ struct HomeView: View {
     private var homeEmails: [Email] {
         model.currentAccount == "all" ? model.emails : model.emails.filter { $0.account == model.currentAccount }
     }
-    private var people: [Sender] { SampleData.homePeople.compactMap { SampleData.senders[$0] } }
+    private var people: [Sender] {
+        // Derive the most recent distinct human senders from the real inbox.
+        var seen = Set<String>()
+        var result: [Sender] = []
+        for e in homeEmails where e.folder == "inbox" {
+            let s = e.resolvedSender
+            guard !s.email.isEmpty, s.id != "you", s.org != .bot else { continue }
+            if seen.insert(s.email).inserted {
+                result.append(s)
+                if result.count == 6 { break }
+            }
+        }
+        return result.isEmpty ? SampleData.homePeople.compactMap { SampleData.senders[$0] } : result
+    }
     private var unreadFrom: Set<String> {
         Set(homeEmails.filter { $0.unread && $0.folder == "inbox" }.map { $0.from })
     }

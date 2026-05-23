@@ -3,9 +3,6 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
-    @State private var vimNav = true
-    @State private var sendOnCmdReturn = true
-    @State private var confirmDiscard = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -35,33 +32,44 @@ struct SettingsView: View {
                         toggleRow("Reading pane", "Read messages alongside the list (off goes full-width).",
                                   on: Binding(get: { model.readingPane }, set: { model.setReadingPane($0) }), last: true)
                     }
-                    section("Account") {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("you@cobalt.studio").font(.system(size: 13.5, weight: .medium)).foregroundStyle(p.fg1)
-                                Text("IMAP · synced 2 minutes ago").font(.system(size: 12)).foregroundStyle(p.fg3)
+                    section("Accounts") {
+                        if model.realConfigs.isEmpty {
+                            Text("No account connected.").font(.system(size: 13)).foregroundStyle(p.fg3).padding(.vertical, 12)
+                        } else {
+                            ForEach(Array(model.realConfigs.enumerated()), id: \.element.id) { idx, cfg in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(cfg.email).font(.system(size: 13.5, weight: .medium)).foregroundStyle(p.fg1)
+                                        Text("\(cfg.imapHost) · IMAP/SMTP").font(.system(size: 12)).foregroundStyle(p.fg3)
+                                    }
+                                    Spacer()
+                                    Button { model.loadFolder(cfg.id, "inbox") } label: {
+                                        HStack(spacing: 6) { Icon(name: "refresh", size: 14); Text("Resync").font(.system(size: 12.5, weight: .medium)) }
+                                            .foregroundStyle(p.fg2).padding(.horizontal, 10).frame(height: 30)
+                                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
+                                    }.buttonStyle(.plain)
+                                    Button { model.removeRealAccount(cfg.id) } label: {
+                                        Text("Remove").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.danger)
+                                            .padding(.horizontal, 10).frame(height: 30)
+                                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.danger.opacity(0.4), lineWidth: 1))
+                                    }.buttonStyle(.plain)
+                                }.padding(.vertical, 12)
+                                if idx < model.realConfigs.count - 1 { Rectangle().fill(p.border).frame(height: 1) }
                             }
-                            Spacer()
-                            Button {} label: {
-                                HStack(spacing: 6) { Icon(name: "refresh", size: 14); Text("Resync").font(.system(size: 12.5, weight: .medium)) }
-                                    .foregroundStyle(p.fg2).padding(.horizontal, 10).frame(height: 30)
-                                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                            }.buttonStyle(.plain)
-                        }.padding(.vertical, 12)
+                        }
                         Rectangle().fill(p.border).frame(height: 1)
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Signature").font(.system(size: 13.5, weight: .medium)).foregroundStyle(p.fg1)
-                                Text("Appended to every reply.").font(.system(size: 12)).foregroundStyle(p.fg3)
-                            }
-                            Spacer()
-                            Text("Sent from MMail").font(.system(size: 12)).foregroundStyle(p.fg3)
-                        }.padding(.vertical, 12)
+                        Button { model.settings = false; model.manualSetupOpen = true } label: {
+                            HStack(spacing: 6) { Icon(name: "plus", size: 13); Text("Add account").font(.system(size: 12.5, weight: .semibold)) }
+                                .foregroundStyle(p.brandBlue)
+                        }.buttonStyle(.plain).padding(.vertical, 12)
                     }
-                    section("Keyboard") {
-                        toggleRow("Vim-style navigation", "J / K to move through messages, G prefix for go-to.", on: $vimNav)
-                        toggleRow("Send on ⌘↵", "Press Cmd-Enter from any compose field to send.", on: $sendOnCmdReturn)
-                        toggleRow("Confirm before discarding", "Ask before throwing away a draft.", on: $confirmDiscard, last: true)
+                    section("Keyboard & alerts") {
+                        toggleRow("Keyboard (vim) navigation", "J / K to move, G-prefix to go to folders, single-key triage.",
+                                  on: Binding(get: { model.vimNav }, set: { model.setVimNav($0) }))
+                        toggleRow("New-mail notifications", "Show a notification when new mail arrives.",
+                                  on: Binding(get: { model.notificationsEnabled }, set: { model.setNotifications($0) }))
+                        toggleRow("Confirm before discarding", "Ask before throwing away a draft.",
+                                  on: Binding(get: { model.confirmDiscard }, set: { model.setConfirmDiscard($0) }), last: true)
                     }
                 }
                 .padding(.horizontal, 28).padding(.vertical, 24)

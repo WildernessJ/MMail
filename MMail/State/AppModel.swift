@@ -52,6 +52,10 @@ final class AppModel: ObservableObject {
     private let kJournalRecent = "mmail.journal.recent"
     private let kTemplates = "mmail.templates"
     private let kRealAccounts = "mmail.realAccounts"
+    private let kVimNav = "mmail.vimNav"
+    private let kConfirmDiscard = "mmail.confirmDiscard"
+    private let kNotifications = "mmail.notifications"
+    private var lastSeenUID: [String: UInt32] = [:]
 
     // Core state
     @Published var onboarding: Bool
@@ -66,6 +70,9 @@ final class AppModel: ObservableObject {
     @Published var dark: Bool
     @Published var sidebarVisible: Bool
     @Published var readingPane: Bool
+    @Published var vimNav: Bool
+    @Published var confirmDiscard: Bool
+    @Published var notificationsEnabled: Bool
 
     // Overlays
     @Published var palette = false
@@ -115,6 +122,9 @@ final class AppModel: ObservableObject {
         dark = d.object(forKey: kDark) as? Bool ?? false
         sidebarVisible = d.object(forKey: kSidebar) as? Bool ?? true
         readingPane = d.object(forKey: kReadingPane) as? Bool ?? true
+        vimNav = d.object(forKey: kVimNav) as? Bool ?? true
+        confirmDiscard = d.object(forKey: kConfirmDiscard) as? Bool ?? false
+        notificationsEnabled = d.object(forKey: kNotifications) as? Bool ?? true
         journal = d.string(forKey: kJournal) ?? ""
         if let data = d.data(forKey: kTodos),
            let decoded = try? JSONDecoder().decode([Todo].self, from: data) {
@@ -494,6 +504,34 @@ final class AppModel: ObservableObject {
     func setDark(_ v: Bool) { dark = v; persistTweaks() }
     func setSidebar(_ v: Bool) { sidebarVisible = v; persistTweaks() }
     func setReadingPane(_ v: Bool) { readingPane = v; persistTweaks() }
+    func setVimNav(_ v: Bool) { vimNav = v; UserDefaults.standard.set(v, forKey: kVimNav) }
+    func setConfirmDiscard(_ v: Bool) { confirmDiscard = v; UserDefaults.standard.set(v, forKey: kConfirmDiscard) }
+    func setNotifications(_ v: Bool) {
+        notificationsEnabled = v
+        UserDefaults.standard.set(v, forKey: kNotifications)
+        if v { Notifier.requestAuthorization() }
+    }
+
+    // MARK: - Account removal
+
+    func removeRealAccount(_ accountId: String) {
+        guard let cfg = config(for: accountId) else { return }
+        Keychain.deletePassword(account: cfg.imapPasswordKey)
+        Keychain.deletePassword(account: cfg.smtpPasswordKey)
+        MailCache.clear(account: accountId)
+        if let session = imapSessions[accountId] { Task { await session.close() } }
+        imapSessions[accountId] = nil
+        realMailboxes[accountId] = nil
+        accountErrors[accountId] = nil
+        lastSeenUID[accountId] = nil
+        realConfigs.removeAll { $0.id == accountId }
+        accounts.removeAll { $0.id == accountId }
+        emails.removeAll { $0.account == accountId }
+        persistRealAccounts()
+        if currentAccount == accountId { currentAccount = "all" }
+        if realConfigs.isEmpty { onboarding = true; selectedId = nil }
+        showToast("Removed \(cfg.email)")
+    }
 
     func activateSearch() {
         searchActive = true
@@ -583,6 +621,7 @@ final class AppModel: ObservableObject {
     func bootstrapRealAccounts() {
         guard !didBootstrap else { return }
         didBootstrap = true
+        if notificationsEnabled { Notifier.requestAuthorization() }
         for cfg in realConfigs {
             if let cached = MailCache.load(account: cfg.id, folder: "inbox"), !cached.isEmpty {
                 emails.removeAll { $0.account == cfg.id && $0.folder == "inbox" }
@@ -692,6 +731,20 @@ final class AppModel: ObservableObject {
                 merged[i].body = cached.body
                 merged[i].preview = cached.preview
                 merged[i].bodyLoaded = true
+            }
+        }
+        // New-mail notifications (inbox only, after a server refresh).
+        if persist && folderId == "inbox" {
+            let maxUID = merged.compactMap { $0.uid }.max() ?? 0
+            if let last = lastSeenUID[accountId] {
+                if notificationsEnabled {
+                    for e in merged.filter({ ($0.uid ?? 0) > last && $0.unread }).prefix(5) {
+                        Notifier.notify(title: e.resolvedSender.name, body: e.subject)
+                    }
+                }
+                lastSeenUID[accountId] = max(last, maxUID)
+            } else {
+                lastSeenUID[accountId] = maxUID
             }
         }
         emails.removeAll { $0.account == accountId && $0.folder == folderId }
@@ -911,8 +964,9 @@ final class AppModel: ObservableObject {
             return false
         }
 
-        // Below: single-key. Don't intercept when typing or an overlay owns focus.
-        if isTyping || anyOverlayOpen || onboarding { return false }
+        // Below: single-key. Don't intercept when typing, an overlay owns focus,
+        // or the user has turned off keyboard (vim) navigation in Settings.
+        if isTyping || anyOverlayOpen || onboarding || !vimNav { return false }
 
         // ? help
         if chars == "?" { help = true; return true }

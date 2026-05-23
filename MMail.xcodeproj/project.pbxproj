@@ -29,6 +29,7 @@
 		7816788B343DCF37413C00FA /* AccountRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067FDA44372798C7B298D335 /* AccountRailView.swift */; };
 		79881C9E5E0484CBE5BEC329 /* JournalArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B99833A4A34A3B059F965D2 /* JournalArchiveView.swift */; };
 		8240DB9802A6B1CF6F49FCD3 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1839AA4256AD539B7E201FD /* OnboardingView.swift */; };
+		A531BB607FF979E32825D772 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2E797661314505349C42D /* Notifier.swift */; };
 		B0BA08AB466E59C9742A188D /* SMTPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 274298C9FD13E7C8D90BB22E /* SMTPService.swift */; };
 		B7635E5A653911A58EC8EC63 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE36DEB176137963E3CA7FE9 /* SampleData.swift */; };
 		B7A899BAA4C3DD629951E464 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4AF498A0E6F2A7C049FDFD /* SidebarView.swift */; };
@@ -50,6 +51,7 @@
 		1B99833A4A34A3B059F965D2 /* JournalArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalArchiveView.swift; sourceTree = "<group>"; };
 		1EABA6D5E51F2CB475040F67 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		2217A8D681EDC9DC08448B20 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		25E2E797661314505349C42D /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
 		274298C9FD13E7C8D90BB22E /* SMTPService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMTPService.swift; sourceTree = "<group>"; };
 		314CDDF0121DFE61BA2FDF2E /* IMAPService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPService.swift; sourceTree = "<group>"; };
 		3415F5DC40ADAD49F09977A1 /* AddAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountView.swift; sourceTree = "<group>"; };
@@ -175,6 +177,7 @@
 				7605E1D3B63AA900A3661F9C /* MailAccountConfig.swift */,
 				B14BFD1E3DA5FBB37448F3FC /* MailCache.swift */,
 				496FBFE1599ECF1854FA4243 /* MIME.swift */,
+				25E2E797661314505349C42D /* Notifier.swift */,
 				274298C9FD13E7C8D90BB22E /* SMTPService.swift */,
 			);
 			path = Mail;
@@ -279,6 +282,7 @@
 				61FA290401BCED1CB7485359 /* ManualAccountSetupView.swift in Sources */,
 				482809988F6EB437DA58D4CD /* MiscViews.swift in Sources */,
 				D913BC78DC57ACB3CFAEAA8E /* Models.swift in Sources */,
+				A531BB607FF979E32825D772 /* Notifier.swift in Sources */,
 				8240DB9802A6B1CF6F49FCD3 /* OnboardingView.swift in Sources */,
 				EDF6BA1F4277388005EA5BDA /* ReaderView.swift in Sources */,
 				4981A459A999FC4B8E9F5803 /* RootView.swift in Sources */,
