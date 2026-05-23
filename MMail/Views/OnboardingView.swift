@@ -84,6 +84,8 @@ struct OnboardingView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(HoverBorderButtonStyle())
+        .focusable(false)
+        .focusEffectDisabled()
     }
 }
 
