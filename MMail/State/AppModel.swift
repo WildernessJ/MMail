@@ -73,7 +73,6 @@ final class AppModel: ObservableObject {
     @Published var searchQuery = ""
     @Published var searchFocusRequested = false
     @Published var toast: ToastModel?
-    @Published var pendingG = false
     @Published var journalArchiveOpen = false
 
     // Home dashboard
@@ -405,11 +404,6 @@ final class AppModel: ObservableObject {
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
     }
 
-    private var isTyping: Bool {
-        guard let r = NSApp.keyWindow?.firstResponder else { return false }
-        return r is NSText || r is NSTextView
-    }
-
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags
         let cmd = flags.contains(.command)
@@ -417,7 +411,7 @@ final class AppModel: ObservableObject {
         let chars = event.charactersIgnoringModifiers ?? ""
         let lower = chars.lowercased()
 
-        // ⌘K — always
+        // ⌘K — command palette
         if cmd && lower == "k" { palette.toggle(); return true }
 
         // ⌘0..9 — switch account
@@ -436,51 +430,16 @@ final class AppModel: ObservableObject {
             }
         }
 
-        // Escape (keyCode 53)
+        // Escape (keyCode 53) — close overlays / clear search
         if event.keyCode == 53 {
             if anyOverlayOpen { closeOverlays(); return true }
             if searchActive { searchActive = false; searchQuery = ""; return true }
             return false
         }
 
-        // Below: single-key. Don't intercept when typing or an overlay owns focus.
-        if isTyping || anyOverlayOpen || onboarding { return false }
-
-        // ? help
-        if chars == "?" { help = true; return true }
-        // / search
-        if chars == "/" { activateSearch(); return true }
-
-        // g-prefix
-        if pendingG {
-            let dest = ["h": "home", "i": "inbox", "z": "snoozed", "e": "done", "t": "sent", "s": "starred", "d": "drafts"][lower]
-            if let d = dest { setFolder(d) }
-            pendingG = false
-            return true
-        }
-        if lower == "g" {
-            pendingG = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.pendingG = false }
-            return true
-        }
-
-        // Home view has no list to triage/navigate
-        let listActive = folder != "home"
-
-        switch chars {
-        case "j": if listActive { navigate(1) }; return listActive
-        case "k": if listActive { navigate(-1) }; return listActive
-        case "e": if listActive { archive() }; return listActive
-        case "h": if listActive { markDone() }; return listActive
-        case "#": if listActive { delete() }; return listActive
-        case "u": if listActive { markUnread() }; return listActive
-        case "s": if listActive { toggleStar() }; return listActive
-        case "z": if listActive { snooze() }; return listActive
-        case "c": startCompose(); return true
-        case "r": reply(); return true
-        case "a": replyAll(); return true
-        case "f": forward(); return true
-        default: return false
-        }
+        // Bare single-key shortcuts (j/k/e/h/r/a/…) are intentionally not
+        // captured globally, so a keystroke only does what the focused control
+        // expects. Modifier shortcuts and Escape above remain app-wide.
+        return false
     }
 }
