@@ -112,7 +112,7 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, -10)
             Spacer(minLength: 0)
-            Text("\(parts.month) \(parts.year)").font(.system(size: 14, weight: .medium)).foregroundStyle(p.fg3)
+            Text(verbatim: "\(parts.month) \(parts.year)").font(.system(size: 14, weight: .medium)).foregroundStyle(p.fg3)
         }
     }
 
@@ -145,16 +145,17 @@ struct HomeView: View {
             } message: {
                 Text("Enter a city to show its weather, or use your approximate location.")
             }
-            WeatherGlyph(size: 56)
-            Text("\(w.temp)°F").font(.system(size: 60, weight: .heavy)).foregroundStyle(p.fg1)
-                .minimumScaleFactor(0.5).lineLimit(1).padding(.top, 4)
-            Text(w.condition).font(.system(size: 12.5)).foregroundStyle(p.fg3).padding(.top, 4)
-            Spacer(minLength: 8)
-            VStack(spacing: 4) {
-                HStack { Text("Feels like").foregroundStyle(p.fg2); Spacer(); Text("\(w.feels)°F").foregroundStyle(p.fg1).fontWeight(.medium) }
+            Spacer(minLength: 0)
+            WeatherGlyph(size: 66)
+            Text("\(w.temp)°C").font(.system(size: 80, weight: .heavy)).foregroundStyle(p.fg1)
+                .minimumScaleFactor(0.4).lineLimit(1).padding(.top, 6)
+            Text(w.condition).font(.system(size: 13.5)).foregroundStyle(p.fg3).padding(.top, 2)
+            Spacer(minLength: 0)
+            VStack(spacing: 6) {
+                HStack { Text("Feels like").foregroundStyle(p.fg2); Spacer(); Text("\(w.feels)°C").foregroundStyle(p.fg1).fontWeight(.medium) }
                 HStack { Text("Today").foregroundStyle(p.fg2); Spacer(); Text("H \(w.hi)° / L \(w.lo)°").foregroundStyle(p.fg1).fontWeight(.medium) }
             }
-            .font(.system(size: 12)).monospacedDigit()
+            .font(.system(size: 12.5)).monospacedDigit()
             .padding(.top, 12)
             .overlay(Rectangle().fill(p.border).frame(height: 1), alignment: .top)
         }
@@ -193,7 +194,7 @@ struct HomeView: View {
             cardHead(icon: "pencil", title: "Journal", trailing: "Open archive")
             HStack(spacing: 6) {
                 Circle().fill(p.magenta).frame(width: 6, height: 6)
-                Text("\(parts.dow.uppercased()) · \(parts.month.uppercased()) \(parts.num), \(parts.year)")
+                Text(verbatim: "\(parts.dow.uppercased()) · \(parts.month.uppercased()) \(parts.num), \(parts.year)")
                     .font(.system(size: 11.5, weight: .medium)).foregroundStyle(p.fg3)
             }
             .padding(.bottom, 8)

@@ -75,7 +75,7 @@ enum SampleData {
 
     static let homePeople = ["sarah", "marcus", "maya", "theo", "daniel", "lumen"]
 
-    static let weather = WeatherInfo(temp: 72, feels: 72, hi: 75, lo: 64,
+    static let weather = WeatherInfo(temp: 22, feels: 22, hi: 24, lo: 18,
                                      condition: "Partly sunny", location: "San Francisco, CA")
 
     static let replyTemplates: [ReplyTemplate] = [

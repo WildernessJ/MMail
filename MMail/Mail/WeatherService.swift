@@ -17,7 +17,7 @@ enum WeatherService {
             .init(name: "longitude", value: String(lon)),
             .init(name: "current", value: "temperature_2m,apparent_temperature,weather_code"),
             .init(name: "daily", value: "temperature_2m_max,temperature_2m_min"),
-            .init(name: "temperature_unit", value: "fahrenheit"),
+            .init(name: "temperature_unit", value: "celsius"),
             .init(name: "timezone", value: "auto"),
             .init(name: "forecast_days", value: "1")
         ]
