@@ -218,7 +218,9 @@ final class IMAPService {
     func fetchBody(mailbox name: String, uid: UInt32) async throws -> String {
         _ = try await select(name)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
-        let responses = try await send(.uidFetch(.range(range), [.bodySection(peek: true, .complete, nil)], []))
+        // Cap the download to the first 256 KB so heavy attachments don't make
+        // opening a message slow; the text parts come first in MIME order.
+        let responses = try await send(.uidFetch(.range(range), [.bodySection(peek: true, .complete, 0...262_143)], []))
         var raw = ByteBuffer()
         for r in responses {
             if case .fetch(.streamingBytes(var chunk)) = r {

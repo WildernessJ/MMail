@@ -36,14 +36,14 @@ struct MailLabel: Identifiable {
     var color: Color { Color(hex: colorHex) }
 }
 
-struct ThreadItem: Identifiable {
-    let id = UUID()
+struct ThreadItem: Identifiable, Codable {
+    var id = UUID()
     let from: String
     let time: String
     let preview: String
 }
 
-struct Email: Identifiable {
+struct Email: Identifiable, Codable {
     let id: String
     var account: String
     var from: String          // sender id, or "you"

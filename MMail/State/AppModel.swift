@@ -95,6 +95,8 @@ final class AppModel: ObservableObject {
     @Published var realMailboxes: [String: [String: String]] = [:]
     @Published var serverSearchResults: [Email]?
     private var pollTimer: Timer?
+    private var imapSessions: [String: IMAPSession] = [:]
+    private var didBootstrap = false
 
     private static let seedJournalRecent: [JournalEntry] = [
         JournalEntry(id: "jr-yesterday", date: "Yesterday", text: "Crit went well. Sarah's instinct on the empty state was right — copy carries it. Need to write down the lighter ring decision before I forget."),
@@ -541,21 +543,47 @@ final class AppModel: ObservableObject {
         loadFolder(currentAccount, folder, silent: silent)
     }
 
+    /// Long-lived IMAP connection per account (reused across operations).
+    private func session(for accountId: String) -> IMAPSession? {
+        if let s = imapSessions[accountId] { return s }
+        guard let cfg = config(for: accountId), let pw = cfg.imapPassword else { return nil }
+        let s = IMAPSession(config: cfg, password: pw)
+        imapSessions[accountId] = s
+        return s
+    }
+
+    /// Show real accounts' cached inboxes immediately on launch, then refresh.
+    func bootstrapRealAccounts() {
+        guard !didBootstrap else { return }
+        didBootstrap = true
+        for cfg in realConfigs {
+            if let cached = MailCache.load(account: cfg.id, folder: "inbox"), !cached.isEmpty {
+                emails.removeAll { $0.account == cfg.id && $0.folder == "inbox" }
+                emails.append(contentsOf: cached)
+            }
+            loadFolder(cfg.id, "inbox", silent: true)
+        }
+        if selectedId == nil { selectedId = filteredEmails.first?.id }
+    }
+
     func loadFolder(_ accountId: String, _ folderId: String, silent: Bool = false) {
-        guard isRealAccount(accountId), isServerFolder(folderId),
-              let cfg = config(for: accountId), let pw = cfg.imapPassword else {
+        guard isRealAccount(accountId), isServerFolder(folderId), let session = session(for: accountId) else {
             if config(for: accountId)?.imapPassword == nil { accountErrors[accountId] = "Missing saved password." }
             return
         }
-        if !silent { loadingAccounts.insert(accountId); accountErrors[accountId] = nil }
+        // Show cached content instantly; only spin when there's nothing to show.
+        var hasContent = emails.contains { $0.account == accountId && $0.folder == folderId }
+        if !hasContent, let cached = MailCache.load(account: accountId, folder: folderId), !cached.isEmpty {
+            mergeRealFolder(cached, accountId: accountId, folderId: folderId, persist: false)
+            hasContent = true
+        }
+        if !silent && !hasContent { loadingAccounts.insert(accountId) }
+        accountErrors[accountId] = nil
         let needDiscover = realMailboxes[accountId] == nil
         Task {
             do {
-                let imap = IMAPService(config: cfg, password: pw)
-                try await imap.connectAndLogin()
-
                 if needDiscover {
-                    let boxes = try await imap.listMailboxes()
+                    let boxes = try await session.listMailboxes()
                     var m: [String: String] = [:]
                     for b in boxes where b.selectable {
                         switch b.kind {
@@ -573,24 +601,23 @@ final class AppModel: ObservableObject {
 
                 let msgs: [IMAPMessage]
                 switch folderId {
-                case "inbox": msgs = try await imap.fetchRecent(mailbox: "INBOX", limit: 50)
-                case "starred": msgs = try await imap.searchFlagged(mailbox: "INBOX", limit: 50)
+                case "inbox": msgs = try await session.fetchRecent(mailbox: "INBOX", limit: 50)
+                case "starred": msgs = try await session.searchFlagged(mailbox: "INBOX", limit: 50)
                 case "done":
-                    if let arch = map["archive"] { msgs = try await imap.fetchRecent(mailbox: arch, limit: 50) }
+                    if let arch = map["archive"] { msgs = try await session.fetchRecent(mailbox: arch, limit: 50) }
                     else { msgs = [] }
                 default:
-                    if let name = map[folderId] { msgs = try await imap.fetchRecent(mailbox: name, limit: 50) }
+                    if let name = map[folderId] { msgs = try await session.fetchRecent(mailbox: name, limit: 50) }
                     else { msgs = [] }
                 }
-                await imap.disconnect()
                 let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
                 await MainActor.run {
-                    self.mergeRealFolder(mapped, accountId: accountId, folderId: folderId)
+                    self.mergeRealFolder(mapped, accountId: accountId, folderId: folderId, persist: true)
                     self.loadingAccounts.remove(accountId)
                 }
             } catch {
                 await MainActor.run {
-                    if !silent { self.accountErrors[accountId] = error.localizedDescription }
+                    if !silent && !hasContent { self.accountErrors[accountId] = error.localizedDescription }
                     self.loadingAccounts.remove(accountId)
                 }
             }
@@ -598,19 +625,16 @@ final class AppModel: ObservableObject {
     }
 
     func runServerSearch() {
-        guard searchActive, isRealAccount(currentAccount),
-              let cfg = config(for: currentAccount), let pw = cfg.imapPassword else { return }
+        guard searchActive, isRealAccount(currentAccount), let session = session(for: currentAccount) else { return }
         let q = searchQuery.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { serverSearchResults = nil; return }
         let acct = currentAccount
         let box = mailboxName(acct, folder) ?? "INBOX"
+        let f = folder
         Task {
             do {
-                let imap = IMAPService(config: cfg, password: pw)
-                try await imap.connectAndLogin()
-                let msgs = try await imap.searchText(mailbox: box, query: q, limit: 50)
-                await imap.disconnect()
-                let mapped = msgs.map { AppModel.makeEmail($0, accountId: acct, folder: self.folder) }
+                let msgs = try await session.searchText(mailbox: box, query: q, limit: 50)
+                let mapped = msgs.map { AppModel.makeEmail($0, accountId: acct, folder: f) }
                 await MainActor.run {
                     self.serverSearchResults = mapped
                     self.selectedId = mapped.first?.id
@@ -621,9 +645,23 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func mergeRealFolder(_ newEmails: [Email], accountId: String, folderId: String) {
+    /// Replace a folder's messages, preserving already-fetched bodies and
+    /// (optionally) writing the result to the on-disk cache.
+    private func mergeRealFolder(_ newEmails: [Email], accountId: String, folderId: String, persist: Bool) {
+        let existing = emails.filter { $0.account == accountId && $0.folder == folderId }
+        var bodyByUID: [UInt32: (body: String, preview: String)] = [:]
+        for e in existing where e.bodyLoaded && e.uid != nil { bodyByUID[e.uid!] = (e.body, e.preview) }
+        var merged = newEmails
+        for i in merged.indices {
+            if let uid = merged[i].uid, !merged[i].bodyLoaded, let cached = bodyByUID[uid] {
+                merged[i].body = cached.body
+                merged[i].preview = cached.preview
+                merged[i].bodyLoaded = true
+            }
+        }
         emails.removeAll { $0.account == accountId && $0.folder == folderId }
-        emails.append(contentsOf: newEmails)
+        emails.append(contentsOf: merged)
+        if persist { MailCache.save(merged, account: accountId, folder: folderId) }
         if currentAccount == accountId && folder == folderId && serverSearchResults == nil {
             if !filteredEmails.contains(where: { $0.id == selectedId }) {
                 selectedId = filteredEmails.first?.id
@@ -656,56 +694,46 @@ final class AppModel: ObservableObject {
     /// Fetch the body (and mark seen) the first time a real message is opened.
     func loadBodyIfNeeded() {
         guard let e = selectedEmail, isRealAccount(e.account), !e.bodyLoaded, let uid = e.uid,
-              let cfg = config(for: e.account), let pw = cfg.imapPassword else { return }
+              let session = session(for: e.account) else { return }
         let box = mailboxName(e.account, e.folder) ?? "INBOX"
         let id = e.id
+        let acct = e.account, fld = e.folder
         Task {
             do {
-                let imap = IMAPService(config: cfg, password: pw)
-                try await imap.connectAndLogin()
-                let body = try await imap.fetchBody(mailbox: box, uid: uid)
-                try? await imap.store(mailbox: box, uid: uid, .seen, add: true)
-                await imap.disconnect()
+                let body = try await session.fetchBody(mailbox: box, uid: uid)
+                try? await session.store(mailbox: box, uid: uid, .seen, add: true)
                 await MainActor.run {
-                    guard let i = self.emails.firstIndex(where: { $0.id == id }) else { return }
-                    self.emails[i].body = body
-                    self.emails[i].preview = String(body.replacingOccurrences(of: "\n", with: " ").prefix(140))
-                    self.emails[i].bodyLoaded = true
+                    if let i = self.emails.firstIndex(where: { $0.id == id }) {
+                        self.emails[i].body = body
+                        self.emails[i].preview = String(body.replacingOccurrences(of: "\n", with: " ").prefix(140))
+                        self.emails[i].bodyLoaded = true
+                    }
                     if let j = self.serverSearchResults?.firstIndex(where: { $0.id == id }) {
                         self.serverSearchResults?[j].body = body
                         self.serverSearchResults?[j].bodyLoaded = true
                     }
+                    // Persist the loaded body so reopening is instant next time.
+                    MailCache.save(self.emails.filter { $0.account == acct && $0.folder == fld },
+                                   account: acct, folder: fld)
                 }
             } catch { /* leave placeholder; surfaced via empty body */ }
         }
     }
 
     func applyRealFlag(_ email: Email, _ kind: MailFlagKind, add: Bool) {
-        guard isRealAccount(email.account), let uid = email.uid,
-              let cfg = config(for: email.account), let pw = cfg.imapPassword else { return }
+        guard isRealAccount(email.account), let uid = email.uid, let session = session(for: email.account) else { return }
         let box = mailboxName(email.account, email.folder) ?? "INBOX"
         Task {
-            let imap = IMAPService(config: cfg, password: pw)
-            do {
-                try await imap.connectAndLogin()
-                try await imap.store(mailbox: box, uid: uid, kind, add: add)
-                await imap.disconnect()
-            } catch { /* best-effort */ }
+            try? await session.store(mailbox: box, uid: uid, kind, add: add)
         }
     }
 
     func realMove(_ email: Email, to folderId: String) {
-        guard isRealAccount(email.account), let uid = email.uid,
-              let cfg = config(for: email.account), let pw = cfg.imapPassword,
+        guard isRealAccount(email.account), let uid = email.uid, let session = session(for: email.account),
               let from = mailboxName(email.account, email.folder),
               let to = mailboxName(email.account, folderId) else { return }
         Task {
-            let imap = IMAPService(config: cfg, password: pw)
-            do {
-                try await imap.connectAndLogin()
-                try await imap.move(uid: uid, from: from, to: to)
-                await imap.disconnect()
-            } catch { /* best-effort */ }
+            try? await session.move(uid: uid, from: from, to: to)
         }
     }
 

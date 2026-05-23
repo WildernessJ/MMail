@@ -21,7 +21,7 @@ struct RootView: View {
             }
         }
         .toolbar { toolbarContent }
-        .onAppear { model.installKeyMonitor(); model.startPolling() }
+        .onAppear { model.installKeyMonitor(); model.startPolling(); model.bootstrapRealAccounts() }
         .onChange(of: model.searchFocusRequested) { _, req in
             if req {
                 searchFocused = true
