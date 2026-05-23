@@ -1001,15 +1001,29 @@ final class AppModel: ObservableObject {
         }
     }
 
-    enum AttachmentOpenMode { case quickLook, defaultApp, app(URL), reveal }
+    enum AttachmentOpenMode { case quickLook, defaultApp, app(URL), reveal, saveToDownloads }
 
     func isDownloading(_ email: Email, _ meta: AttachmentMeta) -> Bool {
         downloadingAttachments.contains("\(email.id)#\(meta.filename)")
     }
 
-    /// Fetch a specific attachment from the full message, cache it, then open it
-    /// per `mode` (Quick Look by default).
+    /// Per-message cache location for an attachment (original filename preserved).
+    private func attachmentCacheURL(_ email: Email, _ meta: AttachmentMeta) -> URL {
+        let safeKey = "\(email.account)#\(email.uid ?? 0)".replacingOccurrences(of: "/", with: "_")
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent("MMailAttachments", isDirectory: true)
+            .appendingPathComponent(safeKey, isDirectory: true)
+            .appendingPathComponent(meta.filename)
+    }
+
+    /// Open an attachment per `mode` (Quick Look by default). Reuses the cached
+    /// file if it was already downloaded; otherwise fetches the full message.
     func openAttachment(_ email: Email, _ meta: AttachmentMeta, mode: AttachmentOpenMode = .quickLook) {
+        let url = attachmentCacheURL(email, meta)
+        if FileManager.default.fileExists(atPath: url.path) {
+            performOpen(mode, url: url)
+            return
+        }
         guard isRealAccount(email.account), let uid = email.uid, let session = session(for: email.account) else { return }
         let box = mailboxName(email.account, email.folder) ?? "INBOX"
         let key = "\(email.id)#\(meta.filename)"
@@ -1023,22 +1037,47 @@ final class AppModel: ObservableObject {
                     await MainActor.run { self.downloadingAttachments.remove(key); self.showToast("Attachment not found") }
                     return
                 }
-                let dir = FileManager.default.temporaryDirectory.appendingPathComponent("MMailAttachments", isDirectory: true)
-                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                let url = dir.appendingPathComponent(meta.filename)
+                try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try att.data.write(to: url)
                 await MainActor.run {
                     self.downloadingAttachments.remove(key)
-                    switch mode {
-                    case .quickLook: QuickLook.shared.show(url)
-                    case .defaultApp: NSWorkspace.shared.open(url)
-                    case .app(let appURL): NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
-                    case .reveal: NSWorkspace.shared.activateFileViewerSelecting([url])
-                    }
+                    self.performOpen(mode, url: url)
                 }
             } catch {
                 await MainActor.run { self.downloadingAttachments.remove(key); self.showToast("Download failed: \(error.localizedDescription)") }
             }
+        }
+    }
+
+    private func performOpen(_ mode: AttachmentOpenMode, url: URL) {
+        switch mode {
+        case .quickLook: QuickLook.shared.show(url)
+        case .defaultApp: NSWorkspace.shared.open(url)
+        case .app(let appURL): NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+        case .reveal: NSWorkspace.shared.activateFileViewerSelecting([url])
+        case .saveToDownloads: saveToDownloads(url)
+        }
+    }
+
+    private func saveToDownloads(_ source: URL) {
+        let fm = FileManager.default
+        let downloads = fm.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
+        var dest = downloads.appendingPathComponent(source.lastPathComponent)
+        if fm.fileExists(atPath: dest.path) {
+            let base = source.deletingPathExtension().lastPathComponent
+            let ext = source.pathExtension
+            var i = 1
+            repeat {
+                let name = ext.isEmpty ? "\(base) \(i)" : "\(base) \(i).\(ext)"
+                dest = downloads.appendingPathComponent(name); i += 1
+            } while fm.fileExists(atPath: dest.path)
+        }
+        do {
+            try fm.copyItem(at: source, to: dest)
+            showToast("Saved \(dest.lastPathComponent) to Downloads")
+            NSWorkspace.shared.activateFileViewerSelecting([dest])
+        } catch {
+            showToast("Couldn't save: \(error.localizedDescription)")
         }
     }
 

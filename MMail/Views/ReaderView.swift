@@ -299,6 +299,7 @@ private struct ReaderContent: View {
                 }
             }
             Divider()
+            Button("Save to Downloads") { model.openAttachment(email, att, mode: .saveToDownloads) }
             Button("Reveal in Finder") { model.openAttachment(email, att, mode: .reveal) }
         }
     }
