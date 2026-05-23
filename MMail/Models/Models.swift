@@ -141,6 +141,7 @@ struct ReplyTemplate: Identifiable, Codable {
 struct AttachmentMeta: Codable, Hashable {
     var filename: String
     var mimeType: String
+    var size: Int = 0
 }
 
 struct ComposeAttachment: Codable, Hashable, Identifiable {

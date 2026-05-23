@@ -119,6 +119,7 @@ final class AppModel: ObservableObject {
     @Published var searching = false
     @Published var scheduled: [ScheduledSend] = []
     @Published var snoozedUntil: [String: Date] = [:]   // "accountId#uid" -> wake date
+    @Published var downloadingAttachments: Set<String> = []
     private let kScheduled = "mmail.scheduled"
     private let kSnoozed = "mmail.snoozed"
     private var pollTimer: Timer?
@@ -905,14 +906,16 @@ final class AppModel: ObservableObject {
     /// (optionally) writing the result to the on-disk cache.
     private func mergeRealFolder(_ newEmails: [Email], accountId: String, folderId: String, persist: Bool) {
         let existing = emails.filter { $0.account == accountId && $0.folder == folderId }
-        var bodyByUID: [UInt32: (body: String, preview: String)] = [:]
-        for e in existing where e.bodyLoaded && e.uid != nil { bodyByUID[e.uid!] = (e.body, e.preview) }
+        var loadedByUID: [UInt32: Email] = [:]
+        for e in existing where e.bodyLoaded && e.uid != nil { loadedByUID[e.uid!] = e }
         var merged = newEmails
         for i in merged.indices {
-            if let uid = merged[i].uid, !merged[i].bodyLoaded, let cached = bodyByUID[uid] {
-                merged[i].body = cached.body
-                merged[i].preview = cached.preview
+            if let uid = merged[i].uid, !merged[i].bodyLoaded, let old = loadedByUID[uid] {
+                merged[i].body = old.body
+                merged[i].preview = old.preview
                 merged[i].bodyLoaded = true
+                merged[i].attachments = old.attachments
+                merged[i].hasAttachment = old.hasAttachment
             }
         }
         // New-mail notifications (inbox only, after a server refresh).
@@ -977,7 +980,7 @@ final class AppModel: ObservableObject {
                 let data = try await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: 262_144)
                 let parsed = MIME.parse(data)
                 try? await session.store(mailbox: box, uid: uid, .seen, add: true)
-                let metas = parsed.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType) }
+                let metas = parsed.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
                 await MainActor.run {
                     if let i = self.emails.firstIndex(where: { $0.id == id }) {
                         self.emails[i].body = parsed.text
@@ -998,31 +1001,52 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Download a specific attachment (fetches the full message), save to
-    /// Downloads, and open it.
-    func downloadAttachment(_ email: Email, _ meta: AttachmentMeta) {
+    enum AttachmentOpenMode { case quickLook, defaultApp, app(URL), reveal }
+
+    func isDownloading(_ email: Email, _ meta: AttachmentMeta) -> Bool {
+        downloadingAttachments.contains("\(email.id)#\(meta.filename)")
+    }
+
+    /// Fetch a specific attachment from the full message, cache it, then open it
+    /// per `mode` (Quick Look by default).
+    func openAttachment(_ email: Email, _ meta: AttachmentMeta, mode: AttachmentOpenMode = .quickLook) {
         guard isRealAccount(email.account), let uid = email.uid, let session = session(for: email.account) else { return }
         let box = mailboxName(email.account, email.folder) ?? "INBOX"
-        showToast("Downloading \(meta.filename)…")
+        let key = "\(email.id)#\(meta.filename)"
+        guard !downloadingAttachments.contains(key) else { return }
+        downloadingAttachments.insert(key)
         Task {
             do {
                 let data = try await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: nil)
                 let parsed = MIME.parse(data)
                 guard let att = parsed.attachments.first(where: { $0.filename == meta.filename }) else {
-                    await MainActor.run { self.showToast("Attachment not found") }; return
+                    await MainActor.run { self.downloadingAttachments.remove(key); self.showToast("Attachment not found") }
+                    return
                 }
-                let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-                    ?? FileManager.default.temporaryDirectory
+                let dir = FileManager.default.temporaryDirectory.appendingPathComponent("MMailAttachments", isDirectory: true)
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                 let url = dir.appendingPathComponent(meta.filename)
                 try att.data.write(to: url)
                 await MainActor.run {
-                    self.showToast("Saved \(meta.filename) to Downloads")
-                    NSWorkspace.shared.open(url)
+                    self.downloadingAttachments.remove(key)
+                    switch mode {
+                    case .quickLook: QuickLook.shared.show(url)
+                    case .defaultApp: NSWorkspace.shared.open(url)
+                    case .app(let appURL): NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+                    case .reveal: NSWorkspace.shared.activateFileViewerSelecting([url])
+                    }
                 }
             } catch {
-                await MainActor.run { self.showToast("Download failed: \(error.localizedDescription)") }
+                await MainActor.run { self.downloadingAttachments.remove(key); self.showToast("Download failed: \(error.localizedDescription)") }
             }
         }
+    }
+
+    /// Applications that can open a file with the given name (by type), for the
+    /// right-click "Open With" menu.
+    static func appsForAttachment(_ filename: String) -> [URL] {
+        let probe = FileManager.default.temporaryDirectory.appendingPathComponent("mmail-probe").appendingPathExtension((filename as NSString).pathExtension)
+        return NSWorkspace.shared.urlsForApplications(toOpen: probe)
     }
 
     func applyRealFlag(_ email: Email, _ kind: MailFlagKind, add: Bool) {
