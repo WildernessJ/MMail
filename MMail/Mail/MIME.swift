@@ -47,7 +47,8 @@ enum MIME {
     // MARK: Outgoing message
 
     static func buildMessage(from: String, fromName: String?, to: String, cc: String = "",
-                             subject: String, body: String, date: Date = Date()) -> String {
+                             subject: String, body: String, date: Date = Date(),
+                             attachments: [ComposeAttachment] = []) -> String {
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")
         df.dateFormat = "EEE, d MMM yyyy HH:mm:ss Z"
@@ -70,9 +71,31 @@ enum MIME {
         headers.append("Date: \(dateStr)")
         headers.append("Message-ID: \(messageID)")
         headers.append("MIME-Version: 1.0")
-        headers.append("Content-Type: text/plain; charset=utf-8")
-        headers.append("Content-Transfer-Encoding: base64")
-        return headers.joined(separator: "\r\n") + "\r\n\r\n" + encodedBody + "\r\n"
+
+        if attachments.isEmpty {
+            headers.append("Content-Type: text/plain; charset=utf-8")
+            headers.append("Content-Transfer-Encoding: base64")
+            return headers.joined(separator: "\r\n") + "\r\n\r\n" + encodedBody + "\r\n"
+        }
+
+        // multipart/mixed: text body + base64 attachment parts.
+        let boundary = "MMail-\(UUID().uuidString)"
+        headers.append("Content-Type: multipart/mixed; boundary=\"\(boundary)\"")
+        var out = headers.joined(separator: "\r\n") + "\r\n\r\n"
+        out += "This is a multi-part message in MIME format.\r\n"
+        out += "--\(boundary)\r\n"
+        out += "Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+        out += encodedBody + "\r\n"
+        for att in attachments {
+            let encoded = att.data.base64EncodedString(options: [.lineLength76Characters, .endLineWithCarriageReturn])
+            out += "--\(boundary)\r\n"
+            out += "Content-Type: \(att.mimeType); name=\"\(att.filename)\"\r\n"
+            out += "Content-Transfer-Encoding: base64\r\n"
+            out += "Content-Disposition: attachment; filename=\"\(att.filename)\"\r\n\r\n"
+            out += encoded + "\r\n"
+        }
+        out += "--\(boundary)--\r\n"
+        return out
     }
 
     private static func encodeWordIfNeeded(_ s: String) -> String {
@@ -81,48 +104,52 @@ enum MIME {
         return "=?utf-8?B?\(b64)?="
     }
 
-    // MARK: Incoming text extraction
+    // MARK: Incoming text + attachment extraction
 
-    static func extractText(from data: Data) -> String {
-        let (headers, body) = splitHeadersBody(data)
-        let contentType = headers["content-type"] ?? "text/plain"
-        let encoding = (headers["content-transfer-encoding"] ?? "").lowercased()
+    struct Attachment { let filename: String; let mimeType: String; let data: Data }
+    struct Parsed { var text: String; var html: String?; var attachments: [Attachment] }
 
-        if contentType.lowercased().contains("multipart/"),
-           let boundary = parameter("boundary", in: contentType) {
-            return extractFromMultipart(body, boundary: boundary)
-        }
+    static func extractText(from data: Data) -> String { parse(data).text }
 
-        let decoded = decodeBody(body, encoding: encoding)
-        let charset = parameter("charset", in: contentType) ?? "utf-8"
-        var text = string(from: decoded, charset: charset) ?? String(decoding: decoded, as: UTF8.self)
-        if contentType.lowercased().contains("text/html") { text = stripHTML(text) }
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    static func parse(_ data: Data) -> Parsed {
+        var result = Parsed(text: "", html: nil, attachments: [])
+        walk(data, into: &result)
+        if result.text.isEmpty, let html = result.html { result.text = stripHTML(html) }
+        result.text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return result
     }
 
-    private static func extractFromMultipart(_ body: Data, boundary: String) -> String {
-        let parts = splitParts(body, boundary: boundary)
-        // Prefer text/plain, then text/html.
-        var htmlFallback: String?
-        for part in parts {
-            let (h, b) = splitHeadersBody(part)
-            let ct = (h["content-type"] ?? "text/plain").lowercased()
-            let enc = (h["content-transfer-encoding"] ?? "").lowercased()
-            if ct.contains("multipart/"), let inner = parameter("boundary", in: h["content-type"] ?? "") {
-                let nested = extractFromMultipart(b, boundary: inner)
-                if !nested.isEmpty { return nested }
-                continue
-            }
-            let decoded = decodeBody(b, encoding: enc)
-            let charset = parameter("charset", in: h["content-type"] ?? "") ?? "utf-8"
-            let text = string(from: decoded, charset: charset) ?? String(decoding: decoded, as: UTF8.self)
-            if ct.contains("text/plain") {
-                return text.trimmingCharacters(in: .whitespacesAndNewlines)
-            } else if ct.contains("text/html"), htmlFallback == nil {
-                htmlFallback = stripHTML(text)
-            }
+    private static func walk(_ data: Data, into result: inout Parsed) {
+        let (headers, body) = splitHeadersBody(data)
+        let ct = headers["content-type"] ?? "text/plain"
+        let ctl = ct.lowercased()
+        let enc = (headers["content-transfer-encoding"] ?? "").lowercased()
+        let disp = (headers["content-disposition"] ?? "").lowercased()
+        let filename = parameter("filename", in: headers["content-disposition"] ?? "") ?? parameter("name", in: ct)
+
+        if ctl.contains("multipart/"), let boundary = parameter("boundary", in: ct) {
+            for part in splitParts(body, boundary: boundary) { walk(part, into: &result) }
+            return
         }
-        return (htmlFallback ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Attachment: explicit disposition, or a named non-text part.
+        if let filename, disp.contains("attachment") || !ctl.hasPrefix("text/") {
+            let decoded = decodeBody(body, encoding: enc)
+            result.attachments.append(Attachment(filename: decodeHeader(filename),
+                                                  mimeType: ctl.split(separator: ";").first.map(String.init) ?? ctl,
+                                                  data: decoded))
+            return
+        }
+
+        // Text content (prefer the first text/plain; keep html as a fallback).
+        let decoded = decodeBody(body, encoding: enc)
+        let charset = parameter("charset", in: ct) ?? "utf-8"
+        let text = string(from: decoded, charset: charset) ?? String(decoding: decoded, as: UTF8.self)
+        if ctl.contains("text/html") {
+            if result.html == nil { result.html = text }
+        } else if result.text.isEmpty {
+            result.text = text
+        }
     }
 
     // MARK: Low-level parsing

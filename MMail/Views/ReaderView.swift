@@ -134,6 +134,10 @@ private struct ReaderContent: View {
                     .padding(.top, 24)
             }
 
+            if !email.attachments.isEmpty {
+                attachmentsSection
+            }
+
             replyStrip.padding(.top, 24)
         }
         .padding(EdgeInsets(top: 32, leading: 40, bottom: 28, trailing: 40))
@@ -234,6 +238,36 @@ private struct ReaderContent: View {
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    private var attachmentsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(email.attachments.count) ATTACHMENT\(email.attachments.count == 1 ? "" : "S")")
+                .font(.system(size: 11, weight: .bold)).tracking(0.6).foregroundStyle(p.fg4)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(email.attachments, id: \.self) { att in
+                    Button { model.downloadAttachment(email, att) } label: {
+                        HStack(spacing: 8) {
+                            Icon(name: "attach", size: 13).foregroundStyle(p.fg3)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(att.filename).font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg1).lineLimit(1)
+                                Text(att.mimeType).font(.system(size: 10.5)).foregroundStyle(p.fg3).lineLimit(1)
+                            }
+                            Spacer(minLength: 8)
+                            Icon(name: "arrowRight", size: 12).foregroundStyle(p.fg3)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .frame(maxWidth: 360, alignment: .leading)
+                        .background(p.bg2)
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(p.border, lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain).help("Download \(att.filename)")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 24)
     }
 
     private var replyStrip: some View {

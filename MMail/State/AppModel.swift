@@ -22,6 +22,7 @@ struct ComposeDraft: Identifiable {
     var body: String
     var titleLabel: String
     var fromId: String
+    var attachments: [ComposeAttachment] = []
 }
 
 struct ToastModel: Identifiable {
@@ -40,6 +41,7 @@ struct ScheduledSend: Codable, Identifiable {
     var subject: String
     var body: String
     var sendAt: Date
+    var attachments: [ComposeAttachment] = []
 }
 
 struct Command: Identifiable {
@@ -436,7 +438,7 @@ final class AppModel: ObservableObject {
         compose = nil
         scheduled.append(ScheduledSend(id: UUID().uuidString, fromId: draft.fromId, to: draft.to,
                                        cc: draft.cc, bcc: draft.bcc, subject: draft.subject,
-                                       body: draft.body, sendAt: date))
+                                       body: draft.body, sendAt: date, attachments: draft.attachments))
         persistScheduled()
         showToast("Scheduled for \(label) · \(draft.to.isEmpty ? "(unknown)" : draft.to)")
     }
@@ -449,7 +451,7 @@ final class AppModel: ObservableObject {
         persistScheduled()
         for s in due {
             let draft = ComposeDraft(to: s.to, cc: s.cc, bcc: s.bcc, subject: s.subject,
-                                     body: s.body, titleLabel: "", fromId: s.fromId)
+                                     body: s.body, titleLabel: "", fromId: s.fromId, attachments: s.attachments)
             performSend(draft)
         }
     }
@@ -465,7 +467,7 @@ final class AppModel: ObservableObject {
         guard !recipients.isEmpty else { return }
         let display = accountsById[cfg.id]?.name
         let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to, cc: draft.cc,
-                                        subject: draft.subject, body: draft.body)
+                                        subject: draft.subject, body: draft.body, attachments: draft.attachments)
         let session = session(for: cfg.id)
         Task {
             do {
@@ -889,23 +891,54 @@ final class AppModel: ObservableObject {
         let acct = e.account, fld = e.folder
         Task {
             do {
-                let body = try await session.fetchBody(mailbox: box, uid: uid)
+                let data = try await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: 262_144)
+                let parsed = MIME.parse(data)
                 try? await session.store(mailbox: box, uid: uid, .seen, add: true)
+                let metas = parsed.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType) }
                 await MainActor.run {
                     if let i = self.emails.firstIndex(where: { $0.id == id }) {
-                        self.emails[i].body = body
-                        self.emails[i].preview = String(body.replacingOccurrences(of: "\n", with: " ").prefix(140))
+                        self.emails[i].body = parsed.text
+                        self.emails[i].preview = String(parsed.text.replacingOccurrences(of: "\n", with: " ").prefix(140))
                         self.emails[i].bodyLoaded = true
+                        self.emails[i].attachments = metas
+                        self.emails[i].hasAttachment = !metas.isEmpty
                     }
                     if let j = self.serverSearchResults?.firstIndex(where: { $0.id == id }) {
-                        self.serverSearchResults?[j].body = body
+                        self.serverSearchResults?[j].body = parsed.text
                         self.serverSearchResults?[j].bodyLoaded = true
+                        self.serverSearchResults?[j].attachments = metas
                     }
-                    // Persist the loaded body so reopening is instant next time.
                     MailCache.save(self.emails.filter { $0.account == acct && $0.folder == fld },
                                    account: acct, folder: fld)
                 }
             } catch { /* leave placeholder; surfaced via empty body */ }
+        }
+    }
+
+    /// Download a specific attachment (fetches the full message), save to
+    /// Downloads, and open it.
+    func downloadAttachment(_ email: Email, _ meta: AttachmentMeta) {
+        guard isRealAccount(email.account), let uid = email.uid, let session = session(for: email.account) else { return }
+        let box = mailboxName(email.account, email.folder) ?? "INBOX"
+        showToast("Downloading \(meta.filename)…")
+        Task {
+            do {
+                let data = try await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: nil)
+                let parsed = MIME.parse(data)
+                guard let att = parsed.attachments.first(where: { $0.filename == meta.filename }) else {
+                    await MainActor.run { self.showToast("Attachment not found") }; return
+                }
+                let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+                    ?? FileManager.default.temporaryDirectory
+                let url = dir.appendingPathComponent(meta.filename)
+                try att.data.write(to: url)
+                await MainActor.run {
+                    self.showToast("Saved \(meta.filename) to Downloads")
+                    NSWorkspace.shared.open(url)
+                }
+            } catch {
+                await MainActor.run { self.showToast("Download failed: \(error.localizedDescription)") }
+            }
         }
     }
 
@@ -959,7 +992,7 @@ final class AppModel: ObservableObject {
               let session = session(for: draft.fromId) else { return }
         let display = accountsById[cfg.id]?.name
         let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to, cc: draft.cc,
-                                        subject: draft.subject, body: draft.body)
+                                        subject: draft.subject, body: draft.body, attachments: draft.attachments)
         Task {
             if let draftsBox = await self.resolveMailbox(cfg.id, kind: .drafts, session: session) {
                 try? await session.append(mailbox: draftsBox, rawMessage: message, seen: false, draft: true)

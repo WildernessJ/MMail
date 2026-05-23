@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct ComposeView: View {
     @EnvironmentObject var model: AppModel
@@ -13,6 +14,7 @@ struct ComposeView: View {
     @State private var subject: String
     @State private var messageBody: String
     @State private var fromId: String
+    @State private var attachments: [ComposeAttachment] = []
     @FocusState private var focus: Field?
 
     // Popovers
@@ -39,6 +41,7 @@ struct ComposeView: View {
         _subject = State(initialValue: draft.subject)
         _messageBody = State(initialValue: draft.body)
         _fromId = State(initialValue: draft.fromId)
+        _attachments = State(initialValue: draft.attachments)
     }
 
     private var fromAcct: Account {
@@ -48,7 +51,21 @@ struct ComposeView: View {
     private func currentDraft() -> ComposeDraft {
         var d = draft
         d.to = to; d.cc = cc; d.bcc = bcc; d.subject = subject; d.body = messageBody; d.fromId = fromId
+        d.attachments = attachments
         return d
+    }
+
+    private func pickAttachments() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                guard let data = try? Data(contentsOf: url) else { continue }
+                let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+                attachments.append(ComposeAttachment(filename: url.lastPathComponent, mimeType: mime, data: data))
+            }
+        }
     }
 
     private func send() { model.sendDraft(currentDraft()) }
@@ -99,6 +116,7 @@ struct ComposeView: View {
                             .allowsHitTesting(false)
                     }
                 }
+            if !attachments.isEmpty { attachmentBar }
             footer
         }
         .frame(width: 540, height: 460)
@@ -175,6 +193,27 @@ struct ComposeView: View {
 
     // MARK: Footer
 
+    private var attachmentBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(attachments) { att in
+                    HStack(spacing: 6) {
+                        Icon(name: "attach", size: 11).foregroundStyle(p.fg3)
+                        Text(att.filename).font(.system(size: 11.5)).foregroundStyle(p.fg1).lineLimit(1)
+                        Button { attachments.removeAll { $0.id == att.id } } label: {
+                            Icon(name: "x", size: 10).foregroundStyle(p.fg3)
+                        }.buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .background(p.bg3)
+                    .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 6)
+        }
+        .overlay(Rectangle().fill(p.border).frame(height: 1), alignment: .top)
+    }
+
     private var footer: some View {
         HStack(spacing: 8) {
             Button(action: send) {
@@ -191,7 +230,7 @@ struct ComposeView: View {
             .buttonStyle(.plain)
             .keyboardShortcut(.return, modifiers: .command)
 
-            footerIcon("attach", help: "Attach file") {}
+            footerIcon("attach", help: "Attach file", active: !attachments.isEmpty) { pickAttachments() }
 
             scheduleButton
             templatesButton

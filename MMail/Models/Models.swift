@@ -66,6 +66,7 @@ struct Email: Identifiable, Codable {
     var fromEmail: String?
     var uid: UInt32?
     var bodyLoaded: Bool
+    var attachments: [AttachmentMeta] = []
 
     init(id: String, account: String, from: String, to: [String]? = nil,
          subject: String, preview: String, body: String, time: String, day: String,
@@ -133,6 +134,18 @@ struct ReplyTemplate: Identifiable, Codable {
     var shortcut: String
     var body: String
     var custom: Bool = false
+}
+
+struct AttachmentMeta: Codable, Hashable {
+    var filename: String
+    var mimeType: String
+}
+
+struct ComposeAttachment: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var filename: String
+    var mimeType: String
+    var data: Data
 }
 
 struct Folder: Identifiable {

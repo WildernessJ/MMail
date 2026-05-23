@@ -215,20 +215,19 @@ final class IMAPService {
         try await search(mailbox: name, key: .flagged, limit: limit)
     }
 
-    func fetchBody(mailbox name: String, uid: UInt32) async throws -> String {
+    /// Fetch the raw RFC822 message bytes. `byteLimit` caps the download (the
+    /// text parts come first in MIME order); pass nil for the complete message.
+    func fetchMessageData(mailbox name: String, uid: UInt32, byteLimit: Int?) async throws -> Data {
         _ = try await select(name)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
-        // Cap the download to the first 256 KB so heavy attachments don't make
-        // opening a message slow; the text parts come first in MIME order.
-        let responses = try await send(.uidFetch(.range(range), [.bodySection(peek: true, .complete, 0...262_143)], []))
+        let section: FetchAttribute = byteLimit.map { .bodySection(peek: true, .complete, 0...UInt32($0 - 1)) }
+            ?? .bodySection(peek: true, .complete, nil)
+        let responses = try await send(.uidFetch(.range(range), [section], []))
         var raw = ByteBuffer()
         for r in responses {
-            if case .fetch(.streamingBytes(var chunk)) = r {
-                raw.writeBuffer(&chunk)
-            }
+            if case .fetch(.streamingBytes(var chunk)) = r { raw.writeBuffer(&chunk) }
         }
-        let data = Data(raw.readableBytesView)
-        return MIME.extractText(from: data)
+        return Data(raw.readableBytesView)
     }
 
     func store(mailbox name: String, uid: UInt32, _ kind: MailFlagKind, add: Bool) async throws {
