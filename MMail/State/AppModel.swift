@@ -53,11 +53,11 @@ final class AppModel: ObservableObject {
 
     // Core state
     @Published var onboarding: Bool
-    @Published var accounts: [Account] = SampleData.accounts
+    @Published var accounts: [Account] = []
     @Published var currentAccount: String = "all"
     @Published var folder: String = "home"
-    @Published var emails: [Email] = SampleData.emails
-    @Published var selectedId: String? = "e01"
+    @Published var emails: [Email] = []
+    @Published var selectedId: String?
     @Published var filter: InboxFilter = .all
 
     // Tweaks / appearance
@@ -102,7 +102,7 @@ final class AppModel: ObservableObject {
 
     init() {
         let d = UserDefaults.standard
-        onboarding = d.object(forKey: kOnboarded) == nil
+        onboarding = true
         dark = d.object(forKey: kDark) as? Bool ?? false
         sidebarVisible = d.object(forKey: kSidebar) as? Bool ?? true
         readingPane = d.object(forKey: kReadingPane) as? Bool ?? true
@@ -130,6 +130,8 @@ final class AppModel: ObservableObject {
             realConfigs = decoded
             for cfg in decoded { accounts.append(AppModel.uiAccount(for: cfg)) }
         }
+        // Welcome shows on first launch and whenever no account is connected.
+        onboarding = accounts.isEmpty
     }
 
     // MARK: - Derived

@@ -4,10 +4,7 @@ struct OnboardingView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
 
-    private func connect() {
-        model.persistOnboarded()
-        withAnimation(.easeOut(duration: 0.25)) { model.onboarding = false }
-    }
+    private func openSetup() { model.manualSetupOpen = true }
 
     var body: some View {
         ZStack {
@@ -23,7 +20,7 @@ struct OnboardingView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 12)
 
-                Text("MMail is built for people who'd rather use their keyboard. Connect an account to get started — or skip and explore a demo inbox.")
+                Text("MMail is built for people who'd rather use their keyboard. Connect an account to get started.")
                     .font(.system(size: 15))
                     .foregroundStyle(p.fg2)
                     .multilineTextAlignment(.center)
@@ -32,22 +29,11 @@ struct OnboardingView: View {
                     .padding(.bottom, 28)
 
                 VStack(spacing: 8) {
-                    providerButton(icon: "mail", title: "Continue with Google")
-                    providerButton(icon: "mail", title: "Continue with iCloud")
-                    providerButton(icon: "settings", title: "Set up IMAP manually") {
-                        model.manualSetupOpen = true
-                    }
+                    providerButton(icon: "mail", title: "Continue with Google", action: openSetup)
+                    providerButton(icon: "mail", title: "Continue with iCloud", action: openSetup)
+                    providerButton(icon: "settings", title: "Set up IMAP manually", action: openSetup)
                 }
-                .padding(.bottom, 4)
-
-                Button(action: connect) {
-                    Text("Skip and explore a demo inbox →")
-                        .font(.system(size: 14))
-                        .foregroundStyle(p.fg3)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(.plain)
+                .padding(.bottom, 8)
 
                 HStack(spacing: 2) {
                     Text("Tip: press").font(.system(size: 12)).foregroundStyle(p.fg3)
@@ -82,8 +68,8 @@ struct OnboardingView: View {
         }
     }
 
-    private func providerButton(icon: String, title: String, action: (() -> Void)? = nil) -> some View {
-        Button(action: { (action ?? connect)() }) {
+    private func providerButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(spacing: 12) {
                 Icon(name: icon, size: 18).foregroundStyle(p.fg1)
                 Text(title).font(.system(size: 14, weight: .medium)).foregroundStyle(p.fg1)
