@@ -57,7 +57,14 @@ struct AddAccountView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if step == 0 {
                     ForEach(providers) { pr in
-                        Button { provider = pr; step = 1 } label: {
+                        Button {
+                            if pr.id == "imap" {
+                                model.addingAccount = false
+                                model.manualSetupOpen = true
+                            } else {
+                                provider = pr; step = 1
+                            }
+                        } label: {
                             HStack(spacing: 12) {
                                 Text(pr.initial)
                                     .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)

@@ -15,6 +15,10 @@ struct RootView: View {
                 content
                 overlays
             }
+
+            if model.manualSetupOpen {
+                ManualAccountSetupView()
+            }
         }
         .toolbar { toolbarContent }
         .onAppear { model.installKeyMonitor() }
@@ -26,6 +30,9 @@ struct RootView: View {
         }
         .onChange(of: searchFocused) { _, focused in
             if focused { model.searchActive = true }
+        }
+        .onChange(of: model.currentAccount) { _, id in
+            model.didSelectAccount(id)
         }
         .animation(.easeOut(duration: 0.2), value: model.sidebarVisible)
         .animation(.easeOut(duration: 0.2), value: model.readingPane)

@@ -49,6 +49,7 @@ final class AppModel: ObservableObject {
     private let kReadingPane = "mmail.readingPane"
     private let kJournalRecent = "mmail.journal.recent"
     private let kTemplates = "mmail.templates"
+    private let kRealAccounts = "mmail.realAccounts"
 
     // Core state
     @Published var onboarding: Bool
@@ -76,6 +77,7 @@ final class AppModel: ObservableObject {
     @Published var toast: ToastModel?
     @Published var pendingG = false
     @Published var journalArchiveOpen = false
+    @Published var manualSetupOpen = false
 
     // Home dashboard
     @Published var todos: [Todo]
@@ -84,6 +86,11 @@ final class AppModel: ObservableObject {
 
     // Reply templates
     @Published var templates: [ReplyTemplate]
+
+    // Real (IMAP/SMTP) accounts
+    @Published var realConfigs: [MailAccountConfig] = []
+    @Published var loadingAccounts: Set<String> = []
+    @Published var accountErrors: [String: String] = [:]
 
     private static let seedJournalRecent: [JournalEntry] = [
         JournalEntry(id: "jr-yesterday", date: "Yesterday", text: "Crit went well. Sarah's instinct on the empty state was right — copy carries it. Need to write down the lighter ring decision before I forget."),
@@ -117,6 +124,11 @@ final class AppModel: ObservableObject {
             templates = decoded
         } else {
             templates = SampleData.replyTemplates
+        }
+        if let data = d.data(forKey: kRealAccounts),
+           let decoded = try? JSONDecoder().decode([MailAccountConfig].self, from: data) {
+            realConfigs = decoded
+            for cfg in decoded { accounts.append(AppModel.uiAccount(for: cfg)) }
         }
     }
 
@@ -183,7 +195,7 @@ final class AppModel: ObservableObject {
     var total: Int { filteredEmails.count }
 
     var anyOverlayOpen: Bool {
-        palette || help || settings || compose != nil || addingAccount || journalArchiveOpen
+        palette || help || settings || compose != nil || addingAccount || journalArchiveOpen || manualSetupOpen
     }
 
     // MARK: - Persistence side-effects
@@ -237,6 +249,7 @@ final class AppModel: ObservableObject {
     func select(_ id: String?) {
         selectedId = id
         markSelectedReadSoon()
+        loadBodyIfNeeded()
     }
 
     func markSelectedReadSoon() {
@@ -278,18 +291,26 @@ final class AppModel: ObservableObject {
 
     func archive(_ id: String? = nil) { moveTo(id ?? selectedId, dest: "archive", verb: "Archived") }
     func markDone(_ id: String? = nil) { moveTo(id ?? selectedId, dest: "done", verb: "Marked done") }
-    func delete(_ id: String? = nil) { moveTo(id ?? selectedId, dest: "trash", verb: "Deleted") }
+    func delete(_ id: String? = nil) {
+        let target = id ?? selectedId
+        if let target, let e = emails.first(where: { $0.id == target }) {
+            applyRealFlag(e, .deleted, add: true)
+        }
+        moveTo(target, dest: "trash", verb: "Deleted")
+    }
     func snooze(_ id: String? = nil) { moveTo(id ?? selectedId, dest: "snoozed", verb: "Snoozed") }
 
     func markUnread(_ id: String? = nil) {
         guard let id = id ?? selectedId, let i = emails.firstIndex(where: { $0.id == id }) else { return }
         emails[i].unread = true
+        applyRealFlag(emails[i], .seen, add: false)
         showToast("Marked as unread")
     }
 
     func toggleStar(_ id: String? = nil) {
         guard let id = id ?? selectedId, let i = emails.firstIndex(where: { $0.id == id }) else { return }
         emails[i].starred.toggle()
+        applyRealFlag(emails[i], .flagged, add: emails[i].starred)
     }
 
     // MARK: - Compose
@@ -302,14 +323,19 @@ final class AppModel: ObservableObject {
     }
 
     func sendDraft(_ draft: ComposeDraft, scheduleLabel: String? = nil) {
-        compose = nil
-        let acct = accountsById[draft.fromId]
         let dest = draft.to.isEmpty ? "(unknown)" : draft.to
         if let label = scheduleLabel {
+            compose = nil
             showToast("Scheduled for \(label) · \(dest)")
-        } else {
-            showToast("Sent to \(dest) from \(acct?.email ?? "you")")
+            return
         }
+        if isRealAccount(draft.fromId), let cfg = config(for: draft.fromId) {
+            sendViaSMTP(draft, cfg: cfg)
+            return
+        }
+        compose = nil
+        let acct = accountsById[draft.fromId]
+        showToast("Sent to \(dest) from \(acct?.email ?? "you")")
     }
 
     func reply() {
@@ -370,7 +396,8 @@ final class AppModel: ObservableObject {
     }
 
     func closeOverlays() {
-        palette = false; help = false; settings = false; compose = nil; addingAccount = false; journalArchiveOpen = false
+        palette = false; help = false; settings = false; compose = nil; addingAccount = false
+        journalArchiveOpen = false; manualSetupOpen = false
     }
 
     func setFolder(_ f: String) {
@@ -424,6 +451,172 @@ final class AppModel: ObservableObject {
     func activateSearch() {
         searchActive = true
         searchFocusRequested = true
+    }
+
+    // MARK: - Real mail (IMAP/SMTP)
+
+    func isRealAccount(_ id: String) -> Bool { realConfigs.contains { $0.id == id } }
+    func config(for id: String) -> MailAccountConfig? { realConfigs.first { $0.id == id } }
+
+    static func uiAccount(for cfg: MailAccountConfig) -> Account {
+        let display = cfg.displayName.isEmpty ? cfg.email : cfg.displayName
+        let base = Sender.stableColorHex(for: cfg.email)
+        return Account(id: cfg.id, name: display, email: cfg.email,
+                       initials: String(display.prefix(1)).uppercased(),
+                       gradient: [base, "1E2DB0"], colorHex: base, provider: "IMAP / SMTP")
+    }
+
+    func persistRealAccounts() {
+        if let data = try? JSONEncoder().encode(realConfigs) {
+            UserDefaults.standard.set(data, forKey: kRealAccounts)
+        }
+    }
+
+    func addRealAccount(config: MailAccountConfig, imapPassword: String, smtpPassword: String) {
+        Keychain.setPassword(imapPassword, account: config.imapPasswordKey)
+        Keychain.setPassword(smtpPassword, account: config.smtpPasswordKey)
+        realConfigs.append(config)
+        accounts.append(AppModel.uiAccount(for: config))
+        persistRealAccounts()
+        addingAccount = false
+        manualSetupOpen = false
+        if onboarding { persistOnboarded(); onboarding = false }
+        currentAccount = config.id
+        folder = "inbox"
+        loadInbox(config.id)
+    }
+
+    /// Called whenever the selected account changes; refreshes real inboxes.
+    func didSelectAccount(_ id: String) {
+        guard id != "all", isRealAccount(id), !loadingAccounts.contains(id) else { return }
+        loadInbox(id)
+    }
+
+    func loadInbox(_ accountId: String) {
+        guard let cfg = config(for: accountId), let pw = cfg.imapPassword else {
+            accountErrors[accountId] = "Missing saved password."
+            return
+        }
+        loadingAccounts.insert(accountId)
+        accountErrors[accountId] = nil
+        Task {
+            do {
+                let imap = IMAPService(config: cfg, password: pw)
+                try await imap.connectAndLogin()
+                let count = try await imap.selectInbox()
+                let msgs = try await imap.fetchRecent(limit: 50, total: count)
+                await imap.disconnect()
+                let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId) }
+                await MainActor.run {
+                    self.mergeRealInbox(mapped, accountId: accountId)
+                    self.loadingAccounts.remove(accountId)
+                }
+            } catch {
+                await MainActor.run {
+                    self.accountErrors[accountId] = error.localizedDescription
+                    self.loadingAccounts.remove(accountId)
+                }
+            }
+        }
+    }
+
+    private func mergeRealInbox(_ newEmails: [Email], accountId: String) {
+        emails.removeAll { $0.account == accountId }
+        emails.append(contentsOf: newEmails)
+        if currentAccount == accountId && folder == "inbox" {
+            selectedId = filteredEmails.first?.id
+        }
+    }
+
+    static func makeEmail(_ m: IMAPMessage, accountId: String) -> Email {
+        let (day, time) = dayAndTime(m.date)
+        let fromKey = m.fromEmail.isEmpty ? "imap-unknown" : m.fromEmail
+        return Email(id: "\(accountId)#\(m.uid)", account: accountId, from: fromKey, to: nil,
+                     subject: m.subject.isEmpty ? "(no subject)" : m.subject,
+                     preview: "", body: "", time: time, day: day,
+                     unread: !m.seen, starred: m.flagged, hasAttachment: false,
+                     labels: [], folder: "inbox", thread: nil, snoozeUntil: nil,
+                     fromName: m.fromName, fromEmail: m.fromEmail, uid: m.uid, bodyLoaded: false)
+    }
+
+    static func dayAndTime(_ date: Date) -> (String, String) {
+        let cal = Calendar.current
+        let f = DateFormatter(); f.locale = .current
+        if cal.isDateInToday(date) { f.dateFormat = "h:mm a"; return ("today", f.string(from: date)) }
+        if cal.isDateInYesterday(date) { return ("yesterday", "Yesterday") }
+        if let days = cal.dateComponents([.day], from: date, to: Date()).day, days < 7 {
+            f.dateFormat = "EEE"; return ("earlier", f.string(from: date))
+        }
+        f.dateFormat = "MMM d"; return ("earlier", f.string(from: date))
+    }
+
+    /// Fetch the body (and mark \Seen) the first time a real message is opened.
+    func loadBodyIfNeeded() {
+        guard let e = selectedEmail, isRealAccount(e.account), !e.bodyLoaded, let uid = e.uid,
+              let cfg = config(for: e.account), let pw = cfg.imapPassword else { return }
+        let id = e.id
+        Task {
+            do {
+                let imap = IMAPService(config: cfg, password: pw)
+                try await imap.connectAndLogin()
+                _ = try await imap.selectInbox()
+                let body = try await imap.fetchBody(uid: uid)
+                try? await imap.store(uid: uid, .seen, add: true)
+                await imap.disconnect()
+                await MainActor.run {
+                    guard let i = self.emails.firstIndex(where: { $0.id == id }) else { return }
+                    self.emails[i].body = body
+                    self.emails[i].preview = String(body.replacingOccurrences(of: "\n", with: " ").prefix(140))
+                    self.emails[i].bodyLoaded = true
+                }
+            } catch { /* leave placeholder; surfaced via empty body */ }
+        }
+    }
+
+    func applyRealFlag(_ email: Email, _ kind: MailFlagKind, add: Bool) {
+        guard isRealAccount(email.account), let uid = email.uid,
+              let cfg = config(for: email.account), let pw = cfg.imapPassword else { return }
+        Task {
+            let imap = IMAPService(config: cfg, password: pw)
+            do {
+                try await imap.connectAndLogin()
+                _ = try await imap.selectInbox()
+                try await imap.store(uid: uid, kind, add: add)
+                await imap.disconnect()
+            } catch { /* best-effort */ }
+        }
+    }
+
+    func sendViaSMTP(_ draft: ComposeDraft, cfg: MailAccountConfig) {
+        guard let pw = cfg.smtpPassword else { showToast("Missing SMTP password."); return }
+        let recipients = AppModel.parseRecipients(draft.to)
+        guard !recipients.isEmpty else { showToast("Add a recipient first."); return }
+        compose = nil
+        showToast("Sending…")
+        let display = accountsById[cfg.id]?.name
+        let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to,
+                                        subject: draft.subject, body: draft.body)
+        Task {
+            do {
+                let smtp = SMTPService(config: cfg, password: pw)
+                try await smtp.send(from: cfg.email, fromName: display, recipients: recipients, message: message)
+                await MainActor.run { self.showToast("Sent to \(draft.to)") }
+            } catch {
+                await MainActor.run { self.showToast("Send failed: \(error.localizedDescription)") }
+            }
+        }
+    }
+
+    static func parseRecipients(_ field: String) -> [String] {
+        field.split(whereSeparator: { $0 == "," || $0 == ";" })
+            .map { piece -> String in
+                let s = piece.trimmingCharacters(in: .whitespaces)
+                if let lt = s.range(of: "<"), let gt = s.range(of: ">") {
+                    return String(s[lt.upperBound..<gt.lowerBound]).trimmingCharacters(in: .whitespaces)
+                }
+                return s
+            }
+            .filter { $0.contains("@") }
     }
 
     // MARK: - Keyboard engine (NSEvent monitor)

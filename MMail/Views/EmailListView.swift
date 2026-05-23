@@ -80,7 +80,11 @@ struct EmailListView: View {
     private var list: some View {
         let visible = model.filteredEmails
         return Group {
-            if visible.isEmpty {
+            if visible.isEmpty && model.loadingAccounts.contains(model.currentAccount) {
+                loadingState
+            } else if visible.isEmpty, let err = model.accountErrors[model.currentAccount] {
+                errorState(err)
+            } else if visible.isEmpty {
                 emptyState
             } else {
                 ScrollViewReader { proxy in
@@ -112,6 +116,29 @@ struct EmailListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var loadingState: some View {
+        VStack(spacing: 12) {
+            ProgressView().controlSize(.large)
+            Text("Connecting…").font(.system(size: 13.5)).foregroundStyle(p.fg3)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func errorState(_ message: String) -> some View {
+        VStack(spacing: 10) {
+            Icon(name: "alert", size: 32, weight: .light).foregroundStyle(p.danger)
+            Text("Couldn't connect").font(.system(size: 18, weight: .bold)).foregroundStyle(p.fg2)
+            Text(message).font(.system(size: 12.5)).foregroundStyle(p.fg3)
+                .multilineTextAlignment(.center).frame(maxWidth: 320)
+            Button { model.loadInbox(model.currentAccount) } label: {
+                Text("Retry").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(p.brandBlue).clipShape(Capsule())
+            }.buttonStyle(.plain).padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(40)
     }
 
     private var emptyState: some View {
@@ -167,7 +194,7 @@ struct EmailRowView: View {
     let accountColor: Color?
     @State private var hovered = false
 
-    private var sender: Sender? { SampleData.senders[email.from] }
+    private var sender: Sender? { email.resolvedSender }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {

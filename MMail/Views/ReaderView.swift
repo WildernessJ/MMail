@@ -43,7 +43,7 @@ private struct ReaderContent: View {
     @State private var contactOpen = false
     @State private var copied = false
 
-    private var sender: Sender? { SampleData.senders[email.from] }
+    private var sender: Sender? { email.resolvedSender }
     private var thread: [ThreadItem] { email.thread ?? [] }
     private let stackMax = 4
     private var stackVisible: [ThreadItem] { expanded ? thread : Array(thread.prefix(stackMax)) }
@@ -117,13 +117,21 @@ private struct ReaderContent: View {
             metaRow.padding(.bottom, 22)
             Divider().overlay(p.border)
 
-            Text(email.body)
-                .font(.system(size: 15))
-                .foregroundStyle(p.fg1)
-                .lineSpacing(5)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
+            if email.body.isEmpty && !email.bodyLoaded {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Loading message…").font(.system(size: 13.5)).foregroundStyle(p.fg3)
+                }
                 .padding(.top, 24)
+            } else {
+                Text(email.body)
+                    .font(.system(size: 15))
+                    .foregroundStyle(p.fg1)
+                    .lineSpacing(5)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 24)
+            }
 
             replyStrip.padding(.top, 24)
         }

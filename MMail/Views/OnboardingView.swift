@@ -34,7 +34,9 @@ struct OnboardingView: View {
                 VStack(spacing: 8) {
                     providerButton(icon: "mail", title: "Continue with Google")
                     providerButton(icon: "mail", title: "Continue with iCloud")
-                    providerButton(icon: "settings", title: "Set up IMAP manually")
+                    providerButton(icon: "settings", title: "Set up IMAP manually") {
+                        model.manualSetupOpen = true
+                    }
                 }
                 .padding(.bottom, 4)
 
@@ -80,8 +82,8 @@ struct OnboardingView: View {
         }
     }
 
-    private func providerButton(icon: String, title: String) -> some View {
-        Button(action: connect) {
+    private func providerButton(icon: String, title: String, action: (() -> Void)? = nil) -> some View {
+        Button(action: { (action ?? connect)() }) {
             HStack(spacing: 12) {
                 Icon(name: icon, size: 18).foregroundStyle(p.fg1)
                 Text(title).font(.system(size: 14, weight: .medium)).foregroundStyle(p.fg1)
