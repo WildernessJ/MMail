@@ -58,7 +58,13 @@ struct EmailListView: View {
                     .buttonStyle(.plain).help("Refresh")
                 }
             }
-            Text(sub).font(.system(size: 12.5)).foregroundStyle(p.fg3)
+            HStack(spacing: 6) {
+                Text(sub).font(.system(size: 12.5)).foregroundStyle(p.fg3)
+                if model.searching {
+                    ProgressView().controlSize(.small).scaleEffect(0.7)
+                    Text("searching all mail…").font(.system(size: 11.5)).foregroundStyle(p.fg4)
+                }
+            }
             if model.folder == "inbox" && !isSearch {
                 HStack(spacing: 4) {
                     ForEach(InboxFilter.allCases, id: \.self) { f in

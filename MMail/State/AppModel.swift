@@ -94,6 +94,7 @@ final class AppModel: ObservableObject {
     // accountId -> canonical folder id ("sent"/"drafts"/"trash"/"spam"/"archive") -> server mailbox name
     @Published var realMailboxes: [String: [String: String]] = [:]
     @Published var serverSearchResults: [Email]?
+    @Published var searching = false
     private var pollTimer: Timer?
     private var imapSessions: [String: IMAPSession] = [:]
     private var didBootstrap = false
@@ -438,6 +439,7 @@ final class AppModel: ObservableObject {
         searchActive = false
         searchQuery = ""
         serverSearchResults = nil
+        searching = false
         if isRealAccount(currentAccount) { loadFolder(currentAccount, f) }
     }
 
@@ -624,13 +626,16 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Server-side full-text search across the whole mailbox (instant local
+    /// filtering already covers loaded mail as you type; this augments it).
     func runServerSearch() {
         guard searchActive, isRealAccount(currentAccount), let session = session(for: currentAccount) else { return }
         let q = searchQuery.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { serverSearchResults = nil; return }
+        guard !q.isEmpty else { serverSearchResults = nil; searching = false; return }
         let acct = currentAccount
         let box = mailboxName(acct, folder) ?? "INBOX"
         let f = folder
+        searching = true
         Task {
             do {
                 let msgs = try await session.searchText(mailbox: box, query: q, limit: 50)
@@ -638,9 +643,10 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     self.serverSearchResults = mapped
                     self.selectedId = mapped.first?.id
+                    self.searching = false
                 }
             } catch {
-                await MainActor.run { self.serverSearchResults = [] }
+                await MainActor.run { self.serverSearchResults = []; self.searching = false }
             }
         }
     }

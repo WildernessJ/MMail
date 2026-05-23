@@ -130,7 +130,7 @@ struct RootView: View {
                 .foregroundStyle(p.fg1)
                 .onSubmit { model.runServerSearch() }
                 .onChange(of: model.searchQuery) { _, q in
-                    if q.isEmpty { model.serverSearchResults = nil }
+                    if q.isEmpty { model.serverSearchResults = nil; model.searching = false }
                 }
             if !model.searchActive {
                 Kbd("/")
