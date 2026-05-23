@@ -12,8 +12,8 @@ struct ManualAccountSetupView: View {
     @State private var imapUsername = ""
     @State private var imapPassword = ""
     @State private var smtpHost = ""
-    @State private var smtpPort = "587"
-    @State private var smtpSecurity: ConnectionSecurity = .startTLS
+    @State private var smtpPort = "465"
+    @State private var smtpSecurity: ConnectionSecurity = .tls
     @State private var smtpUsername = ""
     @State private var smtpPassword = ""
     @State private var sameCredentials = true
