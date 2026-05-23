@@ -138,12 +138,7 @@ struct RootView: View {
         }
         .padding(.horizontal, 12)
         .frame(width: 420, height: 26)
-        .background(p.bg3)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(searchFocused ? p.brandBlue : Color.clear, lineWidth: 1)
-        )
+        .contentShape(Rectangle())
         .onTapGesture {
             model.searchActive = true
             searchFocused = true
