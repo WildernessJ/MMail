@@ -138,7 +138,7 @@ struct RootView: View {
         }
         .padding(.horizontal, 12)
         .frame(width: 420, height: 26)
-        .background(searchFocused ? p.bg1 : p.bg3)
+        .background(p.bg3)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
