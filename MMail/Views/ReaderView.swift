@@ -42,6 +42,8 @@ private struct ReaderContent: View {
     @State private var expanded = false
     @State private var contactOpen = false
     @State private var copied = false
+    @State private var newLabelOpen = false
+    @State private var newLabelName = ""
 
     private var sender: Sender? { email.resolvedSender }
     private var thread: [ThreadItem] { email.thread ?? model.relatedThread(for: email) }
@@ -67,6 +69,16 @@ private struct ReaderContent: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .alert("New label", isPresented: $newLabelOpen) {
+            TextField("Label name", text: $newLabelName)
+            Button("Cancel", role: .cancel) { newLabelName = "" }
+            Button("Create") {
+                if let id = model.addLabel(newLabelName) { model.applyLabel(email, id, add: true) }
+                newLabelName = ""
+            }
+        } message: {
+            Text("Create a label and apply it to this message.")
+        }
     }
 
     // MARK: Toolbar
@@ -75,10 +87,41 @@ private struct ReaderContent: View {
         HStack(spacing: 8) {
             PrimaryToolbarButton(icon: "check", label: "Done", kbd: "H") { model.markDone() }
             PrimaryToolbarButton(icon: "replyAll", label: "Reply all", kbd: "A") { model.replyAll() }
+            Button { model.toggleStar(email.id) } label: {
+                Icon(name: email.starred ? "star.fill" : "star", size: 15)
+                    .foregroundStyle(email.starred ? Color(hex: "F4A52A") : p.fg2)
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.plain)
+            .help(email.starred ? "Unstar (S)" : "Star (S)")
+            labelMenu
             Spacer()
             moreMenu
         }
         .padding(.horizontal, 24).padding(.vertical, 10)
+    }
+
+    private var labelMenu: some View {
+        Menu {
+            if model.labels.isEmpty {
+                Text("No labels yet")
+            } else {
+                ForEach(model.labels) { l in
+                    let on = email.labels.contains(l.id)
+                    Button { model.applyLabel(email, l.id, add: !on) } label: {
+                        Label(l.name, systemImage: on ? "checkmark" : "circle")
+                    }
+                }
+            }
+            Divider()
+            Button { newLabelOpen = true } label: { Label("New label…", systemImage: "plus") }
+        } label: {
+            Icon(name: "tag", size: 15).foregroundStyle(p.fg2).frame(width: 30, height: 30)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Label")
     }
 
     private var moreMenu: some View {

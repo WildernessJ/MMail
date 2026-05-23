@@ -98,6 +98,9 @@ struct RootView: View {
         if model.journalArchiveOpen {
             JournalArchiveView()
         }
+        if model.advancedSearchOpen {
+            AdvancedSearchView()
+        }
     }
 
     // MARK: - Toolbar
@@ -135,6 +138,11 @@ struct RootView: View {
             if !model.searchActive {
                 Kbd("/")
             }
+            Button { model.openAdvancedSearch() } label: {
+                Icon(name: "sliders", size: 13).foregroundStyle(model.serverSearchResults != nil ? p.brandBlue : p.fg3)
+            }
+            .buttonStyle(.plain)
+            .help("Advanced search")
         }
         .padding(.horizontal, 12)
         .frame(width: 420, height: 26)

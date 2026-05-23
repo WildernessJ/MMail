@@ -35,11 +35,16 @@ struct EmailListView: View {
         let visible = model.filteredEmails
         let unread = visible.filter { $0.unread }.count
         let acctName = model.currentAccount == "all" ? "All inboxes" : (model.accountsById[model.currentAccount]?.name ?? folderName)
-        let title = isSearch ? "Search" : (model.folder == "inbox" ? acctName : folderName)
+        let labelName = model.labelFilter.flatMap { model.label(for: $0)?.name }
+        let title = isSearch ? "Search" : (labelName ?? (model.folder == "inbox" ? acctName : folderName))
         let sub: String = {
             if isSearch {
                 let n = visible.count
                 return "\(n) result\(n == 1 ? "" : "s") for \"\(model.searchQuery)\""
+            }
+            if labelName != nil {
+                let n = visible.count
+                return "\(n) \(n == 1 ? "message" : "messages") · label"
             }
             if model.folder == "inbox" {
                 return unread > 0 ? "\(unread) unread · \(greeting())" : "Inbox zero · \(greeting())"
@@ -71,7 +76,7 @@ struct EmailListView: View {
                     Text("searching all mail…").font(.system(size: 11.5)).foregroundStyle(p.fg4)
                 }
             }
-            if model.folder == "inbox" && !isSearch {
+            if model.folder == "inbox" && !isSearch && model.labelFilter == nil {
                 HStack(spacing: 4) {
                     ForEach(InboxFilter.allCases, id: \.self) { f in
                         filterChip(f)
@@ -244,6 +249,9 @@ struct EmailRowView: View {
                             .lineLimit(1)
                     }
                     Spacer(minLength: 4)
+                    if email.starred {
+                        Icon(name: "star.fill", size: 10).foregroundStyle(Color(hex: "F4A52A"))
+                    }
                     Text(email.time)
                         .font(.system(size: 11.5, weight: .medium))
                         .monospacedDigit()
@@ -264,8 +272,8 @@ struct EmailRowView: View {
                             Icon(name: "attach", size: 12).foregroundStyle(p.fg3)
                         }
                         ForEach(email.labels, id: \.self) { l in
-                            if let def = SampleData.labels.first(where: { $0.id == l }) {
-                                Pill(label: def.name, kind: l)
+                            if let def = model.label(for: l) {
+                                Pill(label: def.name, kind: l, colorHex: def.colorHex)
                             }
                         }
                     }
@@ -275,6 +283,7 @@ struct EmailRowView: View {
             if hovered || selected {
                 VStack {
                     HStack(spacing: 2) {
+                        rowAction(email.starred ? "star.fill" : "star", help: "Star (S)") { model.toggleStar(email.id) }
                         rowAction("check", help: "Mark as done (H)") { model.markDone(email.id) }
                         rowAction("archive", help: "Archive (E)") { model.archive(email.id) }
                     }

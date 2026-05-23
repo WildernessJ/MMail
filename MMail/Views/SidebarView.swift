@@ -31,14 +31,8 @@ struct SidebarView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 6)
 
-            ForEach(SampleData.labels) { l in
-                HStack(spacing: 10) {
-                    Circle().fill(l.color).frame(width: 8, height: 8)
-                    Text(l.name).font(.system(size: 12.5)).foregroundStyle(p.fg2)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .frame(height: 26)
+            ForEach(model.labels) { l in
+                labelRow(l)
             }
 
             Spacer(minLength: 8)
@@ -104,6 +98,25 @@ struct SidebarView: View {
         }
         .buttonStyle(.plain)
         .onHover { hoveredFolder = $0 ? f.id : (hoveredFolder == f.id ? nil : hoveredFolder) }
+    }
+
+    private func labelRow(_ l: MailLabel) -> some View {
+        let active = model.labelFilter == l.id
+        let hovered = hoveredFolder == "label:\(l.id)"
+        return Button { model.selectLabel(l.id) } label: {
+            HStack(spacing: 10) {
+                Circle().fill(l.color).frame(width: 8, height: 8)
+                Text(l.name).font(.system(size: 12.5)).foregroundStyle(active ? p.activeFolderText : p.fg2).lineLimit(1)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 26)
+            .frame(maxWidth: .infinity)
+            .background(active ? p.brandBlue100 : (hovered ? p.bg3 : Color.clear))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hoveredFolder = $0 ? "label:\(l.id)" : (hoveredFolder == "label:\(l.id)" ? nil : hoveredFolder) }
     }
 
     private var footer: some View {

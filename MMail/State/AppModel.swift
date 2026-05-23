@@ -44,6 +44,20 @@ struct ScheduledSend: Codable, Identifiable {
     var attachments: [ComposeAttachment] = []
 }
 
+struct AdvancedSearchForm {
+    var text = ""
+    var from = ""
+    var to = ""
+    var subject = ""
+    var account = "all"        // "all" or a specific account id
+    var useAfter = false
+    var after = Date()
+    var useBefore = false
+    var before = Date()
+    var unreadOnly = false
+    var flaggedOnly = false
+}
+
 struct Command: Identifiable {
     let id: String
     let group: String
@@ -96,6 +110,8 @@ final class AppModel: ObservableObject {
     @Published var searchActive = false
     @Published var searchQuery = ""
     @Published var searchFocusRequested = false
+    @Published var advancedSearchOpen = false
+    @Published var advForm = AdvancedSearchForm()
     @Published var toast: ToastModel?
     @Published var pendingG = false
     @Published var journalArchiveOpen = false
@@ -108,6 +124,11 @@ final class AppModel: ObservableObject {
 
     // Reply templates
     @Published var templates: [ReplyTemplate]
+
+    // Labels
+    @Published var labels: [MailLabel]
+    @Published var labelFilter: String?
+    private let kLabels = "mmail.labels"
 
     // Real (IMAP/SMTP) accounts
     @Published var realConfigs: [MailAccountConfig] = []
@@ -164,6 +185,12 @@ final class AppModel: ObservableObject {
         } else {
             templates = SampleData.replyTemplates
         }
+        if let data = d.data(forKey: kLabels),
+           let decoded = try? JSONDecoder().decode([MailLabel].self, from: data), !decoded.isEmpty {
+            labels = decoded
+        } else {
+            labels = SampleData.labels
+        }
         if let data = d.data(forKey: kRealAccounts),
            let decoded = try? JSONDecoder().decode([MailAccountConfig].self, from: data) {
             realConfigs = decoded
@@ -202,6 +229,9 @@ final class AppModel: ObservableObject {
                 (SampleData.senders[e.from]?.name.lowercased().contains(ql) ?? false)
             }
         }
+        if let lf = labelFilter {
+            return accountFiltered.filter { $0.labels.contains(lf) && !isSnoozed($0) }
+        }
         if folder == "snoozed" { return accountFiltered.filter { isSnoozed($0) } }
         return accountFiltered.filter { e in
             if isSnoozed(e) { return false }
@@ -217,6 +247,7 @@ final class AppModel: ObservableObject {
 
     var filteredEmails: [Email] {
         if searchIsActive { return visibleEmails }
+        if labelFilter != nil { return visibleEmails }
         if folder != "inbox" { return visibleEmails }
         switch filter {
         case .unread: return visibleEmails.filter { $0.unread }
@@ -248,7 +279,7 @@ final class AppModel: ObservableObject {
     var total: Int { filteredEmails.count }
 
     var anyOverlayOpen: Bool {
-        palette || help || settings || compose != nil || addingAccount || journalArchiveOpen || manualSetupOpen
+        palette || help || settings || compose != nil || addingAccount || journalArchiveOpen || manualSetupOpen || advancedSearchOpen
     }
 
     // MARK: - Persistence side-effects
@@ -410,6 +441,88 @@ final class AppModel: ObservableObject {
         applyRealFlag(emails[i], .flagged, add: emails[i].starred)
     }
 
+    // MARK: - Labels
+
+    func label(for id: String) -> MailLabel? { labels.first { $0.id == id } }
+
+    func persistLabels() {
+        if let data = try? JSONEncoder().encode(labels) { UserDefaults.standard.set(data, forKey: kLabels) }
+    }
+
+    /// Turn a free-form label name into a valid IMAP keyword (atom): lowercase,
+    /// alphanumerics plus `-`/`_`, everything else collapsed to a dash.
+    static func sanitizeLabelId(_ name: String) -> String {
+        let lowered = name.lowercased()
+        var out = ""
+        var lastDash = false
+        for ch in lowered {
+            if ch.isLetter || ch.isNumber || ch == "-" || ch == "_" {
+                out.append(ch); lastDash = false
+            } else if !lastDash {
+                out.append("-"); lastDash = true
+            }
+        }
+        return out.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    }
+
+    static func prettifyLabel(_ id: String) -> String {
+        let words = id.split(whereSeparator: { $0 == "-" || $0 == "_" }).map(String.init)
+        return words.map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
+    }
+
+    /// Create a new label from a display name (idempotent on the derived id).
+    @discardableResult
+    func addLabel(_ name: String) -> String? {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let id = AppModel.sanitizeLabelId(trimmed)
+        guard !id.isEmpty else { return nil }
+        if labels.contains(where: { $0.id == id }) { return id }
+        labels.append(MailLabel(id: id, name: trimmed.isEmpty ? AppModel.prettifyLabel(id) : trimmed,
+                                colorHex: Sender.stableColorHex(for: id)))
+        persistLabels()
+        return id
+    }
+
+    /// Add or remove a label on a message (local + on the server via IMAP keyword).
+    func applyLabel(_ email: Email, _ labelId: String, add: Bool) {
+        guard let i = emails.firstIndex(where: { $0.id == email.id }) else { return }
+        if add {
+            if !emails[i].labels.contains(labelId) { emails[i].labels.append(labelId) }
+        } else {
+            emails[i].labels.removeAll { $0 == labelId }
+        }
+        let updated = emails[i]
+        MailCache.save(emails.filter { $0.account == updated.account && $0.folder == updated.folder },
+                       account: updated.account, folder: updated.folder)
+        guard isRealAccount(email.account), let uid = email.uid, let session = session(for: email.account) else { return }
+        let box = mailboxName(email.account, email.folder) ?? "INBOX"
+        Task { try? await session.storeKeyword(mailbox: box, uid: uid, keyword: labelId, add: add) }
+    }
+
+    /// Register any labels encountered on freshly loaded mail so they show up in
+    /// the sidebar and label menu.
+    private func registerLabels(from list: [Email]) {
+        let known = Set(labels.map { $0.id })
+        let encountered = Set(list.flatMap { $0.labels })
+        let fresh = encountered.subtracting(known)
+        guard !fresh.isEmpty else { return }
+        for id in fresh.sorted() {
+            labels.append(MailLabel(id: id, name: AppModel.prettifyLabel(id), colorHex: Sender.stableColorHex(for: id)))
+        }
+        persistLabels()
+    }
+
+    /// Filter the list to a single label (across all loaded folders).
+    func selectLabel(_ id: String) {
+        labelFilter = id
+        searchActive = false
+        searchQuery = ""
+        serverSearchResults = nil
+        searching = false
+        loadForCurrentScope("inbox", silent: true)
+        selectedId = filteredEmails.first?.id
+    }
+
     // MARK: - Compose
 
     func startCompose(to: String = "", subject: String = "", body: String = "",
@@ -556,11 +669,12 @@ final class AppModel: ObservableObject {
 
     func closeOverlays() {
         palette = false; help = false; settings = false; compose = nil; addingAccount = false
-        journalArchiveOpen = false; manualSetupOpen = false
+        journalArchiveOpen = false; manualSetupOpen = false; advancedSearchOpen = false
     }
 
     func setFolder(_ f: String) {
         folder = f
+        labelFilter = nil
         searchActive = false
         searchQuery = ""
         serverSearchResults = nil
@@ -902,6 +1016,71 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Advanced search
+
+    func openAdvancedSearch() {
+        if advForm.account == "all" && currentAccount != "all" && isRealAccount(currentAccount) {
+            advForm.account = currentAccount
+        }
+        advancedSearchOpen = true
+    }
+
+    /// Run a structured server-side search built from the advanced-search form.
+    func runAdvancedSearch() {
+        let f = advForm
+        var crit = MailSearchCriteria()
+        crit.text = f.text.trimmingCharacters(in: .whitespaces)
+        crit.from = f.from.trimmingCharacters(in: .whitespaces)
+        crit.to = f.to.trimmingCharacters(in: .whitespaces)
+        crit.subject = f.subject.trimmingCharacters(in: .whitespaces)
+        crit.since = f.useAfter ? Calendar.current.startOfDay(for: f.after) : nil
+        // BEFORE is exclusive; bump to the next day so the chosen date is included.
+        crit.before = f.useBefore ? Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: f.before)) : nil
+        crit.unseenOnly = f.unreadOnly
+        crit.flaggedOnly = f.flaggedOnly
+        guard !crit.isEmpty else { showToast("Add at least one filter"); return }
+
+        let scope: [String] = f.account == "all" ? realConfigs.map { $0.id } : [f.account]
+        let accountIds = scope.filter { isRealAccount($0) }
+        guard !accountIds.isEmpty else { showToast("No mail account to search"); return }
+
+        advancedSearchOpen = false
+        searchActive = true
+        searchQuery = describeAdvanced(f)
+        searching = true
+        serverSearchResults = []
+        let fld = folder == "home" ? "inbox" : folder
+        Task {
+            var results: [Email] = []
+            for acct in accountIds {
+                guard let session = await MainActor.run(body: { self.session(for: acct) }) else { continue }
+                let box = await MainActor.run { self.mailboxName(acct, fld) } ?? "INBOX"
+                if let msgs = try? await session.searchAdvanced(mailbox: box, criteria: crit, limit: 100) {
+                    results.append(contentsOf: msgs.map { AppModel.makeEmail($0, accountId: acct, folder: fld) })
+                }
+            }
+            await MainActor.run {
+                self.serverSearchResults = results
+                self.selectedId = results.first?.id
+                self.searching = false
+            }
+        }
+    }
+
+    private func describeAdvanced(_ f: AdvancedSearchForm) -> String {
+        var parts: [String] = []
+        if !f.text.isEmpty { parts.append(f.text) }
+        if !f.from.isEmpty { parts.append("from:\(f.from)") }
+        if !f.to.isEmpty { parts.append("to:\(f.to)") }
+        if !f.subject.isEmpty { parts.append("subject:\(f.subject)") }
+        if f.unreadOnly { parts.append("is:unread") }
+        if f.flaggedOnly { parts.append("is:starred") }
+        let df = DateFormatter(); df.dateFormat = "MMM d"
+        if f.useAfter { parts.append("after:\(df.string(from: f.after))") }
+        if f.useBefore { parts.append("before:\(df.string(from: f.before))") }
+        return parts.isEmpty ? "Advanced search" : parts.joined(separator: " ")
+    }
+
     /// Replace a folder's messages, preserving already-fetched bodies and
     /// (optionally) writing the result to the on-disk cache.
     private func mergeRealFolder(_ newEmails: [Email], accountId: String, folderId: String, persist: Bool) {
@@ -932,6 +1111,7 @@ final class AppModel: ObservableObject {
                 lastSeenUID[accountId] = maxUID
             }
         }
+        registerLabels(from: merged)
         emails.removeAll { $0.account == accountId && $0.folder == folderId }
         emails.append(contentsOf: merged)
         if persist { MailCache.save(merged, account: accountId, folder: folderId) }
@@ -950,7 +1130,7 @@ final class AppModel: ObservableObject {
                           subject: m.subject.isEmpty ? "(no subject)" : m.subject,
                           preview: "", body: "", time: time, day: day,
                           unread: !m.seen, starred: m.flagged, hasAttachment: false,
-                          labels: [], folder: folder, thread: nil, snoozeUntil: nil,
+                          labels: m.keywords.map { $0.lowercased() }, folder: folder, thread: nil, snoozeUntil: nil,
                           fromName: m.fromName, fromEmail: m.fromEmail, uid: m.uid, bodyLoaded: false)
         email.messageID = m.messageID.isEmpty ? nil : m.messageID
         email.inReplyTo = m.inReplyTo.isEmpty ? nil : m.inReplyTo

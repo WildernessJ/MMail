@@ -29,7 +29,7 @@ struct Account: Identifiable {
     var gradientColors: [Color] { gradient.map { Color(hex: $0) } }
 }
 
-struct MailLabel: Identifiable {
+struct MailLabel: Identifiable, Codable, Hashable {
     let id: String
     let name: String
     let colorHex: String

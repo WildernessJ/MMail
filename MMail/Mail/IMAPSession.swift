@@ -51,11 +51,17 @@ actor IMAPSession {
     func searchFlagged(mailbox: String, limit: Int) async throws -> [IMAPMessage] {
         try await run { try await $0.searchFlagged(mailbox: mailbox, limit: limit) }
     }
+    func searchAdvanced(mailbox: String, criteria: MailSearchCriteria, limit: Int) async throws -> [IMAPMessage] {
+        try await run { try await $0.searchAdvanced(mailbox: mailbox, criteria: criteria, limit: limit) }
+    }
     func store(mailbox: String, uid: UInt32, _ kind: MailFlagKind, add: Bool) async throws {
         try await run { try await $0.store(mailbox: mailbox, uid: uid, kind, add: add) }
     }
     func move(uid: UInt32, from: String, to: String) async throws {
         try await run { try await $0.move(uid: uid, from: from, to: to) }
+    }
+    func storeKeyword(mailbox: String, uid: UInt32, keyword: String, add: Bool) async throws {
+        try await run { try await $0.storeKeyword(mailbox: mailbox, uid: uid, keyword: keyword, add: add) }
     }
     func append(mailbox: String, rawMessage: String, seen: Bool, draft: Bool) async throws {
         try await run { try await $0.append(mailbox: mailbox, rawMessage: rawMessage, seen: seen, draft: draft) }

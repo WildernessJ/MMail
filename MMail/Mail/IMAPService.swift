@@ -32,10 +32,29 @@ struct IMAPMessage {
     var flagged: Bool
     var messageID: String
     var inReplyTo: String
+    var keywords: [String]
 }
 
 // NIO-free flag kind so the app layer doesn't import NIOIMAPCore.
 enum MailFlagKind { case seen, flagged, deleted }
+
+// NIO-free advanced-search criteria. The app builds this; IMAPService turns it
+// into a server SearchKey so the app layer stays free of NIOIMAPCore.
+struct MailSearchCriteria {
+    var text = ""
+    var from = ""
+    var to = ""
+    var subject = ""
+    var since: Date?
+    var before: Date?
+    var unseenOnly = false
+    var flaggedOnly = false
+
+    var isEmpty: Bool {
+        text.isEmpty && from.isEmpty && to.isEmpty && subject.isEmpty
+            && since == nil && before == nil && !unseenOnly && !flaggedOnly
+    }
+}
 
 enum MailboxKind: String { case inbox, sent, drafts, trash, junk, archive, other }
 
@@ -217,6 +236,26 @@ final class IMAPService {
         try await search(mailbox: name, key: .flagged, limit: limit)
     }
 
+    func searchAdvanced(mailbox name: String, criteria c: MailSearchCriteria, limit: Int) async throws -> [IMAPMessage] {
+        var keys: [SearchKey] = []
+        if !c.text.isEmpty { keys.append(.text(ByteBuffer(string: c.text))) }
+        if !c.from.isEmpty { keys.append(.from(ByteBuffer(string: c.from))) }
+        if !c.to.isEmpty { keys.append(.to(ByteBuffer(string: c.to))) }
+        if !c.subject.isEmpty { keys.append(.subject(ByteBuffer(string: c.subject))) }
+        if let since = c.since, let day = IMAPService.imapDay(since) { keys.append(.since(day)) }
+        if let before = c.before, let day = IMAPService.imapDay(before) { keys.append(.before(day)) }
+        if c.unseenOnly { keys.append(.unseen) }
+        if c.flaggedOnly { keys.append(.flagged) }
+        let key: SearchKey = keys.isEmpty ? .all : (keys.count == 1 ? keys[0] : .and(keys))
+        return try await search(mailbox: name, key: key, limit: limit)
+    }
+
+    private static func imapDay(_ date: Date) -> IMAPCalendarDay? {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        guard let y = c.year, let m = c.month, let d = c.day else { return nil }
+        return IMAPCalendarDay(year: y, month: m, day: d)
+    }
+
     /// Fetch the raw RFC822 message bytes. `byteLimit` caps the download (the
     /// text parts come first in MIME order); pass nil for the complete message.
     func fetchMessageData(mailbox name: String, uid: UInt32, byteLimit: Int?) async throws -> Data {
@@ -244,6 +283,15 @@ final class IMAPService {
         _ = try await select(from)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
         _ = try await send(.uidMove(.range(range), mailbox(to)))
+    }
+
+    /// Add or remove a custom keyword (label) on a message.
+    func storeKeyword(mailbox name: String, uid: UInt32, keyword: String, add: Bool) async throws {
+        _ = try await select(name)
+        let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
+        let flag = Flag(keyword)
+        let store: StoreFlags = add ? .add(silent: true, list: [flag]) : .remove(silent: true, list: [flag])
+        _ = try await send(.uidStore(.range(range), [], .flags(store)))
     }
 
     /// APPEND a raw RFC822 message into a mailbox (used to save Sent/Drafts copies).
@@ -323,10 +371,11 @@ final class IMAPService {
         var flagged = false
         var messageID = ""
         var inReplyTo = ""
+        var keywords: [String] = []
 
         func reset() {
             uid = 0; subject = ""; fromName = ""; fromEmail = ""; date = Date()
-            seen = false; flagged = false; messageID = ""; inReplyTo = ""
+            seen = false; flagged = false; messageID = ""; inReplyTo = ""; keywords = []
         }
 
         for r in responses {
@@ -341,6 +390,7 @@ final class IMAPService {
                 case .flags(let flags):
                     seen = flags.contains(.seen)
                     flagged = flags.contains(.flagged)
+                    keywords = flags.map { String($0) }.filter { !$0.hasPrefix("\\") }
                 case .envelope(let env):
                     if let s = env.subject { subject = MIME.decodeHeader(String(buffer: s)) }
                     if let first = env.from.first, case .singleAddress(let addr) = first {
@@ -361,7 +411,7 @@ final class IMAPService {
                 if uid > 0 {
                     out.append(IMAPMessage(uid: uid, subject: subject, fromName: fromName,
                                            fromEmail: fromEmail, date: date, seen: seen, flagged: flagged,
-                                           messageID: messageID, inReplyTo: inReplyTo))
+                                           messageID: messageID, inReplyTo: inReplyTo, keywords: keywords))
                 }
             default:
                 break

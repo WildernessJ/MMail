@@ -43,7 +43,8 @@ enum Icons {
         "sun": "sun.max",
         "plus": "plus",
         "more": "ellipsis",
-        "copy": "doc.on.doc"
+        "copy": "doc.on.doc",
+        "sliders": "slider.horizontal.3"
     ]
 }
 
@@ -146,6 +147,7 @@ struct Pill: View {
     @Environment(\.palette) private var p
     let label: String
     var kind: String = ""
+    var colorHex: String? = nil
 
     var body: some View {
         Text(label)
@@ -158,6 +160,7 @@ struct Pill: View {
     }
 
     private var bg: Color {
+        if let hex = colorHex { return Color(hex: hex).opacity(0.16) }
         switch kind {
         case "team": return p.success100
         case "design": return p.magenta100
@@ -168,6 +171,7 @@ struct Pill: View {
         }
     }
     private var fg: Color {
+        if let hex = colorHex { return Color(hex: hex) }
         switch kind {
         case "team": return p.success
         case "design": return p.magenta600
