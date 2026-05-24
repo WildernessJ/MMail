@@ -48,7 +48,7 @@ enum MIME {
 
     static func buildMessage(from: String, fromName: String?, to: String, cc: String = "",
                              subject: String, body: String, date: Date = Date(),
-                             attachments: [ComposeAttachment] = []) -> String {
+                             attachments: [ComposeAttachment] = [], bodyHTML: String? = nil) -> String {
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")
         df.dateFormat = "EEE, d MMM yyyy HH:mm:ss Z"
@@ -72,29 +72,56 @@ enum MIME {
         headers.append("Message-ID: \(messageID)")
         headers.append("MIME-Version: 1.0")
 
-        if attachments.isEmpty {
+        let htmlEncoded = bodyHTML.map {
+            Data($0.utf8).base64EncodedString(options: [.lineLength76Characters, .endLineWithCarriageReturn])
+        }
+        let plainPart = "Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+        let htmlPart = "Content-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+
+        // Plain text only, no attachments.
+        if htmlEncoded == nil && attachments.isEmpty {
             headers.append("Content-Type: text/plain; charset=utf-8")
             headers.append("Content-Transfer-Encoding: base64")
             return headers.joined(separator: "\r\n") + "\r\n\r\n" + encodedBody + "\r\n"
         }
 
-        // multipart/mixed: text body + base64 attachment parts.
-        let boundary = "MMail-\(UUID().uuidString)"
-        headers.append("Content-Type: multipart/mixed; boundary=\"\(boundary)\"")
+        // The body entity: a multipart/alternative when we have HTML, else plain.
+        func alternativeBlock(_ boundary: String) -> String {
+            var s = "--\(boundary)\r\n" + plainPart + encodedBody + "\r\n"
+            if let htmlEncoded { s += "--\(boundary)\r\n" + htmlPart + htmlEncoded + "\r\n" }
+            s += "--\(boundary)--\r\n"
+            return s
+        }
+
+        // HTML body, no attachments → top-level multipart/alternative.
+        if let _ = htmlEncoded, attachments.isEmpty {
+            let altB = "MMail-alt-\(UUID().uuidString)"
+            headers.append("Content-Type: multipart/alternative; boundary=\"\(altB)\"")
+            return headers.joined(separator: "\r\n") + "\r\n\r\n" + alternativeBlock(altB)
+        }
+
+        // Attachments present → multipart/mixed wrapping the body + attachment parts.
+        let mixB = "MMail-\(UUID().uuidString)"
+        headers.append("Content-Type: multipart/mixed; boundary=\"\(mixB)\"")
         var out = headers.joined(separator: "\r\n") + "\r\n\r\n"
         out += "This is a multi-part message in MIME format.\r\n"
-        out += "--\(boundary)\r\n"
-        out += "Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
-        out += encodedBody + "\r\n"
+        out += "--\(mixB)\r\n"
+        if htmlEncoded != nil {
+            let altB = "MMail-alt-\(UUID().uuidString)"
+            out += "Content-Type: multipart/alternative; boundary=\"\(altB)\"\r\n\r\n"
+            out += alternativeBlock(altB)
+        } else {
+            out += plainPart + encodedBody + "\r\n"
+        }
         for att in attachments {
             let encoded = att.data.base64EncodedString(options: [.lineLength76Characters, .endLineWithCarriageReturn])
-            out += "--\(boundary)\r\n"
+            out += "--\(mixB)\r\n"
             out += "Content-Type: \(att.mimeType); name=\"\(att.filename)\"\r\n"
             out += "Content-Transfer-Encoding: base64\r\n"
             out += "Content-Disposition: attachment; filename=\"\(att.filename)\"\r\n\r\n"
             out += encoded + "\r\n"
         }
-        out += "--\(boundary)--\r\n"
+        out += "--\(mixB)--\r\n"
         return out
     }
 

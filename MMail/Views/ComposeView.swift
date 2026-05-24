@@ -12,7 +12,8 @@ struct ComposeView: View {
     @State private var bcc: String
     @State private var showCcBcc: Bool
     @State private var subject: String
-    @State private var messageBody: String
+    @State private var bodyAttr: NSAttributedString
+    @State private var formatCmd: RichFormat?
     @State private var fromId: String
     @State private var attachments: [ComposeAttachment] = []
     @FocusState private var focus: Field?
@@ -40,7 +41,9 @@ struct ComposeView: View {
         _bcc = State(initialValue: draft.bcc)
         _showCcBcc = State(initialValue: !draft.cc.isEmpty || !draft.bcc.isEmpty)
         _subject = State(initialValue: draft.subject)
-        _messageBody = State(initialValue: draft.body)
+        _bodyAttr = State(initialValue: NSAttributedString(
+            string: draft.body,
+            attributes: [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor.labelColor]))
         _fromId = State(initialValue: draft.fromId)
         _attachments = State(initialValue: draft.attachments)
     }
@@ -51,9 +54,31 @@ struct ComposeView: View {
 
     private func currentDraft() -> ComposeDraft {
         var d = draft
-        d.to = to; d.cc = cc; d.bcc = bcc; d.subject = subject; d.body = messageBody; d.fromId = fromId
+        d.to = to; d.cc = cc; d.bcc = bcc; d.subject = subject; d.body = bodyAttr.string; d.fromId = fromId
         d.attachments = attachments
+        d.bodyHTML = htmlBody()
         return d
+    }
+
+    /// Export the body to HTML only when it actually uses formatting — plain
+    /// messages stay plain text.
+    private func htmlBody() -> String? {
+        let full = NSRange(location: 0, length: bodyAttr.length)
+        guard full.length > 0 else { return nil }
+        var formatted = false
+        bodyAttr.enumerateAttributes(in: full, options: []) { attrs, _, stop in
+            if let f = attrs[.font] as? NSFont {
+                let t = NSFontManager.shared.traits(of: f)
+                if t.contains(.boldFontMask) || t.contains(.italicFontMask) { formatted = true; stop.pointee = true }
+            }
+            if let u = attrs[.underlineStyle] as? Int, u != 0 { formatted = true; stop.pointee = true }
+        }
+        guard formatted else { return nil }
+        guard let data = try? bodyAttr.data(
+            from: full,
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.html,
+                                 .characterEncoding: String.Encoding.utf8.rawValue]) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     private func pickAttachments() {
@@ -102,18 +127,16 @@ struct ComposeView: View {
                     .focused($focus, equals: .subject)
             }
             Divider().overlay(p.border)
-            TextEditor(text: $messageBody)
-                .focused($focus, equals: .body)
-                .font(.system(size: 14))
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
-                .padding(12)
+            formatBar
+            Divider().overlay(p.border)
+            RichTextEditor(attributed: $bodyAttr, command: $formatCmd, focusOnAppear: !draft.to.isEmpty)
+                .padding(4)
                 .frame(maxHeight: .infinity)
                 .overlay(alignment: .topLeading) {
-                    if messageBody.isEmpty {
+                    if bodyAttr.string.isEmpty {
                         Text("Write your message…")
                             .font(.system(size: 14)).foregroundStyle(p.fg4)
-                            .padding(.horizontal, 17).padding(.vertical, 20)
+                            .padding(.horizontal, 17).padding(.vertical, 18)
                             .allowsHitTesting(false)
                     }
                 }
@@ -126,7 +149,7 @@ struct ComposeView: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(p.borderStrong, lineWidth: 1))
         .shadow(color: .black.opacity(0.3), radius: 40, y: 16)
         .background(hiddenShortcuts)
-        .onAppear { focus = to.isEmpty ? .to : .body; installEscMonitor() }
+        .onAppear { if to.isEmpty { focus = .to }; installEscMonitor() }
         .onDisappear { removeEscMonitor() }
         .foregroundStyle(p.fg1)
         .sheet(isPresented: $editorOpen) { templateEditorSheet }
@@ -212,6 +235,35 @@ struct ComposeView: View {
             content()
         }
         .padding(.horizontal, 14).frame(height: 40)
+    }
+
+    // MARK: Formatting bar
+
+    private var formatBar: some View {
+        HStack(spacing: 4) {
+            formatButton(help: "Bold") { formatCmd = .bold } label: {
+                Text("B").font(.system(size: 13, weight: .bold))
+            }
+            formatButton(help: "Italic") { formatCmd = .italic } label: {
+                Text("I").font(.system(size: 13, weight: .semibold)).italic()
+            }
+            formatButton(help: "Underline") { formatCmd = .underline } label: {
+                Text("U").font(.system(size: 13, weight: .semibold)).underline()
+            }
+            formatButton(help: "Bullet") { formatCmd = .bullet } label: {
+                Image(systemName: "list.bullet").font(.system(size: 12))
+            }
+            Spacer()
+        }
+        .foregroundStyle(p.fg2)
+        .padding(.horizontal, 12).padding(.vertical, 5)
+    }
+
+    private func formatButton<L: View>(help: String, action: @escaping () -> Void, @ViewBuilder label: () -> L) -> some View {
+        Button(action: action) {
+            label().frame(width: 28, height: 24).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).help(help)
     }
 
     // MARK: Footer
@@ -394,13 +446,16 @@ struct ComposeView: View {
     }
 
     private func applyTemplate(_ tpl: ReplyTemplate) {
-        if messageBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            messageBody = tpl.body
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 14),
+                                                    .foregroundColor: NSColor.labelColor]
+        if bodyAttr.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            bodyAttr = NSAttributedString(string: tpl.body, attributes: attrs)
         } else {
-            messageBody += "\n\n" + tpl.body
+            let m = NSMutableAttributedString(attributedString: bodyAttr)
+            m.append(NSAttributedString(string: "\n\n" + tpl.body, attributes: attrs))
+            bodyAttr = m
         }
         templatesOpen = false
-        focus = .body
     }
 
     private func openEditor() {

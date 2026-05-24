@@ -18,6 +18,7 @@
 		482809988F6EB437DA58D4CD /* MiscViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903AD651E0AA8087A7D60DFF /* MiscViews.swift */; };
 		4981A459A999FC4B8E9F5803 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2217A8D681EDC9DC08448B20 /* RootView.swift */; };
 		536D999CA2DB6B43B547F476 /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55AA6D4C8349A644BFB08F5 /* WeatherService.swift */; };
+		595D32D0D26325C50DC138BE /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 027847810F2667C4489873BC /* RichTextEditor.swift */; };
 		5B6226FBAB07AC5F325B9A40 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EABA6D5E51F2CB475040F67 /* HomeView.swift */; };
 		61164E07C300ED30D2AED5D6 /* MailAccountConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7605E1D3B63AA900A3661F9C /* MailAccountConfig.swift */; };
 		61A5470686548D0923B9A374 /* MIME.swift in Sources */ = {isa = PBXBuildFile; fileRef = 496FBFE1599ECF1854FA4243 /* MIME.swift */; };
@@ -51,6 +52,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		027847810F2667C4489873BC /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
 		067FDA44372798C7B298D335 /* AccountRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRailView.swift; sourceTree = "<group>"; };
 		0D01C5709231036FDB9444F7 /* ManualAccountSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualAccountSetupView.swift; sourceTree = "<group>"; };
 		0F9E1FBE4FCEF6BB8A40762A /* PeopleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleView.swift; sourceTree = "<group>"; };
@@ -170,6 +172,7 @@
 				B1839AA4256AD539B7E201FD /* OnboardingView.swift */,
 				0F9E1FBE4FCEF6BB8A40762A /* PeopleView.swift */,
 				3B303764555CA0F1AA5D6431 /* ReaderView.swift */,
+				027847810F2667C4489873BC /* RichTextEditor.swift */,
 				2217A8D681EDC9DC08448B20 /* RootView.swift */,
 				6AEEC3FA80A90CA8EAC08ECD /* SearchResultsView.swift */,
 				9C44FF3EE733F7A86D87AE28 /* SettingsView.swift */,
@@ -322,6 +325,7 @@
 				CC5ED000189ABA9C357BED33 /* PeopleView.swift in Sources */,
 				839C08C0B268C946970A9C32 /* QuickLook.swift in Sources */,
 				EDF6BA1F4277388005EA5BDA /* ReaderView.swift in Sources */,
+				595D32D0D26325C50DC138BE /* RichTextEditor.swift in Sources */,
 				4981A459A999FC4B8E9F5803 /* RootView.swift in Sources */,
 				B0BA08AB466E59C9742A188D /* SMTPService.swift in Sources */,
 				B7635E5A653911A58EC8EC63 /* SampleData.swift in Sources */,

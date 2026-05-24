@@ -23,6 +23,7 @@ struct ComposeDraft: Identifiable {
     var titleLabel: String
     var fromId: String
     var attachments: [ComposeAttachment] = []
+    var bodyHTML: String? = nil   // set when the body uses rich formatting
 }
 
 struct ToastModel: Identifiable {
@@ -42,6 +43,7 @@ struct ScheduledSend: Codable, Identifiable {
     var body: String
     var sendAt: Date
     var attachments: [ComposeAttachment] = []
+    var bodyHTML: String? = nil
 }
 
 struct AdvancedSearchForm {
@@ -645,7 +647,8 @@ final class AppModel: ObservableObject {
         compose = nil
         scheduled.append(ScheduledSend(id: UUID().uuidString, fromId: draft.fromId, to: draft.to,
                                        cc: draft.cc, bcc: draft.bcc, subject: draft.subject,
-                                       body: draft.body, sendAt: date, attachments: draft.attachments))
+                                       body: draft.body, sendAt: date, attachments: draft.attachments,
+                                       bodyHTML: draft.bodyHTML))
         persistScheduled()
         showToast("Scheduled for \(label) · \(draft.to.isEmpty ? "(unknown)" : draft.to)")
     }
@@ -658,7 +661,8 @@ final class AppModel: ObservableObject {
         persistScheduled()
         for s in due {
             let draft = ComposeDraft(to: s.to, cc: s.cc, bcc: s.bcc, subject: s.subject,
-                                     body: s.body, titleLabel: "", fromId: s.fromId, attachments: s.attachments)
+                                     body: s.body, titleLabel: "", fromId: s.fromId, attachments: s.attachments,
+                                     bodyHTML: s.bodyHTML)
             performSend(draft)
         }
     }
@@ -674,7 +678,8 @@ final class AppModel: ObservableObject {
         guard !recipients.isEmpty else { return }
         let display = accountsById[cfg.id]?.name
         let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to, cc: draft.cc,
-                                        subject: draft.subject, body: draft.body, attachments: draft.attachments)
+                                        subject: draft.subject, body: draft.body, attachments: draft.attachments,
+                                        bodyHTML: draft.bodyHTML)
         let session = session(for: cfg.id)
         Task {
             do {
@@ -1568,7 +1573,8 @@ final class AppModel: ObservableObject {
               let session = session(for: draft.fromId) else { return }
         let display = accountsById[cfg.id]?.name
         let message = MIME.buildMessage(from: cfg.email, fromName: display, to: draft.to, cc: draft.cc,
-                                        subject: draft.subject, body: draft.body, attachments: draft.attachments)
+                                        subject: draft.subject, body: draft.body, attachments: draft.attachments,
+                                        bodyHTML: draft.bodyHTML)
         Task {
             if let draftsBox = await self.resolveMailbox(cfg.id, kind: .drafts, session: session) {
                 try? await session.append(mailbox: draftsBox, rawMessage: message, seen: false, draft: true)
