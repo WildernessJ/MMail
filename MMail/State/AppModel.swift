@@ -1385,9 +1385,28 @@ final class AppModel: ObservableObject {
         let q = searchQuery.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return }
         searchActive = true
-        serverSearchResults = []
+        serverSearchResults = localSearch(q)   // instant offline results from cache
         searchModalOpen = true
-        runServerSearch()
+        runServerSearch()                        // augment with server-side matches
+    }
+
+    /// Search every cached message on disk (plus in-memory) — works offline and
+    /// covers folders/messages not currently loaded.
+    func localSearch(_ query: String) -> [Email] {
+        let q = query.lowercased()
+        guard !q.isEmpty else { return [] }
+        var byId: [String: Email] = [:]
+        for e in emails { byId[e.id] = e }
+        for e in MailCache.loadAll() where byId[e.id] == nil { byId[e.id] = e }
+        let scope = byId.values.filter { currentAccount == "all" || $0.account == currentAccount }
+        return scope.filter { e in
+            e.subject.lowercased().contains(q) || e.preview.lowercased().contains(q)
+                || e.body.lowercased().contains(q)
+                || (e.fromName?.lowercased().contains(q) ?? false)
+                || (e.fromEmail?.lowercased().contains(q) ?? false)
+        }
+        .sorted { ($0.uid ?? 0) > ($1.uid ?? 0) }
+        .prefix(100).map { $0 }
     }
 
     /// Dismiss the search modal and clear the query/results.
@@ -1437,8 +1456,12 @@ final class AppModel: ObservableObject {
                 }
             }
             await MainActor.run {
-                self.serverSearchResults = results
-                self.selectedId = results.first?.id
+                // Merge server hits into the instant offline results, deduping by id.
+                var combined = self.serverSearchResults ?? []
+                let have = Set(combined.map { $0.id })
+                combined.append(contentsOf: results.filter { !have.contains($0.id) })
+                self.serverSearchResults = combined
+                self.selectedId = combined.first?.id
                 self.searching = false
             }
         }

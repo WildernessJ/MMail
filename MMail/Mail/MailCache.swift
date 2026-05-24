@@ -28,6 +28,20 @@ enum MailCache {
         try? data.write(to: fileURL(account, folder), options: .atomic)
     }
 
+    /// Every cached message across all accounts/folders (for offline search).
+    static func loadAll() -> [Email] {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return [] }
+        var out: [Email] = []
+        for f in files where f.pathExtension == "json" {
+            if let data = try? Data(contentsOf: f),
+               let arr = try? JSONDecoder().decode([Email].self, from: data) {
+                out.append(contentsOf: arr)
+            }
+        }
+        return out
+    }
+
     static func clear(account: String) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
