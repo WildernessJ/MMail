@@ -98,9 +98,12 @@ struct ComposeView: View {
 
     private func send() { model.sendDraft(currentDraft()) }
 
-    /// Attach an image currently on the clipboard (e.g. a screenshot).
-    private func pasteImageFromClipboard() {
+    /// Attach a clipboard image on ⌘V. Returns true if it consumed the paste;
+    /// when the clipboard holds text (no image), returns false so normal paste runs.
+    @discardableResult
+    private func pasteImageFromClipboard() -> Bool {
         let pb = NSPasteboard.general
+        if pb.string(forType: .string) != nil { return false }   // let text paste through
         let png: Data?
         if let data = pb.data(forType: .png) {
             png = data
@@ -110,9 +113,10 @@ struct ComposeView: View {
         } else {
             png = nil
         }
-        guard let png else { model.showToast("No image on the clipboard"); return }
+        guard let png else { return false }
         let name = "pasted-\(Int(Date().timeIntervalSince1970)).png"
         attachments.append(ComposeAttachment(filename: name, mimeType: "image/png", data: png))
+        return true
     }
 
     /// Accept files dropped onto the compose window as attachments.
@@ -356,7 +360,6 @@ struct ComposeView: View {
             .keyboardShortcut(.return, modifiers: .command)
 
             footerIcon("attach", help: "Attach file", active: !attachments.isEmpty) { pickAttachments() }
-            footerIcon("photo", help: "Attach image from clipboard") { pasteImageFromClipboard() }
 
             scheduleButton
             templatesButton
@@ -674,6 +677,13 @@ struct ComposeView: View {
     private func installEscMonitor() {
         guard escMonitor == nil else { return }
         escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // ⌘V: attach a clipboard image (only when it's image-only, so text paste still works).
+            if event.modifierFlags.contains(.command),
+               event.charactersIgnoringModifiers?.lowercased() == "v",
+               !editorOpen, !customOpen {
+                if pasteImageFromClipboard() { return nil }
+                return event
+            }
             guard event.keyCode == 53 else { return event } // Escape only
             if editorOpen { editorOpen = false; return nil }
             if customOpen { customOpen = false; return nil }
