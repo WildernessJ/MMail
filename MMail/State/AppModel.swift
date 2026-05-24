@@ -140,6 +140,10 @@ final class AppModel: ObservableObject {
     @Published var blockedSenders: Set<String> = []
     private let kBlocked = "mmail.blocked"
 
+    // Rules — auto label / archive / trash incoming mail.
+    @Published var rules: [MailRule] = []
+    private let kRules = "mmail.rules"
+
     // Real (IMAP/SMTP) accounts
     @Published var realConfigs: [MailAccountConfig] = []
     @Published var loadingAccounts: Set<String> = []
@@ -202,6 +206,8 @@ final class AppModel: ObservableObject {
             labels = SampleData.labels
         }
         if let arr = d.array(forKey: kBlocked) as? [String] { blockedSenders = Set(arr) }
+        if let data = d.data(forKey: kRules),
+           let decoded = try? JSONDecoder().decode([MailRule].self, from: data) { rules = decoded }
         if let data = d.data(forKey: kRealAccounts),
            let decoded = try? JSONDecoder().decode([MailAccountConfig].self, from: data) {
             realConfigs = decoded
@@ -593,6 +599,50 @@ final class AppModel: ObservableObject {
     func unblockSender(_ email: String) {
         blockedSenders.remove(email.lowercased())
         persistBlocked()
+    }
+
+    // MARK: - Rules
+
+    func persistRules() {
+        if let data = try? JSONEncoder().encode(rules) { UserDefaults.standard.set(data, forKey: kRules) }
+    }
+
+    @discardableResult
+    func addRule(field: MailRule.Field, value: String, action: MailRule.Action, labelId: String?) -> Bool {
+        let v = value.trimmingCharacters(in: .whitespaces)
+        guard !v.isEmpty else { return false }
+        rules.append(MailRule(field: field, value: v, action: action,
+                              labelId: action == .label ? labelId : nil))
+        persistRules()
+        return true
+    }
+
+    func removeRule(_ id: String) {
+        rules.removeAll { $0.id == id }
+        persistRules()
+    }
+
+    /// Run rules over freshly-loaded inbox mail: apply labels, then move
+    /// (Trash wins over Archive). Runs after block filtering.
+    private func applyRules(accountId: String, folderId: String) {
+        guard folderId == "inbox", !rules.isEmpty else { return }
+        let inbox = emails.filter { $0.account == accountId && $0.folder == "inbox" }
+        for e in inbox {
+            var move: String?
+            var labelsToAdd: [String] = []
+            for rule in rules where rule.matches(e) {
+                switch rule.action {
+                case .trash: move = "trash"
+                case .archive: if move != "trash" { move = "archive" }
+                case .label: if let l = rule.labelId { labelsToAdd.append(l) }
+                }
+            }
+            for l in labelsToAdd { applyLabel(e, l, add: true) }
+            if let move, let cur = emails.first(where: { $0.id == e.id }) {
+                if isRealAccount(accountId), mailboxName(accountId, move) != nil { realMove(cur, to: move) }
+                if let i = emails.firstIndex(where: { $0.id == e.id }) { emails[i].folder = move }
+            }
+        }
     }
 
     /// Act on a message's List-Unsubscribe header: open the https page, or
@@ -1383,7 +1433,7 @@ final class AppModel: ObservableObject {
         emails.removeAll { $0.account == accountId && $0.folder == folderId }
         emails.append(contentsOf: merged)
         if persist { MailCache.save(merged, account: accountId, folder: folderId) }
-        if persist { autoTrashBlocked(accountId: accountId, folderId: folderId) }
+        if persist { autoTrashBlocked(accountId: accountId, folderId: folderId); applyRules(accountId: accountId, folderId: folderId) }
         let inScope = (currentAccount == accountId || currentAccount == "all")
         if inScope && folder == folderId && serverSearchResults == nil {
             if !filteredEmails.contains(where: { $0.id == selectedId }) {
@@ -1420,6 +1470,7 @@ final class AppModel: ObservableObject {
             lastSeenUID[accountId] = max(lastSeenUID[accountId] ?? 0, maxUID)
         }
         autoTrashBlocked(accountId: accountId, folderId: folderId)
+        applyRules(accountId: accountId, folderId: folderId)
         MailCache.save(emails.filter { $0.account == accountId && $0.folder == folderId }, account: accountId, folder: folderId)
         let inScope = (currentAccount == accountId || currentAccount == "all")
         if inScope && folder == folderId && serverSearchResults == nil {

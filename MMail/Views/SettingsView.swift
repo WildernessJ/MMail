@@ -4,6 +4,10 @@ struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
     @State private var newLabelDraft = ""
+    @State private var ruleField: MailRule.Field = .from
+    @State private var ruleValue = ""
+    @State private var ruleAction: MailRule.Action = .trash
+    @State private var ruleLabelId = ""
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -87,6 +91,58 @@ struct SettingsView: View {
                         }
                         .padding(.vertical, 12)
                     }
+                    section("Rules") {
+                        if model.rules.isEmpty {
+                            Text("No rules yet. New inbox mail can be auto-labeled, archived, or trashed by sender or subject.")
+                                .font(.system(size: 13)).foregroundStyle(p.fg3)
+                                .fixedSize(horizontal: false, vertical: true).padding(.vertical, 12)
+                        } else {
+                            ForEach(model.rules) { r in
+                                HStack(spacing: 8) {
+                                    Icon(name: "sliders", size: 13).foregroundStyle(p.fg3)
+                                    Text(ruleSummary(r)).font(.system(size: 13)).foregroundStyle(p.fg1).lineLimit(1)
+                                    Spacer()
+                                    Button { model.removeRule(r.id) } label: {
+                                        Icon(name: "trash", size: 13).foregroundStyle(p.danger)
+                                    }.buttonStyle(.plain)
+                                }
+                                .padding(.vertical, 9)
+                                Rectangle().fill(p.border).frame(height: 1)
+                            }
+                        }
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) {
+                                Picker("", selection: $ruleField) {
+                                    ForEach(MailRule.Field.allCases, id: \.self) { Text($0.label).tag($0) }
+                                }.labelsHidden().fixedSize()
+                                Text("contains").font(.system(size: 12)).foregroundStyle(p.fg3)
+                                TextField("text…", text: $ruleValue)
+                                    .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(p.fg1)
+                                    .padding(.horizontal, 8).padding(.vertical, 6)
+                                    .background(p.bg2)
+                                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
+                            }
+                            HStack(spacing: 8) {
+                                Picker("", selection: $ruleAction) {
+                                    ForEach(MailRule.Action.allCases, id: \.self) { Text($0.label).tag($0) }
+                                }.labelsHidden().fixedSize()
+                                if ruleAction == .label {
+                                    Picker("", selection: $ruleLabelId) {
+                                        Text("Choose…").tag("")
+                                        ForEach(model.labels) { Text($0.name).tag($0.id) }
+                                    }.labelsHidden().fixedSize()
+                                }
+                                Spacer()
+                                Button { addRule() } label: {
+                                    Text("Add rule").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.brandBlue)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(ruleValue.trimmingCharacters(in: .whitespaces).isEmpty
+                                          || (ruleAction == .label && ruleLabelId.isEmpty && model.labels.isEmpty))
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
                     section("Blocked contacts") {
                         if model.blockedSenders.isEmpty {
                             Text("No blocked contacts. Block a sender from a message's ⋯ menu — their mail goes straight to Trash.")
@@ -126,6 +182,23 @@ struct SettingsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.borderStrong, lineWidth: 1))
         .shadow(color: .black.opacity(0.4), radius: 48, y: 24)
+    }
+
+    private func addRule() {
+        let labelId = ruleLabelId.isEmpty ? model.labels.first?.id : ruleLabelId
+        if model.addRule(field: ruleField, value: ruleValue, action: ruleAction, labelId: labelId) {
+            ruleValue = ""
+        }
+    }
+
+    private func ruleSummary(_ r: MailRule) -> String {
+        let act: String
+        switch r.action {
+        case .trash: act = "→ Trash"
+        case .archive: act = "→ Archive"
+        case .label: act = "→ \(r.labelId.flatMap { model.label(for: $0)?.name } ?? "Label")"
+        }
+        return "\(r.field.label) contains \"\(r.value)\"  \(act)"
     }
 
     private func addNewLabel() {

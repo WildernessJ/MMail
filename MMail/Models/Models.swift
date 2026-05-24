@@ -119,6 +119,39 @@ extension Sender {
     }
 }
 
+struct MailRule: Identifiable, Codable, Hashable {
+    enum Field: String, Codable, CaseIterable {
+        case from, subject
+        var label: String { self == .from ? "From" : "Subject" }
+    }
+    enum Action: String, Codable, CaseIterable {
+        case trash, archive, label
+        var label: String {
+            switch self {
+            case .trash: return "Move to Trash"
+            case .archive: return "Archive"
+            case .label: return "Apply label"
+            }
+        }
+    }
+    var id: String = UUID().uuidString
+    var field: Field
+    var value: String
+    var action: Action
+    var labelId: String? = nil
+
+    func matches(_ e: Email) -> Bool {
+        let v = value.lowercased()
+        guard !v.isEmpty else { return false }
+        switch field {
+        case .from:
+            return (e.fromEmail?.lowercased().contains(v) ?? false) || (e.fromName?.lowercased().contains(v) ?? false)
+        case .subject:
+            return e.subject.lowercased().contains(v)
+        }
+    }
+}
+
 struct Todo: Identifiable, Codable {
     var id: String
     var text: String
