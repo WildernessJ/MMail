@@ -136,6 +136,10 @@ final class AppModel: ObservableObject {
     @Published var labelFilter: String?
     private let kLabels = "mmail.labels"
 
+    // Blocked senders — their mail is moved to Trash immediately.
+    @Published var blockedSenders: Set<String> = []
+    private let kBlocked = "mmail.blocked"
+
     // Real (IMAP/SMTP) accounts
     @Published var realConfigs: [MailAccountConfig] = []
     @Published var loadingAccounts: Set<String> = []
@@ -196,6 +200,7 @@ final class AppModel: ObservableObject {
         } else {
             labels = SampleData.labels
         }
+        if let arr = d.array(forKey: kBlocked) as? [String] { blockedSenders = Set(arr) }
         if let data = d.data(forKey: kRealAccounts),
            let decoded = try? JSONDecoder().decode([MailAccountConfig].self, from: data) {
             realConfigs = decoded
@@ -552,6 +557,55 @@ final class AppModel: ObservableObject {
         searching = false
         loadForCurrentScope("inbox", silent: true)
         selectedId = filteredEmails.first?.id
+    }
+
+    // MARK: - Blocked senders
+
+    func isBlocked(_ email: String?) -> Bool {
+        guard let e = email?.lowercased(), !e.isEmpty else { return false }
+        return blockedSenders.contains(e)
+    }
+
+    private func persistBlocked() {
+        UserDefaults.standard.set(Array(blockedSenders), forKey: kBlocked)
+    }
+
+    /// Block a sender: remember the address and move any of their loaded mail to
+    /// Trash now. Future arrivals are trashed on load (see `autoTrashBlocked`).
+    func blockSender(_ email: String) {
+        let e = email.lowercased().trimmingCharacters(in: .whitespaces)
+        guard e.contains("@") else { return }
+        blockedSenders.insert(e)
+        persistBlocked()
+        let skip: Set<String> = ["trash", "sent", "drafts"]
+        let targets = emails.filter { ($0.fromEmail?.lowercased() == e) && !skip.contains($0.folder) }
+        for t in targets where isRealAccount(t.account) && mailboxName(t.account, "trash") != nil {
+            realMove(t, to: "trash")
+        }
+        for i in emails.indices where (emails[i].fromEmail?.lowercased() == e) && !skip.contains(emails[i].folder) {
+            emails[i].folder = "trash"
+        }
+        if !filteredEmails.contains(where: { $0.id == selectedId }) { selectedId = filteredEmails.first?.id }
+        showToast("Blocked \(e)")
+    }
+
+    func unblockSender(_ email: String) {
+        blockedSenders.remove(email.lowercased())
+        persistBlocked()
+    }
+
+    /// Move freshly-loaded inbox mail from blocked senders straight to Trash.
+    private func autoTrashBlocked(accountId: String, folderId: String) {
+        guard folderId == "inbox", !blockedSenders.isEmpty else { return }
+        let targets = emails.filter {
+            $0.account == accountId && $0.folder == "inbox" && isBlocked($0.fromEmail)
+        }
+        guard !targets.isEmpty else { return }
+        for t in targets where isRealAccount(t.account) && mailboxName(t.account, "trash") != nil {
+            realMove(t, to: "trash")
+        }
+        let ids = Set(targets.map { $0.id })
+        for i in emails.indices where ids.contains(emails[i].id) { emails[i].folder = "trash" }
     }
 
     static let labelPalette = ["E5484D", "1FB36B", "7A5AE0", "F4A52A", "2D3DEC",
@@ -1279,7 +1333,7 @@ final class AppModel: ObservableObject {
             let maxUID = merged.compactMap { $0.uid }.max() ?? 0
             if let last = lastSeenUID[accountId] {
                 if notificationsEnabled {
-                    for e in merged.filter({ ($0.uid ?? 0) > last && $0.unread }).prefix(5) {
+                    for e in merged.filter({ ($0.uid ?? 0) > last && $0.unread && !isBlocked($0.fromEmail) }).prefix(5) {
                         Notifier.notify(title: e.resolvedSender.name, body: e.subject)
                     }
                 }
@@ -1292,6 +1346,7 @@ final class AppModel: ObservableObject {
         emails.removeAll { $0.account == accountId && $0.folder == folderId }
         emails.append(contentsOf: merged)
         if persist { MailCache.save(merged, account: accountId, folder: folderId) }
+        if persist { autoTrashBlocked(accountId: accountId, folderId: folderId) }
         let inScope = (currentAccount == accountId || currentAccount == "all")
         if inScope && folder == folderId && serverSearchResults == nil {
             if !filteredEmails.contains(where: { $0.id == selectedId }) {
@@ -1316,7 +1371,7 @@ final class AppModel: ObservableObject {
         if !fresh.isEmpty {
             let mapped = fresh.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
             if folderId == "inbox", notificationsEnabled, let last = lastSeenUID[accountId] {
-                for e in mapped.filter({ ($0.uid ?? 0) > last && $0.unread }).prefix(5) {
+                for e in mapped.filter({ ($0.uid ?? 0) > last && $0.unread && !isBlocked($0.fromEmail) }).prefix(5) {
                     Notifier.notify(title: e.resolvedSender.name, body: e.subject)
                 }
             }
@@ -1327,6 +1382,7 @@ final class AppModel: ObservableObject {
             let maxUID = emails.filter { $0.account == accountId && $0.folder == folderId }.compactMap { $0.uid }.max() ?? 0
             lastSeenUID[accountId] = max(lastSeenUID[accountId] ?? 0, maxUID)
         }
+        autoTrashBlocked(accountId: accountId, folderId: folderId)
         MailCache.save(emails.filter { $0.account == accountId && $0.folder == folderId }, account: accountId, folder: folderId)
         let inScope = (currentAccount == accountId || currentAccount == "all")
         if inScope && folder == folderId && serverSearchResults == nil {

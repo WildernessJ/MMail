@@ -87,6 +87,27 @@ struct SettingsView: View {
                         }
                         .padding(.vertical, 12)
                     }
+                    section("Blocked contacts") {
+                        if model.blockedSenders.isEmpty {
+                            Text("No blocked contacts. Block a sender from a message's ⋯ menu — their mail goes straight to Trash.")
+                                .font(.system(size: 13)).foregroundStyle(p.fg3)
+                                .fixedSize(horizontal: false, vertical: true).padding(.vertical, 12)
+                        } else {
+                            let blocked = model.blockedSenders.sorted()
+                            ForEach(Array(blocked.enumerated()), id: \.element) { idx, addr in
+                                HStack {
+                                    Icon(name: "spam", size: 13).foregroundStyle(p.danger)
+                                    Text(addr).font(.system(size: 13)).foregroundStyle(p.fg1).lineLimit(1)
+                                    Spacer()
+                                    Button { model.unblockSender(addr) } label: {
+                                        Text("Unblock").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.brandBlue)
+                                    }.buttonStyle(.plain)
+                                }
+                                .padding(.vertical, 10)
+                                if idx < blocked.count - 1 { Rectangle().fill(p.border).frame(height: 1) }
+                            }
+                        }
+                    }
                     section("Keyboard & alerts") {
                         toggleRow("Keyboard (vim) navigation", "J / K to move, G-prefix to go to folders, single-key triage.",
                                   on: Binding(get: { model.vimNav }, set: { model.setVimNav($0) }))

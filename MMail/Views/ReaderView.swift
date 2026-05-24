@@ -144,6 +144,11 @@ private struct ReaderContent: View {
             Button { model.archive() } label: { Label("Archive", systemImage: "archivebox") }
             Button { model.snooze() } label: { Label("Snooze", systemImage: "clock") }
             Button { model.markSpam() } label: { Label("Mark as Spam", systemImage: "exclamationmark.triangle") }
+            if let addr = sender?.email, !addr.isEmpty {
+                Button(role: .destructive) { model.blockSender(addr) } label: {
+                    Label("Block \(sender?.firstName ?? addr)", systemImage: "hand.raised")
+                }
+            }
             Divider()
             Button(role: .destructive) { model.delete() } label: { Label("Delete", systemImage: "trash") }
         } label: {
