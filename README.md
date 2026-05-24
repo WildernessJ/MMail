@@ -10,6 +10,8 @@ Native SwiftUI · real IMAP/SMTP · built for people who'd rather use their keyb
 
 </div>
 
+<img src="docs/preview.png" alt="MMail home dashboard" />
+
 ---
 
 ## About
