@@ -543,6 +543,18 @@ final class AppModel: ObservableObject {
         showToast("Marked as unread")
     }
 
+    /// Handle an Archive/Trash/tap action from a new-mail notification.
+    func handleNotificationAction(_ action: String, _ id: String) {
+        guard emails.contains(where: { $0.id == id }) else { return }
+        switch action {
+        case "ARCHIVE": archive(id)
+        case "TRASH": delete(id)
+        default:
+            if folder != "inbox" { setFolder("inbox") }
+            select(id)
+        }
+    }
+
     func toggleStar(_ id: String? = nil) {
         guard let id = id ?? selectedId, let i = emails.firstIndex(where: { $0.id == id }) else { return }
         emails[i].starred.toggle()
@@ -1343,6 +1355,7 @@ final class AppModel: ObservableObject {
     func bootstrapRealAccounts() {
         guard !didBootstrap else { return }
         didBootstrap = true
+        Notifier.configure { [weak self] action, id in self?.handleNotificationAction(action, id) }
         if notificationsEnabled { Notifier.requestAuthorization() }
         processScheduledSends()
         refreshWeather()
@@ -1615,7 +1628,7 @@ final class AppModel: ObservableObject {
             if let last = lastSeenUID[accountId] {
                 if notificationsEnabled {
                     for e in merged.filter({ ($0.uid ?? 0) > last && $0.unread && !isBlocked($0.fromEmail) }).prefix(5) {
-                        Notifier.notify(title: e.resolvedSender.name, body: e.subject)
+                        Notifier.notify(title: e.resolvedSender.name, body: e.subject, emailId: e.id)
                     }
                 }
                 lastSeenUID[accountId] = max(last, maxUID)
@@ -1653,7 +1666,7 @@ final class AppModel: ObservableObject {
             let mapped = fresh.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
             if folderId == "inbox", notificationsEnabled, let last = lastSeenUID[accountId] {
                 for e in mapped.filter({ ($0.uid ?? 0) > last && $0.unread && !isBlocked($0.fromEmail) }).prefix(5) {
-                    Notifier.notify(title: e.resolvedSender.name, body: e.subject)
+                    Notifier.notify(title: e.resolvedSender.name, body: e.subject, emailId: e.id)
                 }
             }
             emails.append(contentsOf: mapped)
