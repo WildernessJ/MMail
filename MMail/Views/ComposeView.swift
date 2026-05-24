@@ -102,10 +102,7 @@ struct ComposeView: View {
             header
             fromField
             Divider().overlay(p.border)
-            field(label: "To") {
-                TextField("someone@example.com", text: $to)
-                    .textFieldStyle(.plain).font(.system(size: 13.5))
-                    .focused($focus, equals: .to)
+            RecipientRow(label: "To", text: $to, contacts: model.contacts(), autofocus: to.isEmpty) {
                 if !showCcBcc {
                     Button("Cc/Bcc") { showCcBcc = true }
                         .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(p.fg3)
@@ -113,13 +110,9 @@ struct ComposeView: View {
             }
             Divider().overlay(p.border)
             if showCcBcc {
-                field(label: "Cc") {
-                    TextField("", text: $cc).textFieldStyle(.plain).font(.system(size: 13.5))
-                }
+                RecipientRow(label: "Cc", text: $cc, contacts: model.contacts()) { EmptyView() }
                 Divider().overlay(p.border)
-                field(label: "Bcc") {
-                    TextField("", text: $bcc).textFieldStyle(.plain).font(.system(size: 13.5))
-                }
+                RecipientRow(label: "Bcc", text: $bcc, contacts: model.contacts()) { EmptyView() }
                 Divider().overlay(p.border)
             }
             field(label: "Subject") {
@@ -150,7 +143,7 @@ struct ComposeView: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(p.borderStrong, lineWidth: 1))
         .shadow(color: .black.opacity(0.3), radius: 40, y: 16)
         .background(hiddenShortcuts)
-        .onAppear { if to.isEmpty { focus = .to }; installEscMonitor() }
+        .onAppear { installEscMonitor() }
         .onDisappear { removeEscMonitor() }
         .foregroundStyle(p.fg1)
         .sheet(isPresented: $editorOpen) { templateEditorSheet }
@@ -680,6 +673,78 @@ private struct TemplateRow: View {
     private var previewLine: String {
         let first = tpl.body.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? tpl.body
         return first.count > 60 ? String(first.prefix(60)) + "…" : first
+    }
+}
+
+// MARK: - Recipient field with contact autocomplete
+
+private struct RecipientRow<Trailing: View>: View {
+    @Environment(\.palette) private var p
+    let label: String
+    @Binding var text: String
+    let contacts: [Sender]
+    var autofocus = false
+    @ViewBuilder var trailing: () -> Trailing
+    @FocusState private var focused: Bool
+
+    private var lastToken: String {
+        (text.components(separatedBy: ",").last ?? "").trimmingCharacters(in: .whitespaces)
+    }
+    private var matches: [Sender] {
+        let q = lastToken.lowercased()
+        guard focused, q.count >= 1 else { return [] }
+        let used = Set(text.lowercased().split(whereSeparator: { $0 == "," || $0 == " " }).map(String.init).filter { $0.contains("@") })
+        return Array(contacts.filter {
+            !$0.email.isEmpty && !used.contains($0.email.lowercased())
+                && ($0.name.lowercased().contains(q) || $0.email.lowercased().contains(q))
+        }.prefix(6))
+    }
+    private func complete(_ s: Sender) {
+        var parts = text.components(separatedBy: ",")
+        if parts.isEmpty { parts = [""] }
+        parts[parts.count - 1] = " \(s.email)"
+        text = parts.joined(separator: ",") + ", "
+    }
+    var body: some View {
+        HStack(spacing: 0) {
+            Text(label).font(.system(size: 12)).foregroundStyle(p.fg3).frame(width: 56, alignment: .leading)
+            TextField("", text: $text)
+                .textFieldStyle(.plain).font(.system(size: 13.5))
+                .focused($focused)
+                .autocorrectionDisabled()
+            trailing()
+        }
+        .padding(.horizontal, 14).frame(height: 40)
+        .overlay(alignment: .topLeading) {
+            if !matches.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(matches) { s in
+                        Button { complete(s) } label: {
+                            HStack(spacing: 8) {
+                                Avatar(sender: s, size: 22)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(s.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg1).lineLimit(1)
+                                    Text(s.email).font(.system(size: 11)).foregroundStyle(p.fg3).lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        }
+                        .buttonStyle(HoverRowButtonStyle())
+                    }
+                }
+                .padding(4)
+                .frame(width: 300, alignment: .leading)
+                .background(p.bg1)
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(p.borderStrong, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
+                .offset(x: 50, y: 38)
+                .zIndex(100)
+            }
+        }
+        .onAppear { if autofocus { DispatchQueue.main.async { focused = true } } }
     }
 }
 
