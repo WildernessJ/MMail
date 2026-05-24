@@ -6,6 +6,7 @@ struct HomeView: View {
     @State private var draftTodo = ""
     @State private var cityPromptOpen = false
     @State private var cityDraft = ""
+    @State private var rowWidth: CGFloat = 0
 
     private let cols = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
     private let months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
@@ -56,11 +57,16 @@ struct HomeView: View {
                 }
                 HStack(alignment: .top, spacing: 16) {
                     journalCard
-                        .frame(maxWidth: .infinity)
+                        .frame(width: rowWidth > 0 ? (rowWidth - 16) * 2 / 3 : nil)
                     todoCard
-                        .frame(width: 300)
+                        .frame(width: rowWidth > 0 ? (rowWidth - 16) / 3 : nil)
                 }
                 .padding(.top, 16)
+                .background(GeometryReader { geo in
+                    Color.clear
+                        .onAppear { rowWidth = geo.size.width }
+                        .onChange(of: geo.size.width) { _, w in rowWidth = w }
+                })
             }
             .frame(maxWidth: 1100, alignment: .leading)
             .padding(.horizontal, 40).padding(.top, 32).padding(.bottom, 56)
