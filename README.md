@@ -16,11 +16,7 @@ Native SwiftUI · real IMAP/SMTP · built for people who'd rather use their keyb
 
 MMail is a native macOS mail app written in SwiftUI. It connects to any IMAP/SMTP
 account, keeps a long-lived connection per account, caches mail to disk for instant
-launches, and leans heavily on keyboard navigation in the spirit of Superhuman.
-
-It started from a [Claude Design](https://claude.ai/design) handoff and grew into a
-working client with real triage, search, labels, attachments, scheduled send, and a
-small "Home" dashboard (weather, contacts, to-dos, journal).
+launches, and leans heavily on keyboard navigation.
 
 ## Features
 
@@ -100,7 +96,6 @@ MMail/
 
 - **No OAuth yet** — Google/iCloud/Outlook sign-in is not implemented; use manual
   IMAP/SMTP. Email signatures are also not implemented.
-- Tested primarily against [PurelyMail](https://purelymail.com).
 
 ## License
 
