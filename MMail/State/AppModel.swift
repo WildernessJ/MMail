@@ -165,6 +165,7 @@ final class AppModel: ObservableObject {
 
     private var keyMonitor: Any?
     private var toastWorkItem: DispatchWorkItem?
+    private var pendingSendWork: DispatchWorkItem?
 
     init() {
         let d = UserDefaults.standard
@@ -686,8 +687,21 @@ final class AppModel: ObservableObject {
             let recipients = AppModel.parseRecipients(draft.to) + AppModel.parseRecipients(draft.cc) + AppModel.parseRecipients(draft.bcc)
             guard !recipients.isEmpty else { showToast("Add a recipient first."); return }
             compose = nil
-            showToast("Sending…")
-            performSend(draft)
+            // Undo Send: hold the message briefly so it can be called back.
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.pendingSendWork = nil
+                self.performSend(draft)
+            }
+            pendingSendWork = work
+            showToast("Sending to \(dest)…", actionLabel: "Undo", duration: 5) { [weak self] in
+                guard let self else { return }
+                self.pendingSendWork?.cancel()
+                self.pendingSendWork = nil
+                self.compose = draft   // reopen so it can be edited or re-sent
+                self.showToast("Send canceled")
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
             return
         }
         compose = nil
@@ -808,12 +822,12 @@ final class AppModel: ObservableObject {
 
     // MARK: - Toast
 
-    func showToast(_ message: String, actionLabel: String? = nil, action: (() -> Void)? = nil) {
+    func showToast(_ message: String, actionLabel: String? = nil, duration: TimeInterval = 3.5, action: (() -> Void)? = nil) {
         toast = ToastModel(message: message, actionLabel: actionLabel, action: action)
         toastWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.toast = nil }
         toastWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
     }
 
     func closeOverlays() {
