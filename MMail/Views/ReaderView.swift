@@ -146,6 +146,9 @@ private struct ReaderContent: View {
             Button { model.archive() } label: { Label("Archive", systemImage: "archivebox") }
             Button { model.snooze() } label: { Label("Snooze", systemImage: "clock") }
             Button { model.markSpam() } label: { Label("Mark as Spam", systemImage: "exclamationmark.triangle") }
+            Divider()
+            Button { model.printMessage(email) } label: { Label("Print…", systemImage: "printer") }
+            Button { model.exportPDF(email) } label: { Label("Export as PDF…", systemImage: "doc") }
             if let addr = sender?.email, !addr.isEmpty {
                 Button { model.toggleVIP(addr) } label: {
                     Label(model.isVIP(addr) ? "Remove VIP" : "Mark as VIP", systemImage: "crown")

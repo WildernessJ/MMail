@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 enum InboxFilter: String, CaseIterable {
     case all, unread, people, updates
@@ -730,6 +731,50 @@ final class AppModel: ObservableObject {
 
     /// Act on a message's List-Unsubscribe header: open the https page, or
     /// compose the unsubscribe email in-app for a mailto: link.
+    // MARK: - Print / export
+
+    private func printableView(_ email: Email) -> NSTextView {
+        let content = NSMutableAttributedString()
+        content.append(NSAttributedString(string: (email.subject.isEmpty ? "(no subject)" : email.subject) + "\n",
+                                          attributes: [.font: NSFont.boldSystemFont(ofSize: 18), .foregroundColor: NSColor.labelColor]))
+        let s = email.resolvedSender
+        let who = s.email.isEmpty ? s.name : "\(s.name) <\(s.email)>"
+        content.append(NSAttributedString(string: "\(who)  ·  \(email.time)\n\n",
+                                          attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
+        content.append(NSAttributedString(string: email.body,
+                                          attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: NSColor.labelColor]))
+        let width: CGFloat = 540
+        let tv = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: 100))
+        tv.textContainerInset = NSSize(width: 28, height: 28)
+        tv.textStorage?.setAttributedString(content)
+        if let container = tv.textContainer, let lm = tv.layoutManager {
+            lm.ensureLayout(for: container)
+            let used = lm.usedRect(for: container).size
+            tv.frame = NSRect(x: 0, y: 0, width: width, height: used.height + 56)
+        }
+        tv.backgroundColor = .white
+        return tv
+    }
+
+    func printMessage(_ email: Email) {
+        let op = NSPrintOperation(view: printableView(email))
+        op.printInfo.horizontalPagination = .fit
+        op.run()
+    }
+
+    func exportPDF(_ email: Email) {
+        let tv = printableView(email)
+        let pdf = tv.dataWithPDF(inside: tv.bounds)
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        let base = email.subject.isEmpty ? "message" : email.subject
+        panel.nameFieldStringValue = base.replacingOccurrences(of: "/", with: "-") + ".pdf"
+        if panel.runModal() == .OK, let url = panel.url {
+            do { try pdf.write(to: url); showToast("Saved \(url.lastPathComponent)") }
+            catch { showToast("Couldn't save PDF") }
+        }
+    }
+
     /// Write the invite's .ics to a temp file and hand it to Calendar.app.
     func addToCalendar(_ event: CalendarEvent) {
         let url = FileManager.default.temporaryDirectory
