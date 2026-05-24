@@ -730,6 +730,18 @@ final class AppModel: ObservableObject {
 
     /// Act on a message's List-Unsubscribe header: open the https page, or
     /// compose the unsubscribe email in-app for a mailto: link.
+    /// Write the invite's .ics to a temp file and hand it to Calendar.app.
+    func addToCalendar(_ event: CalendarEvent) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MMail-invite-\(UUID().uuidString).ics")
+        do {
+            try event.raw.write(to: url, atomically: true, encoding: .utf8)
+            NSWorkspace.shared.open(url)
+        } catch {
+            showToast("Couldn't open the invite")
+        }
+    }
+
     func unsubscribe(_ email: Email) {
         guard let raw = email.unsubscribe else { return }
         var https: URL?, mailto: URL?
@@ -1549,6 +1561,7 @@ final class AppModel: ObservableObject {
                 merged[i].hasAttachment = old.hasAttachment
                 merged[i].bodyHTML = old.bodyHTML
                 merged[i].unsubscribe = old.unsubscribe
+                merged[i].calendarEvent = old.calendarEvent
             }
         }
         // New-mail notifications (inbox only, after a server refresh).
@@ -1650,6 +1663,7 @@ final class AppModel: ObservableObject {
                         self.emails[i].hasAttachment = !metas.isEmpty
                         self.emails[i].unsubscribe = parsed.listUnsubscribe
                         self.emails[i].bodyHTML = parsed.html
+                        self.emails[i].calendarEvent = parsed.calendar.flatMap { MIME.parseICS($0) }
                     }
                 }
             }
@@ -1705,6 +1719,7 @@ final class AppModel: ObservableObject {
                         self.emails[i].hasAttachment = !metas.isEmpty
                         self.emails[i].unsubscribe = parsed.listUnsubscribe
                         self.emails[i].bodyHTML = parsed.html
+                        self.emails[i].calendarEvent = parsed.calendar.flatMap { MIME.parseICS($0) }
                     }
                     if let j = self.serverSearchResults?.firstIndex(where: { $0.id == id }) {
                         self.serverSearchResults?[j].body = parsed.text

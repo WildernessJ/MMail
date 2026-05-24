@@ -137,12 +137,12 @@ enum MIME {
     // MARK: Incoming text + attachment extraction
 
     struct Attachment { let filename: String; let mimeType: String; let data: Data }
-    struct Parsed { var text: String; var html: String?; var attachments: [Attachment]; var listUnsubscribe: String? }
+    struct Parsed { var text: String; var html: String?; var attachments: [Attachment]; var listUnsubscribe: String?; var calendar: String? }
 
     static func extractText(from data: Data) -> String { parse(data).text }
 
     static func parse(_ data: Data) -> Parsed {
-        var result = Parsed(text: "", html: nil, attachments: [], listUnsubscribe: nil)
+        var result = Parsed(text: "", html: nil, attachments: [], listUnsubscribe: nil, calendar: nil)
         walk(data, into: &result)
         if result.text.isEmpty, let html = result.html { result.text = stripHTML(html) }
         result.text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -160,6 +160,18 @@ enum MIME {
 
         if ctl.contains("multipart/"), let boundary = parameter("boundary", in: ct) {
             for part in splitParts(body, boundary: boundary) { walk(part, into: &result) }
+            return
+        }
+
+        // Calendar invite (text/calendar part, or a .ics attachment).
+        let isICS = ctl.contains("text/calendar") || ctl.contains("application/ics")
+            || (filename?.lowercased().hasSuffix(".ics") ?? false)
+        if isICS {
+            let decoded = decodeBody(body, encoding: enc)
+            if result.calendar == nil {
+                result.calendar = string(from: decoded, charset: parameter("charset", in: ct) ?? "utf-8")
+                    ?? String(decoding: decoded, as: UTF8.self)
+            }
             return
         }
 
@@ -181,6 +193,61 @@ enum MIME {
         } else if result.text.isEmpty {
             result.text = text
         }
+    }
+
+    // MARK: iCalendar (.ics) parsing
+
+    static func parseICS(_ ics: String) -> CalendarEvent? {
+        // Unfold RFC 5545 continuation lines, then read the VEVENT properties.
+        let unfolded = ics.replacingOccurrences(of: "\r\n ", with: "")
+            .replacingOccurrences(of: "\r\n\t", with: "")
+            .replacingOccurrences(of: "\n ", with: "")
+            .replacingOccurrences(of: "\n\t", with: "")
+        var summary = "", location = "", organizer = ""
+        var start: Date?, end: Date?
+        for rawLine in unfolded.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+            let line = String(rawLine)
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            let keyPart = String(line[line.startIndex..<colon])
+            let value = String(line[line.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+            let key = keyPart.split(separator: ";").first.map { String($0).uppercased() } ?? keyPart.uppercased()
+            switch key {
+            case "SUMMARY": summary = unescapeICS(value)
+            case "LOCATION": location = unescapeICS(value)
+            case "ORGANIZER":
+                if let cn = keyPart.range(of: "CN=", options: .caseInsensitive) {
+                    organizer = String(keyPart[cn.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                } else {
+                    organizer = value.replacingOccurrences(of: "mailto:", with: "", options: .caseInsensitive)
+                }
+            case "DTSTART": start = icsDate(value)
+            case "DTEND": end = icsDate(value)
+            default: break
+            }
+        }
+        guard !summary.isEmpty || start != nil else { return nil }
+        return CalendarEvent(summary: summary.isEmpty ? "(untitled event)" : summary,
+                             start: start, end: end,
+                             location: location.isEmpty ? nil : location,
+                             organizer: organizer.isEmpty ? nil : organizer, raw: ics)
+    }
+
+    private static func unescapeICS(_ s: String) -> String {
+        s.replacingOccurrences(of: "\\,", with: ",")
+            .replacingOccurrences(of: "\\;", with: ";")
+            .replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "\\\\", with: "\\")
+    }
+
+    private static func icsDate(_ value: String) -> Date? {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        for (fmt, utc) in [("yyyyMMdd'T'HHmmss'Z'", true), ("yyyyMMdd'T'HHmmss", false), ("yyyyMMdd", false)] {
+            f.dateFormat = fmt
+            f.timeZone = utc ? TimeZone(identifier: "UTC") : TimeZone.current
+            if let d = f.date(from: value) { return d }
+        }
+        return nil
     }
 
     // MARK: Low-level parsing

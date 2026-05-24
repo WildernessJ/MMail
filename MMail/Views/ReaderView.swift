@@ -199,6 +199,10 @@ private struct ReaderContent: View {
                 .padding(.top, 16)
             }
 
+            if let ev = email.calendarEvent {
+                inviteCard(ev)
+            }
+
             if email.body.isEmpty && !email.bodyLoaded {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -247,6 +251,46 @@ private struct ReaderContent: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(p.border, lineWidth: 1))
         .shadow(color: .black.opacity(p.isDark ? 0.4 : 0.08), radius: 12, y: 6)
         .zIndex(10)
+    }
+
+    private func inviteCard(_ ev: CalendarEvent) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Icon(name: "clock", size: 12).foregroundStyle(p.brandBlue)
+                Text("CALENDAR INVITE").font(.system(size: 10.5, weight: .bold)).tracking(0.6).foregroundStyle(p.fg3)
+            }
+            Text(ev.summary).font(.system(size: 15, weight: .semibold)).foregroundStyle(p.fg1)
+            if let start = ev.start {
+                Text(eventWhen(start, ev.end)).font(.system(size: 12.5)).foregroundStyle(p.fg2)
+            }
+            if let loc = ev.location {
+                HStack(spacing: 6) { Icon(name: "home", size: 11).foregroundStyle(p.fg3); Text(loc).font(.system(size: 12.5)).foregroundStyle(p.fg3) }
+            }
+            Button { model.addToCalendar(ev) } label: {
+                HStack(spacing: 6) {
+                    Icon(name: "check", size: 12); Text("Add to Calendar").font(.system(size: 12.5, weight: .semibold))
+                }
+                .foregroundStyle(.white).padding(.horizontal, 12).frame(height: 28)
+                .background(p.brandBlue).clipShape(Capsule())
+            }
+            .buttonStyle(.plain).padding(.top, 2)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(p.bg2)
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(p.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.top, 16)
+    }
+
+    private func eventWhen(_ start: Date, _ end: Date?) -> String {
+        let df = DateFormatter(); df.dateFormat = "EEE, MMM d · h:mm a"
+        var s = df.string(from: start)
+        if let end {
+            let ef = DateFormatter(); ef.dateFormat = "h:mm a"
+            s += " – \(ef.string(from: end))"
+        }
+        return s
     }
 
     private var metaRow: some View {

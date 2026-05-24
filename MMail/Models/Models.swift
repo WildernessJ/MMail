@@ -72,6 +72,7 @@ struct Email: Identifiable, Codable {
     var inReplyTo: String?
     var unsubscribe: String?   // raw List-Unsubscribe header, when present
     var bodyHTML: String?      // text/html part, when present
+    var calendarEvent: CalendarEvent?  // parsed .ics invite, when present
 
     init(id: String, account: String, from: String, to: [String]? = nil,
          subject: String, preview: String, body: String, time: String, day: String,
@@ -118,6 +119,15 @@ extension Sender {
         return ["noreply", "no-reply", "donotreply", "notifications", "notification",
                 "automated", "mailer", "support", "info", "hello", "team"].contains { local.contains($0) }
     }
+}
+
+struct CalendarEvent: Codable, Hashable {
+    var summary: String
+    var start: Date?
+    var end: Date?
+    var location: String?
+    var organizer: String?
+    var raw: String   // original iCalendar text, written out for "Add to Calendar"
 }
 
 struct MailRule: Identifiable, Codable, Hashable {
