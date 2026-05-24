@@ -97,14 +97,22 @@ struct HomeView: View {
     }
 
     private func card<C: View>(square: Bool = false, @ViewBuilder content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 0) { content() }
+        let inner = VStack(alignment: .leading, spacing: 0) { content() }
             .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(minHeight: 180)
-            .aspectRatio(square ? 1 : nil, contentMode: .fill)
-            .background(p.bg1)
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.border, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        return Group {
+            // Only square cards get an aspect ratio. Using `.fill` on non-square
+            // cards lets them grow in width to fill a taller row, which overflows.
+            if square {
+                inner.aspectRatio(1, contentMode: .fill)
+            } else {
+                inner
+            }
+        }
+        .background(p.bg1)
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var dateCard: some View {
