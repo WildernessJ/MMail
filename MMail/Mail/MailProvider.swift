@@ -52,6 +52,13 @@ struct MailProvider: Identifiable, Equatable {
         domain: "fastmail.com",
         hint: "Fastmail needs an app password. Create one in Settings → Privacy & Security → App passwords.")
 
+    static let zoho = MailProvider(
+        id: "zoho", name: "Zoho Mail", initial: "Z", colorHex: "E42527",
+        imapHost: "imap.zoho.com", imapPort: 993, imapSecurity: .tls,
+        smtpHost: "smtp.zoho.com", smtpPort: 465, smtpSecurity: .tls,
+        domain: "zoho.com",
+        hint: "Enable IMAP access in Zoho Mail (Settings → Mail Accounts → IMAP). If you use two-factor auth, create an application-specific password. Note: use your regional server (e.g. imap.zoho.eu / imap.zoho.in) under Server settings if your account isn't on zoho.com.")
+
     static let purelymail = MailProvider(
         id: "purelymail", name: "PurelyMail", initial: "PM", colorHex: "2E9E6B",
         imapHost: "imap.purelymail.com", imapPort: 993, imapSecurity: .tls,
@@ -65,5 +72,5 @@ struct MailProvider: Identifiable, Equatable {
         smtpHost: "", smtpPort: 587, smtpSecurity: .startTLS,
         domain: "example.com", hint: "")
 
-    static let all: [MailProvider] = [gmail, icloud, outlook, yahoo, fastmail, purelymail, custom]
+    static let all: [MailProvider] = [gmail, icloud, outlook, yahoo, fastmail, zoho, purelymail, custom]
 }
