@@ -283,6 +283,7 @@ struct EmailRowView: View {
                 .buttonStyle(.plain)
                 .padding(.top, 9)
             }
+            HStack(alignment: .top, spacing: 12) {
             avatar
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -330,6 +331,12 @@ struct EmailRowView: View {
                     .padding(.top, 4)
                 }
             }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if model.selectionActive { model.toggleSelect(email.id) } else { model.activate(email.id) }
+            }
             if hovered || selected {
                 VStack {
                     HStack(spacing: 2) {
@@ -352,10 +359,6 @@ struct EmailRowView: View {
             }
         }
         .overlay(Rectangle().fill(p.border).frame(height: 1), alignment: .bottom)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if model.selectionActive { model.toggleSelect(email.id) } else { model.activate(email.id) }
-        }
         .onHover { hovered = $0 }
     }
 

@@ -991,13 +991,31 @@ final class AppModel: ObservableObject {
                 try await smtp.send(from: cfg.email, fromName: display, recipients: recipients, message: message)
                 if let session, let sentBox = await self.resolveMailbox(cfg.id, kind: .sent, session: session) {
                     try? await session.append(mailbox: sentBox, rawMessage: message, seen: true, draft: false)
-                    await MainActor.run { self.loadFolder(cfg.id, "sent", silent: true) }
                 }
-                await MainActor.run { self.showToast("Sent to \(draft.to)") }
+                await MainActor.run {
+                    self.recordSentLocally(draft, account: cfg.id)   // show it in Sent immediately
+                    self.showToast("Sent to \(draft.to)")
+                }
             } catch {
                 await MainActor.run { self.showToast("Send failed: \(error.localizedDescription)") }
             }
         }
+    }
+
+    /// Add a just-sent message to the local Sent folder so it appears right away
+    /// (a full server refresh of Sent replaces this with the real copy later).
+    private func recordSentLocally(_ draft: ComposeDraft, account: String) {
+        let f = DateFormatter(); f.dateFormat = "h:mm a"
+        var e = Email(id: "\(account)#sent#local-\(UUID().uuidString)", account: account, from: "you",
+                      to: AppModel.parseRecipients(draft.to),
+                      subject: draft.subject.isEmpty ? "(no subject)" : draft.subject,
+                      preview: String(draft.body.replacingOccurrences(of: "\n", with: " ").prefix(140)),
+                      body: draft.body, time: f.string(from: Date()), day: "today",
+                      folder: "sent", bodyLoaded: true)
+        e.fromEmail = config(for: account)?.email
+        e.fromName = accountsById[account]?.name
+        emails.append(e)
+        MailCache.save(emails.filter { $0.account == account && $0.folder == "sent" }, account: account, folder: "sent")
     }
 
     private func quotedBody(_ e: Email) -> String {
@@ -1387,7 +1405,7 @@ final class AppModel: ObservableObject {
         // Incremental only for plain mailboxes (starred is a live search) when we
         // already have a loaded window and don't need folder discovery.
         let loaded = emails.filter { $0.account == accountId && $0.folder == folderId }
-        let canIncrement = incremental && !needDiscover && folderId != "starred"
+        let canIncrement = incremental && !needDiscover && folderId == "inbox"
             && !loaded.isEmpty && loaded.compactMap { $0.uid }.max() != nil
         Task {
             do {

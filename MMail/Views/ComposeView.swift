@@ -706,16 +706,17 @@ private struct RecipientRow<Trailing: View>: View {
         text = parts.joined(separator: ",") + ", "
     }
     var body: some View {
-        HStack(spacing: 0) {
-            Text(label).font(.system(size: 12)).foregroundStyle(p.fg3).frame(width: 56, alignment: .leading)
-            TextField("", text: $text)
-                .textFieldStyle(.plain).font(.system(size: 13.5))
-                .focused($focused)
-                .autocorrectionDisabled()
-            trailing()
-        }
-        .padding(.horizontal, 14).frame(height: 40)
-        .overlay(alignment: .topLeading) {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Text(label).font(.system(size: 12)).foregroundStyle(p.fg3).frame(width: 56, alignment: .leading)
+                TextField("", text: $text)
+                    .textFieldStyle(.plain).font(.system(size: 13.5))
+                    .focused($focused)
+                    .autocorrectionDisabled()
+                trailing()
+            }
+            .padding(.horizontal, 14).frame(height: 40)
+
             if !matches.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(matches) { s in
@@ -734,14 +735,9 @@ private struct RecipientRow<Trailing: View>: View {
                         .buttonStyle(HoverRowButtonStyle())
                     }
                 }
-                .padding(4)
-                .frame(width: 300, alignment: .leading)
-                .background(p.bg1)
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(p.borderStrong, lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
-                .offset(x: 50, y: 38)
-                .zIndex(100)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(p.bg2)
+                .overlay(Rectangle().fill(p.border).frame(height: 1), alignment: .top)
             }
         }
         .onAppear { if autofocus { DispatchQueue.main.async { focused = true } } }
