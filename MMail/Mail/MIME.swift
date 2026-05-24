@@ -53,7 +53,10 @@ enum MIME {
         df.locale = Locale(identifier: "en_US_POSIX")
         df.dateFormat = "EEE, d MMM yyyy HH:mm:ss Z"
         let dateStr = df.string(from: date)
-        let messageID = "<\(UUID().uuidString)@mmail.local>"
+        // Message-ID must use the sender's real domain; a bogus host (e.g. .local)
+        // is a common spam signal.
+        let senderDomain = from.split(separator: "@").last.map(String.init) ?? "localhost"
+        let messageID = "<\(UUID().uuidString)@\(senderDomain)>"
         let fromHeader: String
         if let name = fromName, !name.isEmpty {
             fromHeader = "\(encodeWordIfNeeded(name)) <\(from)>"

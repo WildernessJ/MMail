@@ -136,7 +136,10 @@ final class SMTPService {
     }
 
     private func ehlo() async throws {
-        _ = try await command("EHLO localhost", expect: [250])
+        // Identify with the sender's domain rather than "localhost", which some
+        // submission servers and spam filters penalize.
+        let host = username.split(separator: "@").last.map(String.init) ?? "localhost"
+        _ = try await command("EHLO \(host)", expect: [250])
     }
 
     private func authenticate() async throws {
