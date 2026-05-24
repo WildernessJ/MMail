@@ -54,6 +54,7 @@ struct SendingItem: Identifiable {
     let sizeBytes: Int
     var progress: Double
     var failed: Bool
+    var done: Bool
     var error: String?
     let draft: ComposeDraft
 }
@@ -1001,7 +1002,8 @@ final class AppModel: ObservableObject {
         let itemId = UUID().uuidString
         sending.append(SendingItem(id: itemId, to: draft.to.isEmpty ? "(unknown)" : draft.to,
                                    subject: draft.subject.isEmpty ? "(no subject)" : draft.subject,
-                                   sizeBytes: message.utf8.count, progress: 0, failed: false, error: nil, draft: draft))
+                                   sizeBytes: message.utf8.count, progress: 0, failed: false, done: false,
+                                   error: nil, draft: draft))
         Task {
             do {
                 let smtp = SMTPService(config: cfg, password: pw)
@@ -1015,10 +1017,16 @@ final class AppModel: ObservableObject {
                     try? await session.append(mailbox: sentBox, rawMessage: message, seen: true, draft: false)
                 }
                 await MainActor.run {
-                    self.sending.removeAll { $0.id == itemId }
-                    self.recordSentLocally(draft, account: cfg.id)   // show it in Sent immediately
+                    // Show 100% / "Sent" in the Outbox momentarily, and file it in Sent.
+                    if let i = self.sending.firstIndex(where: { $0.id == itemId }) {
+                        self.sending[i].progress = 1.0
+                        self.sending[i].done = true
+                    }
+                    self.recordSentLocally(draft, account: cfg.id)
                     self.showToast("Sent to \(draft.to)")
                 }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                await MainActor.run { self.sending.removeAll { $0.id == itemId } }
             } catch {
                 await MainActor.run {
                     if let i = self.sending.firstIndex(where: { $0.id == itemId }) {

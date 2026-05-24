@@ -61,7 +61,14 @@ struct OutboxView: View {
                     .font(.system(size: 11)).monospacedDigit().foregroundStyle(p.fg3)
             }
             Text(item.subject).font(.system(size: 13)).foregroundStyle(p.fg2).lineLimit(1)
-            if item.failed {
+            if item.done {
+                HStack(spacing: 6) {
+                    Icon(name: "check", size: 12).foregroundStyle(p.success)
+                    Text("Sent — moved to Sent").font(.system(size: 12, weight: .medium)).foregroundStyle(p.success)
+                    Spacer()
+                }
+                .padding(.top, 4)
+            } else if item.failed {
                 HStack(spacing: 8) {
                     Icon(name: "alert", size: 12).foregroundStyle(p.danger)
                     Text(item.error ?? "Send failed").font(.system(size: 12)).foregroundStyle(p.danger).lineLimit(2)
