@@ -52,11 +52,18 @@ struct MailProvider: Identifiable, Equatable {
         domain: "fastmail.com",
         hint: "Fastmail needs an app password. Create one in Settings → Privacy & Security → App passwords.")
 
+    static let purelymail = MailProvider(
+        id: "purelymail", name: "PurelyMail", initial: "PM", colorHex: "2E9E6B",
+        imapHost: "imap.purelymail.com", imapPort: 993, imapSecurity: .tls,
+        smtpHost: "smtp.purelymail.com", smtpPort: 465, smtpSecurity: .tls,
+        domain: "purelymail.com",
+        hint: "Use your PurelyMail password, or an app password created in the PurelyMail dashboard if you've enabled them.")
+
     static let custom = MailProvider(
         id: "custom", name: "Other", initial: "@", colorHex: "6B7088",
         imapHost: "", imapPort: 993, imapSecurity: .tls,
         smtpHost: "", smtpPort: 587, smtpSecurity: .startTLS,
         domain: "example.com", hint: "")
 
-    static let all: [MailProvider] = [gmail, icloud, outlook, yahoo, fastmail, custom]
+    static let all: [MailProvider] = [gmail, icloud, outlook, yahoo, fastmail, purelymail, custom]
 }
