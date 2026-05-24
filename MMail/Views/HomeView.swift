@@ -6,7 +6,6 @@ struct HomeView: View {
     @State private var draftTodo = ""
     @State private var cityPromptOpen = false
     @State private var cityDraft = ""
-    @State private var rowWidth: CGFloat = 0
 
     private let months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
     private let dows = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
@@ -57,26 +56,13 @@ struct HomeView: View {
                     weatherCard
                     peopleCard
                 }
-                Group {
-                    if rowWidth > 0 && rowWidth < 760 {
-                        VStack(spacing: 16) {
-                            journalCard
-                            todoCard
-                        }
-                    } else {
-                        HStack(alignment: .top, spacing: 16) {
-                            journalCard
-                                .frame(width: rowWidth > 0 ? max(0, 2 * (rowWidth - 32) / 3 + 16) : nil)
-                            todoCard
-                        }
+                Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+                    GridRow {
+                        journalCard.gridCellColumns(2)
+                        todoCard
                     }
                 }
                 .padding(.top, 16)
-                .background(GeometryReader { geo in
-                    Color.clear
-                        .onAppear { rowWidth = geo.size.width }
-                        .onChange(of: geo.size.width) { _, w in rowWidth = w }
-                })
             }
             .frame(maxWidth: 1100, alignment: .leading)
             .padding(.horizontal, 40).padding(.top, 32).padding(.bottom, 56)
@@ -221,7 +207,7 @@ struct HomeView: View {
                 }
                 TextEditor(text: Binding(get: { model.journal }, set: { model.journal = $0; model.persistJournal() }))
                     .font(.system(size: 14)).scrollContentBackground(.hidden).background(Color.clear)
-                    .frame(minHeight: 100)
+                    .frame(height: 64)
             }
             HStack(spacing: 8) {
                 Icon(name: "check", size: 12).foregroundStyle(p.fg3)
