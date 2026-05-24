@@ -49,6 +49,8 @@ struct RootView: View {
             }
             if model.folder == "home" {
                 HomeView()
+            } else if model.folder == "outbox" {
+                OutboxView()
             } else if model.readingPane {
                 EmailListView()
                 ReaderView()

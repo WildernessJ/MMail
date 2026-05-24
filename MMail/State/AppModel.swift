@@ -1160,7 +1160,23 @@ final class AppModel: ObservableObject {
 
     /// Folders that map to a real server mailbox / search and can be loaded.
     private func isServerFolder(_ folderId: String) -> Bool {
-        !["home", "snoozed"].contains(folderId)
+        !["home", "snoozed", "outbox"].contains(folderId)
+    }
+
+    func cancelScheduled(_ id: String) {
+        scheduled.removeAll { $0.id == id }
+        persistScheduled()
+        showToast("Scheduled send canceled")
+    }
+
+    func sendScheduledNow(_ id: String) {
+        guard let s = scheduled.first(where: { $0.id == id }) else { return }
+        scheduled.removeAll { $0.id == id }
+        persistScheduled()
+        let draft = ComposeDraft(to: s.to, cc: s.cc, bcc: s.bcc, subject: s.subject,
+                                 body: s.body, titleLabel: "", fromId: s.fromId,
+                                 attachments: s.attachments, bodyHTML: s.bodyHTML)
+        performSend(draft)
     }
 
     func refreshCurrentRealFolder(silent: Bool = false, incremental: Bool = false) {

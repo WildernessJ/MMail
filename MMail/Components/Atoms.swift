@@ -46,7 +46,8 @@ enum Icons {
         "more": "ellipsis",
         "copy": "doc.on.doc",
         "sliders": "slider.horizontal.3",
-        "crown": "crown.fill"
+        "crown": "crown.fill",
+        "outbox": "tray.and.arrow.up"
     ]
 }
 
