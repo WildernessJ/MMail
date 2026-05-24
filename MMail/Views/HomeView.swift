@@ -6,7 +6,9 @@ struct HomeView: View {
     @State private var draftTodo = ""
     @State private var cityPromptOpen = false
     @State private var cityDraft = ""
+    @State private var rowWidth: CGFloat = 0
 
+    private let cols = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
     private let months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
     private let dows = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
 
@@ -48,17 +50,23 @@ struct HomeView: View {
                     .font(.system(size: 14)).foregroundStyle(p.fg3)
                     .padding(.bottom, 28)
 
-                Grid(alignment: .top, horizontalSpacing: 16, verticalSpacing: 16) {
-                    GridRow {
-                        dateCard
-                        weatherCard
-                        peopleCard
-                    }
-                    GridRow {
-                        journalCard.gridCellColumns(2)
-                        todoCard
-                    }
+                LazyVGrid(columns: cols, alignment: .leading, spacing: 16) {
+                    dateCard
+                    weatherCard
+                    peopleCard
                 }
+                HStack(alignment: .top, spacing: 16) {
+                    journalCard
+                        .frame(width: rowWidth > 0 ? max(0, 2 * (rowWidth - 32) / 3 + 16) : nil)
+                    todoCard
+                        .frame(maxWidth: .infinity)
+                }
+                .padding(.top, 16)
+                .background(GeometryReader { geo in
+                    Color.clear
+                        .onAppear { rowWidth = geo.size.width }
+                        .onChange(of: geo.size.width) { _, w in rowWidth = w }
+                })
             }
             .frame(maxWidth: 1100, alignment: .leading)
             .padding(.horizontal, 40).padding(.top, 32).padding(.bottom, 56)
@@ -287,6 +295,8 @@ struct TodoRow: View {
                 .font(.system(size: 13.5))
                 .foregroundStyle(todo.done ? p.fg4 : p.fg1)
                 .strikethrough(todo.done, color: p.fg4)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Spacer(minLength: 8)
             if let src = todo.source, let s = SampleData.senders[src] {
                 Avatar(sender: s, size: 16).help("From \(s.name)")
