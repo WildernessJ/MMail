@@ -49,7 +49,7 @@ struct HomeView: View {
                     .font(.system(size: 14)).foregroundStyle(p.fg3)
                     .padding(.bottom, 28)
 
-                Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+                Grid(alignment: .top, horizontalSpacing: 16, verticalSpacing: 16) {
                     GridRow {
                         dateCard
                         weatherCard
