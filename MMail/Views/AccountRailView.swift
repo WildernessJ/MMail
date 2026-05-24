@@ -50,31 +50,17 @@ struct AccountRailView: View {
     }
 
     private var allTile: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    sliceColor(0); sliceColor(1)
-                }
-                HStack(spacing: 0) {
-                    sliceColor(2); sliceColor(3)
-                }
-            }
-            Text("All")
-                .font(.system(size: 11, weight: .heavy))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.4), radius: 1, y: 1)
-        }
-        .frame(width: 38, height: 38)
-        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .strokeBorder(p.borderStrong, lineWidth: 1)
-        )
-    }
-
-    private func sliceColor(_ i: Int) -> some View {
-        let color = i < model.accounts.count ? model.accounts[i].color : p.bg3
-        return Rectangle().fill(color).frame(width: 19, height: 19)
+        Text("All")
+            .font(.system(size: 11, weight: .heavy))
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.4), radius: 1, y: 1)
+            .frame(width: 38, height: 38)
+            .background(p.magenta)
+            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(p.borderStrong, lineWidth: 1)
+            )
     }
 
     @ViewBuilder
