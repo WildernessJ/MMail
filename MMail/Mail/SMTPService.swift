@@ -80,7 +80,9 @@ final class SMTPService {
     }
 
     /// Connects, authenticates, sends one message, and disconnects.
-    func send(from: String, fromName: String?, recipients: [String], message: String) async throws {
+    /// `progress` reports the DATA upload fraction (0...1) for large messages.
+    func send(from: String, fromName: String?, recipients: [String], message: String,
+              progress: (@Sendable (Double) -> Void)? = nil) async throws {
         try await connect()
         defer { Task { await self.close() } }
 
@@ -101,7 +103,7 @@ final class SMTPService {
             _ = try await command("RCPT TO:<\(rcpt)>", expect: [250, 251])
         }
         _ = try await command("DATA", expect: [354])
-        _ = try await sendData(message)
+        _ = try await sendData(message, progress: progress)
         _ = try await command("QUIT", expect: [221, 250])
     }
 
@@ -157,13 +159,25 @@ final class SMTPService {
     }
 
     @discardableResult
-    private func sendData(_ message: String) async throws -> SMTPResponse {
+    private func sendData(_ message: String, progress: (@Sendable (Double) -> Void)? = nil) async throws -> SMTPResponse {
         // Dot-stuff and terminate with <CRLF>.<CRLF>.
         let normalized = message.replacingOccurrences(of: "\r\n", with: "\n")
         let stuffed = normalized.split(separator: "\n", omittingEmptySubsequences: false)
             .map { $0.hasPrefix(".") ? "." + $0 : String($0) }
             .joined(separator: "\r\n")
-        try await writeLine(stuffed + "\r\n.\r\n")
+        let payload = Array((stuffed + "\r\n.\r\n").utf8)
+        guard let channel = self.channel else { throw MailError.notConnected }
+        let total = payload.count
+        let chunk = 64 * 1024
+        var sent = 0
+        while sent < total {
+            let end = Swift.min(sent + chunk, total)
+            var buf = channel.allocator.buffer(capacity: end - sent)
+            buf.writeBytes(payload[sent..<end])
+            try await channel.writeAndFlush(buf).get()
+            sent = end
+            progress?(Double(sent) / Double(total))
+        }
         return try await expect([250])
     }
 

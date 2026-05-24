@@ -74,7 +74,7 @@ struct SidebarView: View {
     private func folderRow(_ f: Folder) -> some View {
         let active = model.folder == f.id
         let hovered = hoveredFolder == f.id
-        let count = f.id == "outbox" ? model.scheduled.count : (model.unreadCounts[f.id] ?? 0)
+        let count = f.id == "outbox" ? (model.scheduled.count + model.sending.count) : (model.unreadCounts[f.id] ?? 0)
         return Button { model.setFolder(f.id) } label: {
             HStack(spacing: 10) {
                 Icon(name: folderIcons[f.id] ?? "mail", size: 16)

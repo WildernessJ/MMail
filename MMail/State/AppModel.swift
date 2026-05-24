@@ -47,6 +47,17 @@ struct ScheduledSend: Codable, Identifiable {
     var bodyHTML: String? = nil
 }
 
+struct SendingItem: Identifiable {
+    let id: String
+    let to: String
+    let subject: String
+    let sizeBytes: Int
+    var progress: Double
+    var failed: Bool
+    var error: String?
+    let draft: ComposeDraft
+}
+
 struct AdvancedSearchForm {
     var text = ""
     var from = ""
@@ -165,6 +176,7 @@ final class AppModel: ObservableObject {
     @Published var serverSearchResults: [Email]?
     @Published var searching = false
     @Published var scheduled: [ScheduledSend] = []
+    @Published var sending: [SendingItem] = []   // in-flight sends (Outbox progress)
     @Published var snoozedUntil: [String: Date] = [:]   // "accountId#uid" -> wake date
     @Published var downloadingAttachments: Set<String> = []
     private let kScheduled = "mmail.scheduled"
@@ -985,22 +997,45 @@ final class AppModel: ObservableObject {
                                         subject: draft.subject, body: draft.body, attachments: draft.attachments,
                                         bodyHTML: draft.bodyHTML)
         let session = session(for: cfg.id)
+        let itemId = UUID().uuidString
+        sending.append(SendingItem(id: itemId, to: draft.to.isEmpty ? "(unknown)" : draft.to,
+                                   subject: draft.subject.isEmpty ? "(no subject)" : draft.subject,
+                                   sizeBytes: message.utf8.count, progress: 0, failed: false, error: nil, draft: draft))
         Task {
             do {
                 let smtp = SMTPService(config: cfg, password: pw)
-                try await smtp.send(from: cfg.email, fromName: display, recipients: recipients, message: message)
+                try await smtp.send(from: cfg.email, fromName: display, recipients: recipients, message: message) { frac in
+                    Task { @MainActor [weak self] in
+                        guard let self, let i = self.sending.firstIndex(where: { $0.id == itemId }) else { return }
+                        self.sending[i].progress = frac
+                    }
+                }
                 if let session, let sentBox = await self.resolveMailbox(cfg.id, kind: .sent, session: session) {
                     try? await session.append(mailbox: sentBox, rawMessage: message, seen: true, draft: false)
                 }
                 await MainActor.run {
+                    self.sending.removeAll { $0.id == itemId }
                     self.recordSentLocally(draft, account: cfg.id)   // show it in Sent immediately
                     self.showToast("Sent to \(draft.to)")
                 }
             } catch {
-                await MainActor.run { self.showToast("Send failed: \(error.localizedDescription)") }
+                await MainActor.run {
+                    if let i = self.sending.firstIndex(where: { $0.id == itemId }) {
+                        self.sending[i].failed = true
+                        self.sending[i].error = error.localizedDescription
+                    }
+                    self.showToast("Send failed: \(error.localizedDescription)")
+                }
             }
         }
     }
+
+    func retrySend(_ id: String) {
+        guard let item = sending.first(where: { $0.id == id }) else { return }
+        sending.removeAll { $0.id == id }
+        performSend(item.draft)
+    }
+    func dismissSending(_ id: String) { sending.removeAll { $0.id == id } }
 
     /// Add a just-sent message to the local Sent folder so it appears right away
     /// (a full server refresh of Sent replaces this with the real copy later).

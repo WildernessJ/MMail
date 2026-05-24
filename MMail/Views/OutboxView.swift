@@ -10,16 +10,17 @@ struct OutboxView: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(p.border)
-            if items.isEmpty { empty } else { list }
+            if items.isEmpty && model.sending.isEmpty { empty } else { list }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(p.bg1)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let total = items.count + model.sending.count
+        return VStack(alignment: .leading, spacing: 4) {
             Text("Outbox").font(.system(size: 22, weight: .bold)).foregroundStyle(p.fg1)
-            Text(items.isEmpty ? "Nothing queued" : "\(items.count) scheduled message\(items.count == 1 ? "" : "s")")
+            Text(total == 0 ? "Nothing queued" : "\(total) message\(total == 1 ? "" : "s") sending or scheduled")
                 .font(.system(size: 12.5)).foregroundStyle(p.fg3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -39,12 +40,54 @@ struct OutboxView: View {
     private var list: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
+                ForEach(model.sending) { item in
+                    sendingRow(item)
+                    Divider().overlay(p.border)
+                }
                 ForEach(items) { s in
                     row(s)
                     Divider().overlay(p.border)
                 }
             }
         }
+    }
+
+    private func sendingRow(_ item: SendingItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(item.to).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(p.fg1).lineLimit(1)
+                Spacer()
+                Text(ByteCountFormatter.string(fromByteCount: Int64(item.sizeBytes), countStyle: .file))
+                    .font(.system(size: 11)).monospacedDigit().foregroundStyle(p.fg3)
+            }
+            Text(item.subject).font(.system(size: 13)).foregroundStyle(p.fg2).lineLimit(1)
+            if item.failed {
+                HStack(spacing: 8) {
+                    Icon(name: "alert", size: 12).foregroundStyle(p.danger)
+                    Text(item.error ?? "Send failed").font(.system(size: 12)).foregroundStyle(p.danger).lineLimit(2)
+                    Spacer()
+                    Button { model.retrySend(item.id) } label: {
+                        Text("Retry").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 12).frame(height: 26).background(p.brandBlue).clipShape(Capsule())
+                    }.buttonStyle(.plain)
+                    Button { model.dismissSending(item.id) } label: {
+                        Text("Dismiss").font(.system(size: 12, weight: .semibold)).foregroundStyle(p.fg2)
+                            .padding(.horizontal, 12).frame(height: 26).overlay(Capsule().stroke(p.border, lineWidth: 1))
+                    }.buttonStyle(.plain)
+                }
+                .padding(.top, 2)
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView(value: item.progress).progressViewStyle(.linear).tint(p.brandBlue)
+                    Text(item.progress > 0 ? "\(Int(item.progress * 100))%" : "Sending…")
+                        .font(.system(size: 11, weight: .medium)).monospacedDigit().foregroundStyle(p.brandBlue)
+                        .frame(width: 64, alignment: .trailing)
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func row(_ s: ScheduledSend) -> some View {
