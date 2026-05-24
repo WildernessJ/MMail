@@ -281,6 +281,19 @@ struct EmailRowView: View {
 
     private var bulkSelected: Bool { model.selectedIds.contains(email.id) }
 
+    /// Outgoing folders show the recipient; everything else shows the sender.
+    private var displayName: String {
+        if ["sent", "drafts", "outbox"].contains(email.folder) {
+            guard let to = email.to?.first, !to.isEmpty else { return "(no recipient)" }
+            if let lt = to.firstIndex(of: "<") {
+                let name = String(to[..<lt]).trimmingCharacters(in: .whitespaces)
+                return name.isEmpty ? to.trimmingCharacters(in: CharacterSet(charactersIn: "<> ")) : name
+            }
+            return to
+        }
+        return sender?.name ?? (email.to?.first ?? "You")
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if hovered || model.selectionActive {
@@ -310,7 +323,7 @@ struct EmailRowView: View {
                         if model.isVIP(email.fromEmail) {
                             Icon(name: "crown", size: 10).foregroundStyle(Color(hex: "F4A52A"))
                         }
-                        Text(sender?.name ?? (email.to?.first ?? "You"))
+                        Text(displayName)
                             .font(.system(size: 13.5, weight: email.unread ? .bold : .semibold))
                             .foregroundStyle(email.unread ? p.fg1 : p.fg2)
                             .lineLimit(1)

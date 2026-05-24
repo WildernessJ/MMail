@@ -27,6 +27,8 @@ struct IMAPMessage {
     var subject: String
     var fromName: String
     var fromEmail: String
+    var toName: String
+    var toEmail: String
     var date: Date
     var seen: Bool
     var flagged: Bool
@@ -402,6 +404,8 @@ final class IMAPService {
         var subject = ""
         var fromName = ""
         var fromEmail = ""
+        var toName = ""
+        var toEmail = ""
         var date = Date()
         var seen = false
         var flagged = false
@@ -410,7 +414,7 @@ final class IMAPService {
         var keywords: [String] = []
 
         func reset() {
-            uid = 0; subject = ""; fromName = ""; fromEmail = ""; date = Date()
+            uid = 0; subject = ""; fromName = ""; fromEmail = ""; toName = ""; toEmail = ""; date = Date()
             seen = false; flagged = false; messageID = ""; inReplyTo = ""; keywords = []
         }
 
@@ -435,6 +439,12 @@ final class IMAPService {
                         let hostPart = addr.host.map { String(buffer: $0) } ?? ""
                         if !mailbox.isEmpty { fromEmail = hostPart.isEmpty ? mailbox : "\(mailbox)@\(hostPart)" }
                     }
+                    if let first = env.to.first, case .singleAddress(let addr) = first {
+                        if let pn = addr.personName { toName = MIME.decodeHeader(String(buffer: pn)) }
+                        let mailbox = addr.mailbox.map { String(buffer: $0) } ?? ""
+                        let hostPart = addr.host.map { String(buffer: $0) } ?? ""
+                        if !mailbox.isEmpty { toEmail = hostPart.isEmpty ? mailbox : "\(mailbox)@\(hostPart)" }
+                    }
                     if let d = env.date, let parsed = Self.parseRFC2822(String(d)) { date = parsed }
                     if let mid = env.messageID { messageID = String(mid) }
                     if let irt = env.inReplyTo { inReplyTo = String(irt) }
@@ -446,7 +456,8 @@ final class IMAPService {
             case .finish:
                 if uid > 0 {
                     out.append(IMAPMessage(uid: uid, subject: subject, fromName: fromName,
-                                           fromEmail: fromEmail, date: date, seen: seen, flagged: flagged,
+                                           fromEmail: fromEmail, toName: toName, toEmail: toEmail,
+                                           date: date, seen: seen, flagged: flagged,
                                            messageID: messageID, inReplyTo: inReplyTo, keywords: keywords))
                 }
             default:
