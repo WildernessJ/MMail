@@ -441,7 +441,13 @@ private struct ReaderContent: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.border, lineWidth: 1))
         .shadow(color: .black.opacity(p.isDark ? 0.3 : 0.06), radius: collapsed ? 10 : 6, y: 4)
         .contentShape(Rectangle())
-        .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { expanded = true } }
+        .onTapGesture {
+            if collapsed {
+                withAnimation(.easeOut(duration: 0.2)) { expanded = true }
+            } else if let id = t.emailId {
+                model.openThreadMessage(id)
+            }
+        }
     }
 
     private var stackMoreButton: some View {

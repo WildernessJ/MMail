@@ -41,6 +41,7 @@ struct ThreadItem: Identifiable, Codable {
     let from: String
     let time: String
     let preview: String
+    var emailId: String? = nil   // the underlying Email.id, when this is real mail
 }
 
 struct Email: Identifiable, Codable {

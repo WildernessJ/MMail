@@ -984,8 +984,23 @@ final class AppModel: ObservableObject {
         }
         return thread.prefix(8).map {
             ThreadItem(from: $0.resolvedSender.name, time: $0.time,
-                       preview: $0.preview.isEmpty ? $0.subject : $0.preview)
+                       preview: $0.preview.isEmpty ? $0.subject : $0.preview,
+                       emailId: $0.id)
         }
+    }
+
+    /// Open another message from the current conversation in the reader.
+    func openThreadMessage(_ id: String) {
+        guard let e = emails.first(where: { $0.id == id }) else { return }
+        labelFilter = nil
+        searchActive = false
+        searchQuery = ""
+        serverSearchResults = nil
+        if currentAccount != "all" && currentAccount != e.account { currentAccount = e.account }
+        folder = e.folder
+        selectedId = id
+        if !readingPane { readerFullScreen = true }
+        loadBodyIfNeeded()
     }
 
     /// Long-lived IMAP connection per account (reused across operations).
