@@ -68,6 +68,25 @@ struct SettingsView: View {
                                 .foregroundStyle(p.brandBlue)
                         }.buttonStyle(.plain).padding(.vertical, 12)
                     }
+                    if !model.realConfigs.isEmpty {
+                        section("Signatures") {
+                            ForEach(Array(model.realConfigs.enumerated()), id: \.element.id) { idx, cfg in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(cfg.email).font(.system(size: 12, weight: .medium)).foregroundStyle(p.fg2)
+                                    TextEditor(text: Binding(
+                                        get: { model.signature(for: cfg.id) },
+                                        set: { model.setSignature(cfg.id, $0) }))
+                                        .font(.system(size: 13)).scrollContentBackground(.hidden)
+                                        .frame(height: 70)
+                                        .padding(8).background(p.bg2)
+                                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(p.border, lineWidth: 1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                }
+                                .padding(.vertical, 10)
+                                if idx < model.realConfigs.count - 1 { Rectangle().fill(p.border).frame(height: 1) }
+                            }
+                        }
+                    }
                     section("Labels") {
                         if model.labels.isEmpty {
                             Text("No labels yet. Create one below.").font(.system(size: 13)).foregroundStyle(p.fg3).padding(.vertical, 12)

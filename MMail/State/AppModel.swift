@@ -131,6 +131,10 @@ final class AppModel: ObservableObject {
     // Reply templates
     @Published var templates: [ReplyTemplate]
 
+    // Per-account signatures (auto-appended when composing).
+    @Published var signatures: [String: String] = [:]
+    private let kSignatures = "mmail.signatures"
+
     // Labels
     @Published var labels: [MailLabel]
     @Published var labelFilter: String?
@@ -199,6 +203,8 @@ final class AppModel: ObservableObject {
         } else {
             templates = SampleData.replyTemplates
         }
+        if let data = d.data(forKey: kSignatures),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) { signatures = decoded }
         if let data = d.data(forKey: kLabels),
            let decoded = try? JSONDecoder().decode([MailLabel].self, from: data), !decoded.isEmpty {
             labels = decoded
@@ -749,8 +755,19 @@ final class AppModel: ObservableObject {
                       titleLabel: String = "New message", fromId: String? = nil) {
         // Reply/forward pass the receiving account; a fresh compose uses the first account.
         let defaultFrom = accounts.first?.id ?? "work"
-        compose = ComposeDraft(to: to, subject: subject, body: body,
-                               titleLabel: titleLabel, fromId: fromId ?? defaultFrom)
+        let from = fromId ?? defaultFrom
+        let sig = signature(for: from)
+        // Signature sits above any quoted history; the caret opens at the very top.
+        let finalBody = sig.isEmpty ? body : "\n\n-- \n\(sig)\(body)"
+        compose = ComposeDraft(to: to, subject: subject, body: finalBody,
+                               titleLabel: titleLabel, fromId: from)
+    }
+
+    func signature(for accountId: String) -> String { signatures[accountId] ?? "" }
+
+    func setSignature(_ accountId: String, _ text: String) {
+        signatures[accountId] = text
+        if let data = try? JSONEncoder().encode(signatures) { UserDefaults.standard.set(data, forKey: kSignatures) }
     }
 
     func sendDraft(_ draft: ComposeDraft) {
