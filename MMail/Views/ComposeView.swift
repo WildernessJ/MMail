@@ -250,8 +250,11 @@ struct ComposeView: View {
             formatButton(help: "Underline") { formatCmd = .underline } label: {
                 Text("U").font(.system(size: 13, weight: .semibold)).underline()
             }
-            formatButton(help: "Bullet") { formatCmd = .bullet } label: {
+            formatButton(help: "Bulleted list") { formatCmd = .bullet } label: {
                 Image(systemName: "list.bullet").font(.system(size: 12))
+            }
+            formatButton(help: "Numbered list") { formatCmd = .numbered } label: {
+                Image(systemName: "list.number").font(.system(size: 12))
             }
             Spacer()
         }
