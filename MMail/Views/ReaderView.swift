@@ -368,8 +368,10 @@ private struct ReaderContent: View {
                 Kbd("R")
             }
             .padding(14)
+            .frame(maxWidth: .infinity)
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(p.borderStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
