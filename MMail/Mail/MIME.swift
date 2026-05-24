@@ -134,12 +134,12 @@ enum MIME {
     // MARK: Incoming text + attachment extraction
 
     struct Attachment { let filename: String; let mimeType: String; let data: Data }
-    struct Parsed { var text: String; var html: String?; var attachments: [Attachment] }
+    struct Parsed { var text: String; var html: String?; var attachments: [Attachment]; var listUnsubscribe: String? }
 
     static func extractText(from data: Data) -> String { parse(data).text }
 
     static func parse(_ data: Data) -> Parsed {
-        var result = Parsed(text: "", html: nil, attachments: [])
+        var result = Parsed(text: "", html: nil, attachments: [], listUnsubscribe: nil)
         walk(data, into: &result)
         if result.text.isEmpty, let html = result.html { result.text = stripHTML(html) }
         result.text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -148,6 +148,7 @@ enum MIME {
 
     private static func walk(_ data: Data, into result: inout Parsed) {
         let (headers, body) = splitHeadersBody(data)
+        if result.listUnsubscribe == nil, let lu = headers["list-unsubscribe"] { result.listUnsubscribe = lu }
         let ct = headers["content-type"] ?? "text/plain"
         let ctl = ct.lowercased()
         let enc = (headers["content-transfer-encoding"] ?? "").lowercased()

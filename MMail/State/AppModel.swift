@@ -595,6 +595,29 @@ final class AppModel: ObservableObject {
         persistBlocked()
     }
 
+    /// Act on a message's List-Unsubscribe header: open the https page, or
+    /// compose the unsubscribe email in-app for a mailto: link.
+    func unsubscribe(_ email: Email) {
+        guard let raw = email.unsubscribe else { return }
+        var https: URL?, mailto: URL?
+        for part in raw.components(separatedBy: ",") {
+            let inner = part.trimmingCharacters(in: CharacterSet(charactersIn: "<> \t"))
+            if inner.lowercased().hasPrefix("http"), https == nil { https = URL(string: inner) }
+            else if inner.lowercased().hasPrefix("mailto:"), mailto == nil { mailto = URL(string: inner) }
+        }
+        if let https {
+            NSWorkspace.shared.open(https)
+            showToast("Opening unsubscribe page…")
+        } else if let mailto, let comps = URLComponents(url: mailto, resolvingAgainstBaseURL: false) {
+            let to = comps.path
+            let subject = comps.queryItems?.first { $0.name.lowercased() == "subject" }?.value ?? "Unsubscribe"
+            let body = comps.queryItems?.first { $0.name.lowercased() == "body" }?.value ?? "Please unsubscribe me."
+            startCompose(to: to, subject: subject, body: body, titleLabel: "Unsubscribe", fromId: email.account)
+        } else {
+            showToast("No usable unsubscribe link found")
+        }
+    }
+
     /// Move freshly-loaded inbox mail from blocked senders straight to Trash.
     private func autoTrashBlocked(accountId: String, folderId: String) {
         guard folderId == "inbox", !blockedSenders.isEmpty else { return }
@@ -1438,6 +1461,7 @@ final class AppModel: ObservableObject {
                         self.emails[i].bodyLoaded = true
                         self.emails[i].attachments = metas
                         self.emails[i].hasAttachment = !metas.isEmpty
+                        self.emails[i].unsubscribe = parsed.listUnsubscribe
                     }
                 }
             }
@@ -1491,6 +1515,7 @@ final class AppModel: ObservableObject {
                         self.emails[i].bodyLoaded = true
                         self.emails[i].attachments = metas
                         self.emails[i].hasAttachment = !metas.isEmpty
+                        self.emails[i].unsubscribe = parsed.listUnsubscribe
                     }
                     if let j = self.serverSearchResults?.firstIndex(where: { $0.id == id }) {
                         self.serverSearchResults?[j].body = parsed.text

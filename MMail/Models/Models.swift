@@ -70,6 +70,7 @@ struct Email: Identifiable, Codable {
     var attachments: [AttachmentMeta] = []
     var messageID: String?
     var inReplyTo: String?
+    var unsubscribe: String?   // raw List-Unsubscribe header, when present
 
     init(id: String, account: String, from: String, to: [String]? = nil,
          subject: String, preview: String, body: String, time: String, day: String,

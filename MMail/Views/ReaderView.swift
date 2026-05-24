@@ -178,6 +178,22 @@ private struct ReaderContent: View {
             metaRow.padding(.bottom, 22)
             Divider().overlay(p.border)
 
+            if email.unsubscribe != nil {
+                HStack(spacing: 8) {
+                    Icon(name: "mail", size: 12).foregroundStyle(p.fg3)
+                    Text("You're subscribed to this mailing list.").font(.system(size: 12)).foregroundStyle(p.fg3)
+                    Spacer()
+                    Button { model.unsubscribe(email) } label: {
+                        Text("Unsubscribe").font(.system(size: 12, weight: .semibold)).foregroundStyle(p.brandBlue)
+                    }.buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(p.bg2)
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(p.border, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.top, 16)
+            }
+
             if email.body.isEmpty && !email.bodyLoaded {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
