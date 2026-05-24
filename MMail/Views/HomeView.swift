@@ -41,8 +41,7 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                (Text(hello).foregroundStyle(p.fg1) + Text(".").foregroundStyle(p.brandBlue)
-                 + Text(" ").foregroundStyle(p.fg1) + Text(parts.full).foregroundStyle(p.fg3))
+                (Text(hello).foregroundStyle(p.fg1) + Text(".").foregroundStyle(p.brandBlue))
                     .font(.system(size: 28, weight: .bold))
                     .padding(.bottom, 4)
                 Text("A glance at your day before you dive into mail.")
