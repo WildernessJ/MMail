@@ -38,8 +38,6 @@ struct HomeView: View {
         Set(homeEmails.filter { $0.unread && $0.folder == "inbox" }.map { $0.from })
     }
 
-    private let cols = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -51,18 +49,17 @@ struct HomeView: View {
                     .font(.system(size: 14)).foregroundStyle(p.fg3)
                     .padding(.bottom, 28)
 
-                LazyVGrid(columns: cols, alignment: .leading, spacing: 16) {
-                    dateCard
-                    weatherCard
-                    peopleCard
-                }
                 Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+                    GridRow {
+                        dateCard
+                        weatherCard
+                        peopleCard
+                    }
                     GridRow {
                         journalCard.gridCellColumns(2)
                         todoCard
                     }
                 }
-                .padding(.top, 16)
             }
             .frame(maxWidth: 1100, alignment: .leading)
             .padding(.horizontal, 40).padding(.top, 32).padding(.bottom, 56)
