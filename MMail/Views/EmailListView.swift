@@ -293,9 +293,11 @@ struct EmailRowView: View {
                             .frame(width: 18, height: 18)
                         if bulkSelected { Icon(name: "check", size: 11, weight: .bold).foregroundStyle(.white) }
                     }
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 9)
+                .padding(.top, 7)
             }
             HStack(alignment: .top, spacing: 12) {
             avatar

@@ -1050,6 +1050,8 @@ final class AppModel: ObservableObject {
                       folder: "sent", bodyLoaded: true)
         e.fromEmail = config(for: account)?.email
         e.fromName = accountsById[account]?.name
+        e.attachments = draft.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
+        e.hasAttachment = !draft.attachments.isEmpty
         emails.append(e)
         MailCache.save(emails.filter { $0.account == account && $0.folder == "sent" }, account: account, folder: "sent")
     }
