@@ -252,9 +252,6 @@ struct EmailRowView: View {
                     if email.starred {
                         Icon(name: "star.fill", size: 10).foregroundStyle(Color(hex: "F4A52A"))
                     }
-                    if email.unread {
-                        Circle().fill(p.danger).frame(width: 7, height: 7)
-                    }
                     Text(email.time)
                         .font(.system(size: 11.5, weight: .medium))
                         .monospacedDigit()
