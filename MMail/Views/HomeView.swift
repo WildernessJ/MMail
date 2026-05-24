@@ -295,9 +295,8 @@ struct TodoRow: View {
                 .font(.system(size: 13.5))
                 .foregroundStyle(todo.done ? p.fg4 : p.fg1)
                 .strikethrough(todo.done, color: p.fg4)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 8)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             if let src = todo.source, let s = SampleData.senders[src] {
                 Avatar(sender: s, size: 16).help("From \(s.name)")
             }
