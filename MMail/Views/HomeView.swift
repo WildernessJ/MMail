@@ -214,7 +214,7 @@ struct HomeView: View {
             .padding(.bottom, 8)
             ZStack(alignment: .topLeading) {
                 if model.journal.isEmpty {
-                    Text("What's on your mind, \(parts.dow)?").font(.system(size: 14)).foregroundStyle(p.fg4)
+                    Text("What's on your mind?").font(.system(size: 14)).foregroundStyle(p.fg4)
                         .padding(.top, 0)
                 }
                 TextEditor(text: Binding(get: { model.journal }, set: { model.journal = $0; model.persistJournal() }))
