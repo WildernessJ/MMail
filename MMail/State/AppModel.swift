@@ -148,6 +148,7 @@ final class AppModel: ObservableObject {
     private let kScheduled = "mmail.scheduled"
     private let kSnoozed = "mmail.snoozed"
     private var pollTimer: Timer?
+    private var pollCount = 0
     private var imapSessions: [String: IMAPSession] = [:]
     private var didBootstrap = false
     private var pageLimits: [String: Int] = [:]
@@ -367,6 +368,9 @@ final class AppModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             guard let self, let i = self.emails.firstIndex(where: { $0.id == id }) else { return }
             self.emails[i].unread = false
+            // Mark seen on the server here (not in loadBodyIfNeeded), so prefetched
+            // messages — whose body is already loaded — still get marked read on open.
+            self.applyRealFlag(self.emails[i], .seen, add: true)
         }
     }
 
@@ -898,12 +902,12 @@ final class AppModel: ObservableObject {
 
     /// Load a folder for whatever account scope is selected — a single real
     /// account, or every real account when the unified "All inboxes" is active.
-    func loadForCurrentScope(_ folderId: String, silent: Bool = false) {
+    func loadForCurrentScope(_ folderId: String, silent: Bool = false, incremental: Bool = false) {
         guard isServerFolder(folderId) else { return }
         if currentAccount == "all" {
-            for cfg in realConfigs { loadFolder(cfg.id, folderId, silent: silent) }
+            for cfg in realConfigs { loadFolder(cfg.id, folderId, silent: silent, incremental: incremental) }
         } else if isRealAccount(currentAccount) {
-            loadFolder(currentAccount, folderId, silent: silent)
+            loadFolder(currentAccount, folderId, silent: silent, incremental: incremental)
         }
     }
 
@@ -918,8 +922,8 @@ final class AppModel: ObservableObject {
         !["home", "snoozed"].contains(folderId)
     }
 
-    func refreshCurrentRealFolder(silent: Bool = false) {
-        loadForCurrentScope(folder, silent: silent)
+    func refreshCurrentRealFolder(silent: Bool = false, incremental: Bool = false) {
+        loadForCurrentScope(folder, silent: silent, incremental: incremental)
     }
 
     // MARK: - Pagination
@@ -1038,7 +1042,7 @@ final class AppModel: ObservableObject {
         if selectedId == nil { selectedId = filteredEmails.first?.id }
     }
 
-    func loadFolder(_ accountId: String, _ folderId: String, silent: Bool = false) {
+    func loadFolder(_ accountId: String, _ folderId: String, silent: Bool = false, incremental: Bool = false) {
         guard isRealAccount(accountId), isServerFolder(folderId), let session = session(for: accountId) else {
             if config(for: accountId)?.imapPassword == nil { accountErrors[accountId] = "Missing saved password." }
             return
@@ -1053,6 +1057,11 @@ final class AppModel: ObservableObject {
         accountErrors[accountId] = nil
         let needDiscover = realMailboxes[accountId] == nil
         let limit = pageLimit(accountId, folderId)
+        // Incremental only for plain mailboxes (starred is a live search) when we
+        // already have a loaded window and don't need folder discovery.
+        let loaded = emails.filter { $0.account == accountId && $0.folder == folderId }
+        let canIncrement = incremental && !needDiscover && folderId != "starred"
+            && !loaded.isEmpty && loaded.compactMap { $0.uid }.max() != nil
         Task {
             do {
                 if needDiscover {
@@ -1072,15 +1081,32 @@ final class AppModel: ObservableObject {
                 }
                 let map = await MainActor.run { self.realMailboxes[accountId] ?? [:] }
 
+                let box: String? = {
+                    switch folderId {
+                    case "inbox": return "INBOX"
+                    case "starred": return nil
+                    case "done": return map["archive"]
+                    default: return map[folderId]
+                    }
+                }()
+
+                if canIncrement, let box {
+                    let uids = loaded.compactMap { $0.uid }
+                    let sync = try await session.syncFolder(mailbox: box, afterUID: uids.max() ?? 0,
+                                                            oldestUID: uids.min() ?? 0, newLimit: limit)
+                    await MainActor.run {
+                        self.mergeIncremental(sync, accountId: accountId, folderId: folderId)
+                        self.loadingAccounts.remove(accountId)
+                    }
+                    return
+                }
+
                 let msgs: [IMAPMessage]
                 switch folderId {
                 case "inbox": msgs = try await session.fetchRecent(mailbox: "INBOX", limit: limit)
                 case "starred": msgs = try await session.searchFlagged(mailbox: "INBOX", limit: limit)
-                case "done":
-                    if let arch = map["archive"] { msgs = try await session.fetchRecent(mailbox: arch, limit: limit) }
-                    else { msgs = [] }
                 default:
-                    if let name = map[folderId] { msgs = try await session.fetchRecent(mailbox: name, limit: limit) }
+                    if let box { msgs = try await session.fetchRecent(mailbox: box, limit: limit) }
                     else { msgs = [] }
                 }
                 let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
@@ -1267,6 +1293,83 @@ final class AppModel: ObservableObject {
                 selectedId = filteredEmails.first?.id
             }
         }
+        if persist { prefetchBodies(accountId, folderId) }
+    }
+
+    /// Apply an incremental refresh: update flags on the loaded window, append
+    /// any new messages, persist, and prefetch the newest/starred bodies.
+    private func mergeIncremental(_ sync: IMAPFolderSync, accountId: String, folderId: String) {
+        for (uid, fs) in sync.flags {
+            if let i = emails.firstIndex(where: { $0.account == accountId && $0.folder == folderId && $0.uid == uid }) {
+                emails[i].unread = !fs.seen
+                emails[i].starred = fs.flagged
+                emails[i].labels = fs.keywords.map { $0.lowercased() }
+            }
+        }
+        let existingUIDs = Set(emails.filter { $0.account == accountId && $0.folder == folderId }.compactMap { $0.uid })
+        let fresh = sync.newMessages.filter { !existingUIDs.contains($0.uid) }
+        if !fresh.isEmpty {
+            let mapped = fresh.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
+            if folderId == "inbox", notificationsEnabled, let last = lastSeenUID[accountId] {
+                for e in mapped.filter({ ($0.uid ?? 0) > last && $0.unread }).prefix(5) {
+                    Notifier.notify(title: e.resolvedSender.name, body: e.subject)
+                }
+            }
+            emails.append(contentsOf: mapped)
+            registerLabels(from: mapped)
+        }
+        if folderId == "inbox" {
+            let maxUID = emails.filter { $0.account == accountId && $0.folder == folderId }.compactMap { $0.uid }.max() ?? 0
+            lastSeenUID[accountId] = max(lastSeenUID[accountId] ?? 0, maxUID)
+        }
+        MailCache.save(emails.filter { $0.account == accountId && $0.folder == folderId }, account: accountId, folder: folderId)
+        let inScope = (currentAccount == accountId || currentAccount == "all")
+        if inScope && folder == folderId && serverSearchResults == nil {
+            if !filteredEmails.contains(where: { $0.id == selectedId }) {
+                selectedId = filteredEmails.first?.id
+            }
+        }
+        prefetchBodies(accountId, folderId)
+    }
+
+    /// Warm the cache for the messages most likely to be opened: the newest few
+    /// in the folder and every starred message. Uses BODY.PEEK so it never marks
+    /// anything as read. Bodies already loaded are skipped.
+    private func prefetchBodies(_ accountId: String, _ folderId: String) {
+        guard isRealAccount(accountId), let session = session(for: accountId) else { return }
+        let box = mailboxName(accountId, folderId) ?? "INBOX"
+        let pool = emails.filter { $0.account == accountId && $0.folder == folderId && !$0.bodyLoaded && $0.uid != nil }
+        guard !pool.isEmpty else { return }
+        let newest = pool.sorted { ($0.uid ?? 0) > ($1.uid ?? 0) }.prefix(8)
+        let starred = pool.filter { $0.starred }
+        var targets: [Email] = []
+        var seen = Set<String>()
+        for e in (Array(newest) + starred) where seen.insert(e.id).inserted { targets.append(e) }
+        let acct = accountId, fld = folderId
+        Task {
+            for e in targets {
+                guard let uid = e.uid else { continue }
+                let stillNeeded = await MainActor.run {
+                    self.emails.first(where: { $0.id == e.id })?.bodyLoaded == false
+                }
+                guard stillNeeded == true else { continue }
+                guard let data = try? await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: 262_144) else { continue }
+                let parsed = MIME.parse(data)
+                let metas = parsed.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
+                await MainActor.run {
+                    if let i = self.emails.firstIndex(where: { $0.id == e.id }) {
+                        self.emails[i].body = parsed.text
+                        self.emails[i].preview = String(parsed.text.replacingOccurrences(of: "\n", with: " ").prefix(140))
+                        self.emails[i].bodyLoaded = true
+                        self.emails[i].attachments = metas
+                        self.emails[i].hasAttachment = !metas.isEmpty
+                    }
+                }
+            }
+            await MainActor.run {
+                MailCache.save(self.emails.filter { $0.account == acct && $0.folder == fld }, account: acct, folder: fld)
+            }
+        }
     }
 
     static func makeEmail(_ m: IMAPMessage, accountId: String, folder: String) -> Email {
@@ -1305,7 +1408,6 @@ final class AppModel: ObservableObject {
             do {
                 let data = try await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: 262_144)
                 let parsed = MIME.parse(data)
-                try? await session.store(mailbox: box, uid: uid, .seen, add: true)
                 let metas = parsed.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
                 await MainActor.run {
                     if let i = self.emails.firstIndex(where: { $0.id == id }) {
@@ -1432,10 +1534,13 @@ final class AppModel: ObservableObject {
 
     func startPolling() {
         guard pollTimer == nil else { return }
-        // Every 30s: refresh current folder, fire any due scheduled sends, wake snoozed.
+        // Every 30s: incrementally refresh the current folder (new mail + flag
+        // changes only). Every 10th tick (~5 min) do a full fetch to self-heal
+        // expunges / UID-validity resets. Also run scheduled sends + snooze wakes.
         pollTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             guard let self else { return }
-            self.refreshCurrentRealFolder(silent: true)
+            self.pollCount += 1
+            self.refreshCurrentRealFolder(silent: true, incremental: self.pollCount % 10 != 0)
             self.processScheduledSends()
             self.wakeSnoozedIfDue()
         }

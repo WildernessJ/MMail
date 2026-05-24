@@ -38,6 +38,18 @@ struct IMAPMessage {
 // NIO-free flag kind so the app layer doesn't import NIOIMAPCore.
 enum MailFlagKind { case seen, flagged, deleted }
 
+// NIO-free incremental-sync results.
+struct IMAPFlagState {
+    var seen: Bool
+    var flagged: Bool
+    var keywords: [String]
+}
+
+struct IMAPFolderSync {
+    var newMessages: [IMAPMessage]               // UID greater than the highest we had
+    var flags: [UInt32: IMAPFlagState]           // current flags for the already-loaded range
+}
+
 // NIO-free advanced-search criteria. The app builds this; IMAPService turns it
 // into a server SearchKey so the app layer stays free of NIOIMAPCore.
 struct MailSearchCriteria {
@@ -209,6 +221,30 @@ final class IMAPService {
         let range = MessageIdentifierRange<SequenceNumber>(SequenceNumber(rawValue: lo)...SequenceNumber(rawValue: hi))
         let responses = try await send(.fetch(.range(range), [.uid, .flags, .envelope, .internalDate], []))
         return parseMessages(responses).sorted { $0.date > $1.date }
+    }
+
+    /// Incremental refresh: fetch only messages newer than `afterUID`, plus the
+    /// current flags for the already-loaded range `[oldestUID...afterUID]` (so
+    /// read/star/label changes from other clients show up). One SELECT, two
+    /// cheap UID FETCHes — far less data than re-fetching every envelope.
+    func syncFolder(mailbox name: String, afterUID: UInt32, oldestUID: UInt32, newLimit: Int) async throws -> IMAPFolderSync {
+        _ = try await select(name)
+
+        var newMessages: [IMAPMessage] = []
+        if afterUID < UInt32.max {
+            let newRange = MessageIdentifierRange<UID>(UID(rawValue: afterUID + 1)...UID.max)
+            let r = try await send(.uidFetch(.range(newRange), [.uid, .flags, .envelope, .internalDate], []))
+            newMessages = parseMessages(r).sorted { $0.date > $1.date }
+            if newMessages.count > newLimit { newMessages = Array(newMessages.prefix(newLimit)) }
+        }
+
+        var flags: [UInt32: IMAPFlagState] = [:]
+        if oldestUID > 0 && oldestUID <= afterUID {
+            let flagRange = MessageIdentifierRange<UID>(UID(rawValue: oldestUID)...UID(rawValue: afterUID))
+            let r = try await send(.uidFetch(.range(flagRange), [.uid, .flags], []))
+            flags = parseFlags(r)
+        }
+        return IMAPFolderSync(newMessages: newMessages, flags: flags)
     }
 
     func search(mailbox name: String, key: SearchKey, limit: Int) async throws -> [IMAPMessage] {
@@ -418,6 +454,34 @@ final class IMAPService {
             }
         }
         return out
+    }
+
+    private func parseFlags(_ responses: [Response]) -> [UInt32: IMAPFlagState] {
+        var map: [UInt32: IMAPFlagState] = [:]
+        var uid: UInt32 = 0, seen = false, flagged = false
+        var keywords: [String] = []
+        func reset() { uid = 0; seen = false; flagged = false; keywords = [] }
+        for r in responses {
+            guard case .fetch(let fr) = r else { continue }
+            switch fr {
+            case .start, .startUID:
+                reset()
+            case .simpleAttribute(let attr):
+                switch attr {
+                case .uid(let u): uid = u.rawValue
+                case .flags(let flags):
+                    seen = flags.contains(.seen)
+                    flagged = flags.contains(.flagged)
+                    keywords = flags.map { String($0) }.filter { !$0.hasPrefix("\\") }
+                default: break
+                }
+            case .finish:
+                if uid > 0 { map[uid] = IMAPFlagState(seen: seen, flagged: flagged, keywords: keywords) }
+            default:
+                break
+            }
+        }
+        return map
     }
 
     private static func parseRFC2822(_ s: String) -> Date? {
