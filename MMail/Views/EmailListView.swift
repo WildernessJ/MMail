@@ -21,6 +21,10 @@ struct EmailListView: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(p.border)
+            if model.selectionActive {
+                selectionBar
+                Divider().overlay(p.border)
+            }
             list
         }
         .frame(width: model.readingPane ? 380 : nil)
@@ -89,6 +93,33 @@ struct EmailListView: View {
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 12)
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: 6) {
+            Text("\(model.selectedIds.count) selected")
+                .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.fg1)
+            Button { model.selectAllVisible() } label: {
+                Text("Select all").font(.system(size: 11.5)).foregroundStyle(p.brandBlue)
+            }.buttonStyle(.plain)
+            Spacer()
+            bulkButton("check", "Done") { model.bulkDone() }
+            bulkButton("archive", "Archive") { model.bulkArchive() }
+            bulkButton("mail", "Read") { model.bulkMarkRead(true) }
+            bulkButton("trash", "Delete") { model.bulkDelete() }
+            Button { model.clearSelection() } label: {
+                Icon(name: "x", size: 13).foregroundStyle(p.fg3).frame(width: 26, height: 26)
+            }.buttonStyle(.plain).help("Clear selection (esc)")
+        }
+        .padding(.horizontal, 20).padding(.vertical, 8)
+        .background(p.bg2)
+    }
+
+    private func bulkButton(_ icon: String, _ help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Icon(name: icon, size: 14).foregroundStyle(p.fg2).frame(width: 28, height: 26)
+        }
+        .buttonStyle(.plain).help(help)
     }
 
     private func filterChip(_ f: InboxFilter) -> some View {
@@ -234,8 +265,24 @@ struct EmailRowView: View {
 
     private var sender: Sender? { email.resolvedSender }
 
+    private var bulkSelected: Bool { model.selectedIds.contains(email.id) }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
+            if hovered || model.selectionActive {
+                Button { model.toggleSelect(email.id) } label: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(bulkSelected ? p.brandBlue : Color.clear)
+                            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .stroke(bulkSelected ? p.brandBlue : p.borderStrong, lineWidth: 1.5))
+                            .frame(width: 18, height: 18)
+                        if bulkSelected { Icon(name: "check", size: 11, weight: .bold).foregroundStyle(.white) }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 9)
+            }
             avatar
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -306,7 +353,9 @@ struct EmailRowView: View {
         }
         .overlay(Rectangle().fill(p.border).frame(height: 1), alignment: .bottom)
         .contentShape(Rectangle())
-        .onTapGesture { model.activate(email.id) }
+        .onTapGesture {
+            if model.selectionActive { model.toggleSelect(email.id) } else { model.activate(email.id) }
+        }
         .onHover { hovered = $0 }
     }
 
@@ -315,6 +364,7 @@ struct EmailRowView: View {
     }
 
     private var rowBackground: Color {
+        if bulkSelected { return p.brandBlue100 }
         if selected { return p.brandBlue100 }
         if hovered { return p.bg2 }
         return p.bg1

@@ -96,6 +96,9 @@ final class AppModel: ObservableObject {
     @Published var filter: InboxFilter = .all
     // When the reading pane is off, this opens the selected message full-width.
     @Published var readerFullScreen = false
+    // Bulk selection (checkboxes in the list).
+    @Published var selectedIds: Set<String> = []
+    var selectionActive: Bool { !selectedIds.isEmpty }
 
     // Tweaks / appearance
     @Published var dark: Bool
@@ -383,6 +386,56 @@ final class AppModel: ObservableObject {
     func activate(_ id: String) {
         select(id)
         if !readingPane { readerFullScreen = true }
+    }
+
+    // MARK: - Bulk selection
+
+    func toggleSelect(_ id: String) {
+        if selectedIds.contains(id) { selectedIds.remove(id) } else { selectedIds.insert(id) }
+    }
+    func clearSelection() { selectedIds.removeAll() }
+    func selectAllVisible() { selectedIds = Set(filteredEmails.map { $0.id }) }
+
+    func bulkArchive() { bulkTriage(localFolder: "archive", serverFolder: "archive", verb: "Archived") }
+    func bulkDone() { bulkTriage(localFolder: "done", serverFolder: "archive", verb: "Marked done") }
+
+    func bulkDelete() {
+        let ids = selectedIds
+        for id in ids {
+            guard let e = emails.first(where: { $0.id == id }) else { continue }
+            if isRealAccount(e.account) {
+                if mailboxName(e.account, "trash") != nil { realMove(e, to: "trash") }
+                else { applyRealFlag(e, .deleted, add: true) }
+            }
+            if let i = emails.firstIndex(where: { $0.id == id }) { emails[i].folder = "trash" }
+        }
+        finishBulk(ids.count, "Deleted")
+    }
+
+    func bulkMarkRead(_ read: Bool) {
+        let ids = selectedIds
+        for id in ids {
+            guard let i = emails.firstIndex(where: { $0.id == id }) else { continue }
+            emails[i].unread = !read
+            applyRealFlag(emails[i], .seen, add: read)
+        }
+        finishBulk(ids.count, read ? "Marked read" : "Marked unread")
+    }
+
+    private func bulkTriage(localFolder: String, serverFolder: String, verb: String) {
+        let ids = selectedIds
+        for id in ids {
+            guard let e = emails.first(where: { $0.id == id }) else { continue }
+            if isRealAccount(e.account), mailboxName(e.account, serverFolder) != nil { realMove(e, to: serverFolder) }
+            if let i = emails.firstIndex(where: { $0.id == id }) { emails[i].folder = localFolder }
+        }
+        finishBulk(ids.count, verb)
+    }
+
+    private func finishBulk(_ n: Int, _ verb: String) {
+        clearSelection()
+        if !filteredEmails.contains(where: { $0.id == selectedId }) { selectedId = filteredEmails.first?.id }
+        showToast("\(n) message\(n == 1 ? "" : "s") · \(verb.lowercased())")
     }
 
     func closeFullReader() { readerFullScreen = false }
@@ -954,6 +1007,7 @@ final class AppModel: ObservableObject {
         folder = f
         labelFilter = nil
         readerFullScreen = false
+        clearSelection()
         searchActive = false
         searchQuery = ""
         serverSearchResults = nil
@@ -1861,6 +1915,7 @@ final class AppModel: ObservableObject {
         if event.keyCode == 53 {
             if searchModalOpen { dismissSearch(); return true }
             if anyOverlayOpen { closeOverlays(); return true }
+            if selectionActive { clearSelection(); return true }
             if searchActive { searchActive = false; searchQuery = ""; return true }
             if readerFullScreen { readerFullScreen = false; return true }
             return false
