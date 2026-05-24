@@ -30,6 +30,7 @@ struct ComposeView: View {
     // Local key monitor (Escape routing for popovers/sheets)
     @State private var escMonitor: Any?
     @State private var fromPickerOpen = false
+    @State private var dropTargeted = false
 
     enum Field { case to, subject, body }
 
@@ -97,6 +98,26 @@ struct ComposeView: View {
 
     private func send() { model.sendDraft(currentDraft()) }
 
+    /// Accept files dropped onto the compose window as attachments.
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        var handled = false
+        for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            handled = true
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                var url: URL?
+                if let u = item as? URL { url = u }
+                else if let d = item as? Data { url = URL(dataRepresentation: d, relativeTo: nil) }
+                else if let s = item as? String { url = URL(string: s) }
+                guard let url, url.isFileURL, let data = try? Data(contentsOf: url) else { return }
+                let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+                DispatchQueue.main.async {
+                    attachments.append(ComposeAttachment(filename: url.lastPathComponent, mimeType: mime, data: data))
+                }
+            }
+        }
+        return handled
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -140,7 +161,22 @@ struct ComposeView: View {
         .frame(width: 540, height: 460)
         .background(p.bg1)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(p.borderStrong, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .stroke(dropTargeted ? p.brandBlue : p.borderStrong, lineWidth: dropTargeted ? 2 : 1))
+        .overlay {
+            if dropTargeted {
+                ZStack {
+                    p.brandBlue100.opacity(0.6)
+                    VStack(spacing: 8) {
+                        Icon(name: "attach", size: 28).foregroundStyle(p.brandBlue)
+                        Text("Drop to attach").font(.system(size: 15, weight: .semibold)).foregroundStyle(p.brandBlue)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .allowsHitTesting(false)
+            }
+        }
+        .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { handleDrop($0) }
         .shadow(color: .black.opacity(0.3), radius: 40, y: 16)
         .background(hiddenShortcuts)
         .onAppear { installEscMonitor() }
