@@ -59,7 +59,7 @@ struct SettingsView: View {
                             }
                         }
                         Rectangle().fill(p.border).frame(height: 1)
-                        Button { model.settings = false; model.manualSetupOpen = true } label: {
+                        Button { model.settings = false; model.addingAccount = true } label: {
                             HStack(spacing: 6) { Icon(name: "plus", size: 13); Text("Add account").font(.system(size: 12.5, weight: .semibold)) }
                                 .foregroundStyle(p.brandBlue)
                         }.buttonStyle(.plain).padding(.vertical, 12)

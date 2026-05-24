@@ -4,8 +4,12 @@ struct ManualAccountSetupView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
 
+    @State private var provider: MailProvider = .custom
+    @State private var showAdvanced = false
+
     @State private var displayName = ""
     @State private var email = ""
+    @State private var lastEmail = ""
     @State private var imapHost = ""
     @State private var imapPort = "993"
     @State private var imapSecurity: ConnectionSecurity = .tls
@@ -21,6 +25,17 @@ struct ManualAccountSetupView: View {
     @State private var connecting = false
     @State private var error: String?
 
+    private func applyProvider(_ pr: MailProvider) {
+        provider = pr
+        if !pr.isCustom {
+            imapHost = pr.imapHost; imapPort = String(pr.imapPort); imapSecurity = pr.imapSecurity
+            smtpHost = pr.smtpHost; smtpPort = String(pr.smtpPort); smtpSecurity = pr.smtpSecurity
+            showAdvanced = false
+        } else {
+            showAdvanced = true
+        }
+    }
+
     private var canConnect: Bool {
         !email.trimmingCharacters(in: .whitespaces).isEmpty &&
         !imapHost.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -32,6 +47,34 @@ struct ManualAccountSetupView: View {
         ZStack(alignment: .top) {
             OverlayBackdrop { if !connecting { model.manualSetupOpen = false } }
             sheet.padding(.top, 56)
+        }
+        .onAppear { applyProvider(model.setupProvider ?? .custom) }
+    }
+
+    private var providerPicker: some View {
+        let cols = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+        return LazyVGrid(columns: cols, spacing: 8) {
+            ForEach(MailProvider.all) { pr in
+                let active = provider.id == pr.id
+                Button { applyProvider(pr) } label: {
+                    HStack(spacing: 8) {
+                        Text(pr.initial)
+                            .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                            .frame(width: 22, height: 22)
+                            .background(Color(hex: pr.colorHex))
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        Text(pr.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg1).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 7)
+                    .frame(maxWidth: .infinity)
+                    .background(active ? p.brandBlue100 : p.bg2)
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(active ? p.brandBlue : p.border, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -50,35 +93,62 @@ struct ManualAccountSetupView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    section("Account") {
-                        field("Display name", text: $displayName, placeholder: "Jane Doe")
-                        field("Email address", text: $email, placeholder: "you@example.com")
-                            .onChange(of: email) { _, v in
-                                if imapUsername.isEmpty { imapUsername = v }
+                    section("Provider") {
+                        providerPicker
+                        if !provider.hint.isEmpty {
+                            HStack(alignment: .top, spacing: 8) {
+                                Icon(name: "alert", size: 12).foregroundStyle(p.brandBlue).padding(.top, 1)
+                                Text(provider.hint).font(.system(size: 11.5)).foregroundStyle(p.fg2)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(p.brandBlue100)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
                     }
-                    section("Incoming — IMAP") {
-                        HStack(spacing: 10) {
-                            field("Host", text: $imapHost, placeholder: "imap.example.com").frame(maxWidth: .infinity)
-                            field("Port", text: $imapPort, placeholder: "993").frame(width: 80)
-                        }
-                        securityRow("Security", selection: $imapSecurity)
-                        field("Username", text: $imapUsername, placeholder: "you@example.com")
-                        secureField("Password", text: $imapPassword)
+                    section("Account") {
+                        field("Display name (optional)", text: $displayName, placeholder: "Jane Doe")
+                        field("Email address", text: $email, placeholder: "you@\(provider.domain)")
+                            .onChange(of: email) { _, v in
+                                if imapUsername.isEmpty || imapUsername == lastEmail { imapUsername = v }
+                                lastEmail = v
+                            }
+                        secureField(provider.isCustom ? "Password" : "App password", text: $imapPassword)
                     }
-                    section("Outgoing — SMTP") {
-                        Toggle(isOn: $sameCredentials) {
-                            Text("Use the same username & password as IMAP").font(.system(size: 12.5)).foregroundStyle(p.fg2)
+
+                    Button { withAnimation(.easeOut(duration: 0.15)) { showAdvanced.toggle() } } label: {
+                        HStack(spacing: 6) {
+                            Icon(name: showAdvanced ? "chevronDown" : "chevronRight", size: 11)
+                            Text("Server settings").font(.system(size: 12, weight: .semibold))
                         }
-                        .toggleStyle(.checkbox)
-                        HStack(spacing: 10) {
-                            field("Host", text: $smtpHost, placeholder: "smtp.example.com").frame(maxWidth: .infinity)
-                            field("Port", text: $smtpPort, placeholder: "587").frame(width: 80)
+                        .foregroundStyle(p.fg2)
+                    }
+                    .buttonStyle(.plain)
+
+                    if showAdvanced {
+                        section("Incoming — IMAP") {
+                            HStack(spacing: 10) {
+                                field("Host", text: $imapHost, placeholder: "imap.example.com").frame(maxWidth: .infinity)
+                                field("Port", text: $imapPort, placeholder: "993").frame(width: 80)
+                            }
+                            securityRow("Security", selection: $imapSecurity)
+                            field("Username", text: $imapUsername, placeholder: "you@example.com")
                         }
-                        securityRow("Security", selection: $smtpSecurity)
-                        if !sameCredentials {
-                            field("Username", text: $smtpUsername, placeholder: "you@example.com")
-                            secureField("Password", text: $smtpPassword)
+                        section("Outgoing — SMTP") {
+                            Toggle(isOn: $sameCredentials) {
+                                Text("Use the same username & password as IMAP").font(.system(size: 12.5)).foregroundStyle(p.fg2)
+                            }
+                            .toggleStyle(.checkbox)
+                            HStack(spacing: 10) {
+                                field("Host", text: $smtpHost, placeholder: "smtp.example.com").frame(maxWidth: .infinity)
+                                field("Port", text: $smtpPort, placeholder: "587").frame(width: 80)
+                            }
+                            securityRow("Security", selection: $smtpSecurity)
+                            if !sameCredentials {
+                                field("Username", text: $smtpUsername, placeholder: "you@example.com")
+                                secureField("Password", text: $smtpPassword)
+                            }
                         }
                     }
                     if let error {

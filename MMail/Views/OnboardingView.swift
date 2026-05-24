@@ -4,7 +4,6 @@ struct OnboardingView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
 
-    private func openSetup() { model.manualSetupOpen = true }
 
     var body: some View {
         ZStack {
@@ -30,9 +29,10 @@ struct OnboardingView: View {
                     .padding(.bottom, 28)
 
                 VStack(spacing: 8) {
-                    providerButton(icon: "mail", title: "Continue with Google", action: openSetup)
-                    providerButton(icon: "mail", title: "Continue with iCloud", action: openSetup)
-                    providerButton(icon: "settings", title: "Set up IMAP manually", action: openSetup)
+                    providerButton(MailProvider.gmail)
+                    providerButton(MailProvider.icloud)
+                    providerButton(MailProvider.outlook)
+                    providerButton(MailProvider.custom, titleOverride: "Set up another account (IMAP / SMTP)")
                 }
                 .padding(.bottom, 8)
 
@@ -69,15 +69,23 @@ struct OnboardingView: View {
         }
     }
 
-    private func providerButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func providerButton(_ provider: MailProvider, titleOverride: String? = nil) -> some View {
+        Button { model.openSetup(provider) } label: {
             HStack(spacing: 12) {
-                Icon(name: icon, size: 18).foregroundStyle(p.fg1)
-                Text(title).font(.system(size: 14, weight: .medium)).foregroundStyle(p.fg1)
+                if provider.isCustom {
+                    Icon(name: "settings", size: 18).foregroundStyle(p.fg1).frame(width: 28, height: 28)
+                } else {
+                    Text(provider.initial)
+                        .font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Color(hex: provider.colorHex))
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                Text(titleOverride ?? provider.name).font(.system(size: 14, weight: .medium)).foregroundStyle(p.fg1)
                 Spacer()
                 Icon(name: "arrowRight", size: 16).foregroundStyle(p.fg3)
             }
-            .padding(.horizontal, 16).padding(.vertical, 14)
+            .padding(.horizontal, 16).padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(p.bg1)
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(p.borderStrong, lineWidth: 1))

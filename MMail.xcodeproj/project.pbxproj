@@ -31,6 +31,7 @@
 		7816788B343DCF37413C00FA /* AccountRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067FDA44372798C7B298D335 /* AccountRailView.swift */; };
 		79881C9E5E0484CBE5BEC329 /* JournalArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B99833A4A34A3B059F965D2 /* JournalArchiveView.swift */; };
 		8240DB9802A6B1CF6F49FCD3 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1839AA4256AD539B7E201FD /* OnboardingView.swift */; };
+		82FD7DC1B326B431F597D040 /* MailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0FD3634640269304B4DE33 /* MailProvider.swift */; };
 		839C08C0B268C946970A9C32 /* QuickLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC4277C859DBC1033E01D12 /* QuickLook.swift */; };
 		99D3EA2AB149562DAF3C6362 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AEEC3FA80A90CA8EAC08ECD /* SearchResultsView.swift */; };
 		A531BB607FF979E32825D772 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2E797661314505349C42D /* Notifier.swift */; };
@@ -85,6 +86,7 @@
 		E68E9DF829AD4EBED12B2F2E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		EA2148554E9EF016B1B83B1F /* IMAPSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPSession.swift; sourceTree = "<group>"; };
 		EE36DEB176137963E3CA7FE9 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
+		EF0FD3634640269304B4DE33 /* MailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailProvider.swift; sourceTree = "<group>"; };
 		FC7062ED4848255AFB2D1992 /* Atoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atoms.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -192,6 +194,7 @@
 				98D419268CA68F3EEBD01D83 /* Keychain.swift */,
 				7605E1D3B63AA900A3661F9C /* MailAccountConfig.swift */,
 				B14BFD1E3DA5FBB37448F3FC /* MailCache.swift */,
+				EF0FD3634640269304B4DE33 /* MailProvider.swift */,
 				496FBFE1599ECF1854FA4243 /* MIME.swift */,
 				25E2E797661314505349C42D /* Notifier.swift */,
 				6EC4277C859DBC1033E01D12 /* QuickLook.swift */,
@@ -310,6 +313,7 @@
 				6AB5697973DD2DFA70DCD13A /* MMailApp.swift in Sources */,
 				61164E07C300ED30D2AED5D6 /* MailAccountConfig.swift in Sources */,
 				724B0BD8337C5B7A22384EDC /* MailCache.swift in Sources */,
+				82FD7DC1B326B431F597D040 /* MailProvider.swift in Sources */,
 				61FA290401BCED1CB7485359 /* ManualAccountSetupView.swift in Sources */,
 				482809988F6EB437DA58D4CD /* MiscViews.swift in Sources */,
 				D913BC78DC57ACB3CFAEAA8E /* Models.swift in Sources */,

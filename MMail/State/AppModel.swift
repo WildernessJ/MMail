@@ -119,6 +119,7 @@ final class AppModel: ObservableObject {
     @Published var pendingG = false
     @Published var journalArchiveOpen = false
     @Published var manualSetupOpen = false
+    @Published var setupProvider: MailProvider?   // preset to pre-fill manual setup
 
     // Home dashboard
     @Published var todos: [Todo]
@@ -833,6 +834,13 @@ final class AppModel: ObservableObject {
     func activateSearch() {
         searchActive = true
         searchFocusRequested = true
+    }
+
+    /// Open the manual IMAP/SMTP setup, optionally pre-filled for a provider.
+    func openSetup(_ provider: MailProvider? = nil) {
+        setupProvider = provider
+        addingAccount = false
+        manualSetupOpen = true
     }
 
     // MARK: - Real mail (IMAP/SMTP)
