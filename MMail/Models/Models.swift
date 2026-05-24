@@ -71,6 +71,7 @@ struct Email: Identifiable, Codable {
     var messageID: String?
     var inReplyTo: String?
     var unsubscribe: String?   // raw List-Unsubscribe header, when present
+    var bodyHTML: String?      // text/html part, when present
 
     init(id: String, account: String, from: String, to: [String]? = nil,
          subject: String, preview: String, body: String, time: String, day: String,

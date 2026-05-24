@@ -1413,6 +1413,8 @@ final class AppModel: ObservableObject {
                 merged[i].bodyLoaded = true
                 merged[i].attachments = old.attachments
                 merged[i].hasAttachment = old.hasAttachment
+                merged[i].bodyHTML = old.bodyHTML
+                merged[i].unsubscribe = old.unsubscribe
             }
         }
         // New-mail notifications (inbox only, after a server refresh).
@@ -1513,6 +1515,7 @@ final class AppModel: ObservableObject {
                         self.emails[i].attachments = metas
                         self.emails[i].hasAttachment = !metas.isEmpty
                         self.emails[i].unsubscribe = parsed.listUnsubscribe
+                        self.emails[i].bodyHTML = parsed.html
                     }
                 }
             }
@@ -1567,6 +1570,7 @@ final class AppModel: ObservableObject {
                         self.emails[i].attachments = metas
                         self.emails[i].hasAttachment = !metas.isEmpty
                         self.emails[i].unsubscribe = parsed.listUnsubscribe
+                        self.emails[i].bodyHTML = parsed.html
                     }
                     if let j = self.serverSearchResults?.firstIndex(where: { $0.id == id }) {
                         self.serverSearchResults?[j].body = parsed.text

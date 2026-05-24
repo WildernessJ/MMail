@@ -44,6 +44,8 @@ private struct ReaderContent: View {
     @State private var copied = false
     @State private var newLabelOpen = false
     @State private var newLabelName = ""
+    @State private var htmlHeight: CGFloat = 0
+    @State private var loadImages = false
 
     private var sender: Sender? { email.resolvedSender }
     private var thread: [ThreadItem] { email.thread ?? model.relatedThread(for: email) }
@@ -200,6 +202,25 @@ private struct ReaderContent: View {
                     Text("Loading message…").font(.system(size: 13.5)).foregroundStyle(p.fg3)
                 }
                 .padding(.top, 24)
+            } else if let html = email.bodyHTML, !html.isEmpty {
+                if !loadImages {
+                    HStack(spacing: 8) {
+                        Icon(name: "alert", size: 12).foregroundStyle(p.fg3)
+                        Text("Remote images are blocked for privacy.").font(.system(size: 12)).foregroundStyle(p.fg3)
+                        Spacer()
+                        Button { loadImages = true } label: {
+                            Text("Load images").font(.system(size: 12, weight: .semibold)).foregroundStyle(p.brandBlue)
+                        }.buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(p.bg2)
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(p.border, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(.top, 16)
+                }
+                HTMLMessageView(html: html, blockRemote: !loadImages, height: $htmlHeight)
+                    .frame(height: max(htmlHeight, 80))
+                    .padding(.top, 16)
             } else {
                 Text(email.body)
                     .font(.system(size: 15))
