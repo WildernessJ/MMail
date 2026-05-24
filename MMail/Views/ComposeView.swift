@@ -98,6 +98,23 @@ struct ComposeView: View {
 
     private func send() { model.sendDraft(currentDraft()) }
 
+    /// Attach an image currently on the clipboard (e.g. a screenshot).
+    private func pasteImageFromClipboard() {
+        let pb = NSPasteboard.general
+        let png: Data?
+        if let data = pb.data(forType: .png) {
+            png = data
+        } else if let img = NSImage(pasteboard: pb), let tiff = img.tiffRepresentation,
+                  let rep = NSBitmapImageRep(data: tiff) {
+            png = rep.representation(using: .png, properties: [:])
+        } else {
+            png = nil
+        }
+        guard let png else { model.showToast("No image on the clipboard"); return }
+        let name = "pasted-\(Int(Date().timeIntervalSince1970)).png"
+        attachments.append(ComposeAttachment(filename: name, mimeType: "image/png", data: png))
+    }
+
     /// Accept files dropped onto the compose window as attachments.
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         var handled = false
@@ -339,6 +356,7 @@ struct ComposeView: View {
             .keyboardShortcut(.return, modifiers: .command)
 
             footerIcon("attach", help: "Attach file", active: !attachments.isEmpty) { pickAttachments() }
+            footerIcon("photo", help: "Attach image from clipboard") { pasteImageFromClipboard() }
 
             scheduleButton
             templatesButton

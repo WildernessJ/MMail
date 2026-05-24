@@ -146,6 +146,14 @@ private struct ReaderContent: View {
             Button { model.archive() } label: { Label("Archive", systemImage: "archivebox") }
             Button { model.snooze() } label: { Label("Snooze", systemImage: "clock") }
             Button { model.markSpam() } label: { Label("Mark as Spam", systemImage: "exclamationmark.triangle") }
+            let folders = model.folderNames(for: email.account)
+            if !folders.isEmpty {
+                Menu {
+                    ForEach(folders, id: \.self) { name in
+                        Button(name) { model.moveToMailbox(email.id, mailbox: name) }
+                    }
+                } label: { Label("Move to…", systemImage: "tray.and.arrow.up") }
+            }
             Divider()
             Button { model.printMessage(email) } label: { Label("Print…", systemImage: "printer") }
             Button { model.exportPDF(email) } label: { Label("Export as PDF…", systemImage: "doc") }

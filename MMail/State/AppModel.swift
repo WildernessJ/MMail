@@ -173,6 +173,7 @@ final class AppModel: ObservableObject {
     @Published var accountErrors: [String: String] = [:]
     // accountId -> canonical folder id ("sent"/"drafts"/"trash"/"spam"/"archive") -> server mailbox name
     @Published var realMailboxes: [String: [String: String]] = [:]
+    @Published var allMailboxes: [String: [String]] = [:]   // accountId -> all selectable folder names
     @Published var serverSearchResults: [Email]?
     @Published var searching = false
     @Published var scheduled: [ScheduledSend] = []
@@ -1457,7 +1458,8 @@ final class AppModel: ObservableObject {
                         default: break
                         }
                     }
-                    await MainActor.run { self.realMailboxes[accountId] = m }
+                    let names = boxes.filter { $0.selectable }.map { $0.name }
+                    await MainActor.run { self.realMailboxes[accountId] = m; self.allMailboxes[accountId] = names }
                 }
                 let map = await MainActor.run { self.realMailboxes[accountId] ?? [:] }
 
@@ -1936,6 +1938,36 @@ final class AppModel: ObservableObject {
         Task {
             try? await session.store(mailbox: box, uid: uid, kind, add: add)
         }
+    }
+
+    /// All selectable server folder names for an account (for the Move-to menu).
+    func folderNames(for accountId: String) -> [String] {
+        (allMailboxes[accountId] ?? []).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// Move a message to an arbitrary server mailbox by name.
+    func moveToMailbox(_ id: String?, mailbox name: String) {
+        guard let id = id ?? selectedId, let e = emails.first(where: { $0.id == id }),
+              isRealAccount(e.account), let uid = e.uid, let session = session(for: e.account),
+              let from = mailboxName(e.account, e.folder) else { return }
+        let fe = filteredEmails
+        if let ci = fe.firstIndex(where: { $0.id == id }) {
+            selectedId = (fe[safe: ci + 1] ?? fe[safe: ci - 1])?.id
+        }
+        emails.removeAll { $0.id == id }
+        Task { try? await session.move(uid: uid, from: from, to: name) }
+        showToast("Moved to \(name)")
+    }
+
+    func bulkMoveToMailbox(_ name: String) {
+        let ids = selectedIds
+        for id in ids {
+            guard let e = emails.first(where: { $0.id == id }), isRealAccount(e.account), let uid = e.uid,
+                  let session = session(for: e.account), let from = mailboxName(e.account, e.folder) else { continue }
+            Task { try? await session.move(uid: uid, from: from, to: name) }
+        }
+        emails.removeAll { ids.contains($0.id) }
+        finishBulk(ids.count, "Moved to \(name)")
     }
 
     func realMove(_ email: Email, to folderId: String) {

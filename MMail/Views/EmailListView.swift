@@ -105,6 +105,20 @@ struct EmailListView: View {
             Spacer()
             bulkButton("check", "Done") { model.bulkDone() }
             bulkButton("archive", "Archive") { model.bulkArchive() }
+            let moveAcct = model.currentAccount == "all"
+                ? (model.emails.first { model.selectedIds.contains($0.id) }?.account ?? "")
+                : model.currentAccount
+            let folders = model.folderNames(for: moveAcct)
+            if !folders.isEmpty {
+                Menu {
+                    ForEach(folders, id: \.self) { name in
+                        Button(name) { model.bulkMoveToMailbox(name) }
+                    }
+                } label: {
+                    Icon(name: "outbox", size: 14).foregroundStyle(p.fg2).frame(width: 28, height: 26)
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Move to…")
+            }
             bulkButton("mail", "Read") { model.bulkMarkRead(true) }
             bulkButton("trash", "Delete") { model.bulkDelete() }
             Button { model.clearSelection() } label: {
