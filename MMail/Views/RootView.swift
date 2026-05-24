@@ -64,14 +64,6 @@ struct RootView: View {
 
     @ViewBuilder
     private var overlays: some View {
-        // Floating focus counter (bottom center, on hover handled by always-on subtle here)
-        if model.folder != "home" {
-            FocusCounterView(pos: model.position, total: model.total)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .padding(.bottom, 16)
-                .allowsHitTesting(false)
-        }
-
         if let toast = model.toast {
             ToastView(toast: toast)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
