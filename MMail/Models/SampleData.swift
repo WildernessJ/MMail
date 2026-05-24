@@ -93,14 +93,6 @@ enum SampleData {
                       body: "Wanted to put the two of you in touch — I think there's a useful conversation to be had here.\n\nI'll let you take it from here.")
     ]
 
-    static let seedTodos: [Todo] = [
-        Todo(id: "td1", text: "Review the launch note before the afternoon sync", done: false, source: "sarah"),
-        Todo(id: "td2", text: "Reply to Marcus about reading-pane spacing", done: false, source: "marcus"),
-        Todo(id: "td3", text: "Pull latest research notes into the planning doc", done: false, source: nil),
-        Todo(id: "td4", text: "Send signed deposit for Lumen brand refresh", done: false, source: "lumen"),
-        Todo(id: "td5", text: "Book flights for the Tokyo trip", done: true, source: nil)
-    ]
-
     static let emails: [Email] = [
         Email(id: "e01", account: "work", from: "sarah", to: ["you@cobalt.studio"],
               subject: "Re: Onboarding redesign — final review tomorrow?",

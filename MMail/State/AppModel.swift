@@ -156,11 +156,6 @@ final class AppModel: ObservableObject {
     @Published var peopleOpen = false
     private let kWeatherCity = "mmail.weatherCity"
 
-    private static let seedJournalRecent: [JournalEntry] = [
-        JournalEntry(id: "jr-yesterday", date: "Yesterday", text: "Crit went well. Sarah's instinct on the empty state was right — copy carries it. Need to write down the lighter ring decision before I forget."),
-        JournalEntry(id: "jr-mar-18", date: "Mon · Mar 18", text: "Started the week underwater but the Lumen sign-off felt great. Need to make space tomorrow for the Q3 roadmap doc Theo shared.")
-    ]
-
     private var keyMonitor: Any?
     private var toastWorkItem: DispatchWorkItem?
 
@@ -178,13 +173,13 @@ final class AppModel: ObservableObject {
            let decoded = try? JSONDecoder().decode([Todo].self, from: data) {
             todos = decoded
         } else {
-            todos = SampleData.seedTodos
+            todos = []
         }
         if let data = d.data(forKey: kJournalRecent),
            let decoded = try? JSONDecoder().decode([JournalEntry].self, from: data) {
             journalRecent = decoded
         } else {
-            journalRecent = AppModel.seedJournalRecent
+            journalRecent = []
         }
         if let data = d.data(forKey: kTemplates),
            let decoded = try? JSONDecoder().decode([ReplyTemplate].self, from: data), !decoded.isEmpty {
@@ -210,6 +205,20 @@ final class AppModel: ObservableObject {
            let decoded = try? JSONDecoder().decode([String: Date].self, from: data) { snoozedUntil = decoded }
         // Welcome shows on first launch and whenever no account is connected.
         onboarding = accounts.isEmpty
+        purgeSeedData()
+    }
+
+    /// Remove the old demo to-dos / journal entries that earlier builds seeded,
+    /// so existing installs also end up clean. User-created items (different ids)
+    /// are preserved.
+    private func purgeSeedData() {
+        let seedTodoIds: Set<String> = ["td1", "td2", "td3", "td4", "td5"]
+        let cleanTodos = todos.filter { !seedTodoIds.contains($0.id) }
+        if cleanTodos.count != todos.count { todos = cleanTodos; persistTodos() }
+
+        let seedJournalIds: Set<String> = ["jr-yesterday", "jr-mar-18"]
+        let cleanJournal = journalRecent.filter { !seedJournalIds.contains($0.id) }
+        if cleanJournal.count != journalRecent.count { journalRecent = cleanJournal; persistJournalRecent() }
     }
 
     // MARK: - Derived
