@@ -23,16 +23,18 @@ struct SidebarView: View {
                 }
             }
 
-            Text("LABELS")
-                .font(.system(size: 10.5, weight: .bold))
-                .tracking(0.6)
-                .foregroundStyle(p.fg4)
-                .padding(.horizontal, 12)
-                .padding(.top, 18)
-                .padding(.bottom, 6)
+            if model.folder != "home" {
+                Text("LABELS")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(p.fg4)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 18)
+                    .padding(.bottom, 6)
 
-            ForEach(model.labels) { l in
-                labelRow(l)
+                ForEach(model.labels) { l in
+                    labelRow(l)
+                }
             }
 
             Spacer(minLength: 8)
