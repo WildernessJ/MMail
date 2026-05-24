@@ -12,8 +12,7 @@ struct ComposeView: View {
     @State private var bcc: String
     @State private var showCcBcc: Bool
     @State private var subject: String
-    @State private var bodyAttr: NSAttributedString
-    @State private var formatCmd: RichFormat?
+    @StateObject private var editor: RichTextController
     @State private var fromId: String
     @State private var attachments: [ComposeAttachment] = []
     @FocusState private var focus: Field?
@@ -41,9 +40,10 @@ struct ComposeView: View {
         _bcc = State(initialValue: draft.bcc)
         _showCcBcc = State(initialValue: !draft.cc.isEmpty || !draft.bcc.isEmpty)
         _subject = State(initialValue: draft.subject)
-        _bodyAttr = State(initialValue: NSAttributedString(
+        let initialBody = NSAttributedString(
             string: draft.body,
-            attributes: [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor.labelColor]))
+            attributes: [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor.labelColor])
+        _editor = StateObject(wrappedValue: RichTextController(initial: initialBody, focusOnAppear: !draft.to.isEmpty))
         _fromId = State(initialValue: draft.fromId)
         _attachments = State(initialValue: draft.attachments)
     }
@@ -54,7 +54,7 @@ struct ComposeView: View {
 
     private func currentDraft() -> ComposeDraft {
         var d = draft
-        d.to = to; d.cc = cc; d.bcc = bcc; d.subject = subject; d.body = bodyAttr.string; d.fromId = fromId
+        d.to = to; d.cc = cc; d.bcc = bcc; d.subject = subject; d.body = editor.currentString(); d.fromId = fromId
         d.attachments = attachments
         d.bodyHTML = htmlBody()
         return d
@@ -63,10 +63,11 @@ struct ComposeView: View {
     /// Export the body to HTML only when it actually uses formatting — plain
     /// messages stay plain text.
     private func htmlBody() -> String? {
-        let full = NSRange(location: 0, length: bodyAttr.length)
+        let body = editor.currentAttributed()
+        let full = NSRange(location: 0, length: body.length)
         guard full.length > 0 else { return nil }
         var formatted = false
-        bodyAttr.enumerateAttributes(in: full, options: []) { attrs, _, stop in
+        body.enumerateAttributes(in: full, options: []) { attrs, _, stop in
             if let f = attrs[.font] as? NSFont {
                 let t = NSFontManager.shared.traits(of: f)
                 if t.contains(.boldFontMask) || t.contains(.italicFontMask) { formatted = true; stop.pointee = true }
@@ -74,7 +75,7 @@ struct ComposeView: View {
             if let u = attrs[.underlineStyle] as? Int, u != 0 { formatted = true; stop.pointee = true }
         }
         guard formatted else { return nil }
-        guard let data = try? bodyAttr.data(
+        guard let data = try? body.data(
             from: full,
             documentAttributes: [.documentType: NSAttributedString.DocumentType.html,
                                  .characterEncoding: String.Encoding.utf8.rawValue]) else { return nil }
@@ -129,11 +130,11 @@ struct ComposeView: View {
             Divider().overlay(p.border)
             formatBar
             Divider().overlay(p.border)
-            RichTextEditor(attributed: $bodyAttr, command: $formatCmd, focusOnAppear: !draft.to.isEmpty)
+            RichTextEditor(controller: editor)
                 .padding(4)
                 .frame(maxHeight: .infinity)
                 .overlay(alignment: .topLeading) {
-                    if bodyAttr.string.isEmpty {
+                    if editor.isEmpty {
                         Text("Write your message…")
                             .font(.system(size: 14)).foregroundStyle(p.fg4)
                             .padding(.horizontal, 17).padding(.vertical, 18)
@@ -241,19 +242,19 @@ struct ComposeView: View {
 
     private var formatBar: some View {
         HStack(spacing: 4) {
-            formatButton(help: "Bold") { formatCmd = .bold } label: {
+            formatButton(help: "Bold") { editor.apply(.bold) } label: {
                 Text("B").font(.system(size: 13, weight: .bold))
             }
-            formatButton(help: "Italic") { formatCmd = .italic } label: {
+            formatButton(help: "Italic") { editor.apply(.italic) } label: {
                 Text("I").font(.system(size: 13, weight: .semibold)).italic()
             }
-            formatButton(help: "Underline") { formatCmd = .underline } label: {
+            formatButton(help: "Underline") { editor.apply(.underline) } label: {
                 Text("U").font(.system(size: 13, weight: .semibold)).underline()
             }
-            formatButton(help: "Bulleted list") { formatCmd = .bullet } label: {
+            formatButton(help: "Bulleted list") { editor.apply(.bullet) } label: {
                 Image(systemName: "list.bullet").font(.system(size: 12))
             }
-            formatButton(help: "Numbered list") { formatCmd = .numbered } label: {
+            formatButton(help: "Numbered list") { editor.apply(.numbered) } label: {
                 Image(systemName: "list.number").font(.system(size: 12))
             }
             Spacer()
@@ -449,14 +450,10 @@ struct ComposeView: View {
     }
 
     private func applyTemplate(_ tpl: ReplyTemplate) {
-        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 14),
-                                                    .foregroundColor: NSColor.labelColor]
-        if bodyAttr.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            bodyAttr = NSAttributedString(string: tpl.body, attributes: attrs)
+        if editor.currentString().trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            editor.replaceAll(tpl.body)
         } else {
-            let m = NSMutableAttributedString(attributedString: bodyAttr)
-            m.append(NSAttributedString(string: "\n\n" + tpl.body, attributes: attrs))
-            bodyAttr = m
+            editor.appendPlain("\n\n" + tpl.body)
         }
         templatesOpen = false
     }
