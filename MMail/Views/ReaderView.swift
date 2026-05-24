@@ -147,6 +147,9 @@ private struct ReaderContent: View {
             Button { model.snooze() } label: { Label("Snooze", systemImage: "clock") }
             Button { model.markSpam() } label: { Label("Mark as Spam", systemImage: "exclamationmark.triangle") }
             if let addr = sender?.email, !addr.isEmpty {
+                Button { model.toggleVIP(addr) } label: {
+                    Label(model.isVIP(addr) ? "Remove VIP" : "Mark as VIP", systemImage: "crown")
+                }
                 Button(role: .destructive) { model.blockSender(addr) } label: {
                     Label("Block \(sender?.firstName ?? addr)", systemImage: "hand.raised")
                 }

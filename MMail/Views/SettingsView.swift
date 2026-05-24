@@ -162,6 +162,27 @@ struct SettingsView: View {
                         }
                         .padding(.top, 8)
                     }
+                    section("VIP senders") {
+                        if model.vipSenders.isEmpty {
+                            Text("No VIPs yet. Mark a sender as VIP from a message's ⋯ menu — their mail is highlighted and never auto-filtered.")
+                                .font(.system(size: 13)).foregroundStyle(p.fg3)
+                                .fixedSize(horizontal: false, vertical: true).padding(.vertical, 12)
+                        } else {
+                            let vips = model.vipSenders.sorted()
+                            ForEach(Array(vips.enumerated()), id: \.element) { idx, addr in
+                                HStack {
+                                    Icon(name: "crown", size: 13).foregroundStyle(Color(hex: "F4A52A"))
+                                    Text(addr).font(.system(size: 13)).foregroundStyle(p.fg1).lineLimit(1)
+                                    Spacer()
+                                    Button { model.removeVIP(addr) } label: {
+                                        Text("Remove").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.brandBlue)
+                                    }.buttonStyle(.plain)
+                                }
+                                .padding(.vertical, 10)
+                                if idx < vips.count - 1 { Rectangle().fill(p.border).frame(height: 1) }
+                            }
+                        }
+                    }
                     section("Blocked contacts") {
                         if model.blockedSenders.isEmpty {
                             Text("No blocked contacts. Block a sender from a message's ⋯ menu — their mail goes straight to Trash.")

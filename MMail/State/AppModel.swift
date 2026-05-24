@@ -148,6 +148,10 @@ final class AppModel: ObservableObject {
     @Published var rules: [MailRule] = []
     private let kRules = "mmail.rules"
 
+    // VIP senders — highlighted, and exempt from rules / blocking.
+    @Published var vipSenders: Set<String> = []
+    private let kVIP = "mmail.vip"
+
     // Real (IMAP/SMTP) accounts
     @Published var realConfigs: [MailAccountConfig] = []
     @Published var loadingAccounts: Set<String> = []
@@ -212,6 +216,7 @@ final class AppModel: ObservableObject {
             labels = SampleData.labels
         }
         if let arr = d.array(forKey: kBlocked) as? [String] { blockedSenders = Set(arr) }
+        if let arr = d.array(forKey: kVIP) as? [String] { vipSenders = Set(arr) }
         if let data = d.data(forKey: kRules),
            let decoded = try? JSONDecoder().decode([MailRule].self, from: data) { rules = decoded }
         if let data = d.data(forKey: kRealAccounts),
@@ -607,6 +612,25 @@ final class AppModel: ObservableObject {
         persistBlocked()
     }
 
+    // MARK: - VIP senders
+
+    func isVIP(_ email: String?) -> Bool {
+        guard let e = email?.lowercased(), !e.isEmpty else { return false }
+        return vipSenders.contains(e)
+    }
+
+    func toggleVIP(_ email: String) {
+        let e = email.lowercased().trimmingCharacters(in: .whitespaces)
+        guard e.contains("@") else { return }
+        if vipSenders.contains(e) { vipSenders.remove(e) } else { vipSenders.insert(e) }
+        UserDefaults.standard.set(Array(vipSenders), forKey: kVIP)
+    }
+
+    func removeVIP(_ email: String) {
+        vipSenders.remove(email.lowercased())
+        UserDefaults.standard.set(Array(vipSenders), forKey: kVIP)
+    }
+
     // MARK: - Rules
 
     func persistRules() {
@@ -633,7 +657,7 @@ final class AppModel: ObservableObject {
     private func applyRules(accountId: String, folderId: String) {
         guard folderId == "inbox", !rules.isEmpty else { return }
         let inbox = emails.filter { $0.account == accountId && $0.folder == "inbox" }
-        for e in inbox {
+        for e in inbox where !isVIP(e.fromEmail) {
             var move: String?
             var labelsToAdd: [String] = []
             for rule in rules where rule.matches(e) {
@@ -678,7 +702,7 @@ final class AppModel: ObservableObject {
     private func autoTrashBlocked(accountId: String, folderId: String) {
         guard folderId == "inbox", !blockedSenders.isEmpty else { return }
         let targets = emails.filter {
-            $0.account == accountId && $0.folder == "inbox" && isBlocked($0.fromEmail)
+            $0.account == accountId && $0.folder == "inbox" && isBlocked($0.fromEmail) && !isVIP($0.fromEmail)
         }
         guard !targets.isEmpty else { return }
         for t in targets where isRealAccount(t.account) && mailboxName(t.account, "trash") != nil {

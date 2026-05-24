@@ -243,6 +243,9 @@ struct EmailRowView: View {
                         if showAccountDot, let c = accountColor {
                             Circle().fill(c).frame(width: 6, height: 6)
                         }
+                        if model.isVIP(email.fromEmail) {
+                            Icon(name: "crown", size: 10).foregroundStyle(Color(hex: "F4A52A"))
+                        }
                         Text(sender?.name ?? (email.to?.first ?? "You"))
                             .font(.system(size: 13.5, weight: email.unread ? .bold : .semibold))
                             .foregroundStyle(email.unread ? p.fg1 : p.fg2)
