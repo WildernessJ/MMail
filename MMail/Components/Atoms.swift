@@ -48,7 +48,8 @@ enum Icons {
         "sliders": "slider.horizontal.3",
         "crown": "crown.fill",
         "outbox": "tray.and.arrow.up",
-        "photo": "photo"
+        "photo": "photo",
+        "shield": "lock.shield"
     ]
 }
 

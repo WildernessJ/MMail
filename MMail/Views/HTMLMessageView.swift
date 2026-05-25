@@ -1,6 +1,46 @@
 import SwiftUI
 import WebKit
 
+/// Privacy helpers: count blocked remote resources (trackers) and strip
+/// click-tracking parameters from links.
+enum Privacy {
+    private static let trackerPatterns = [
+        "<img[^>]+src\\s*=\\s*[\"']?https?://",
+        "<script[^>]+src\\s*=\\s*[\"']?https?://",
+        "<iframe[^>]+src\\s*=\\s*[\"']?https?://",
+        "<link[^>]+href\\s*=\\s*[\"']?https?://",
+        "url\\(\\s*[\"']?https?://"
+    ]
+
+    static func trackerCount(in html: String) -> Int {
+        let range = NSRange(html.startIndex..., in: html)
+        var n = 0
+        for p in trackerPatterns {
+            if let re = try? NSRegularExpression(pattern: p, options: [.caseInsensitive]) {
+                n += re.numberOfMatches(in: html, options: [], range: range)
+            }
+        }
+        return n
+    }
+
+    static let trackingParams: Set<String> = [
+        "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
+        "fbclid", "gclid", "gclsrc", "dclid", "mc_eid", "mc_cid", "_hsenc", "_hsmi",
+        "mkt_tok", "yclid", "igshid", "vero_id", "oly_enc_id", "oly_anon_id", "wickedid",
+        "cmpid", "ncid", "spm", "trk"
+    ]
+
+    /// Remove common click-tracking query parameters from a URL.
+    static func cleanLink(_ url: URL) -> URL {
+        guard var comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = comps.queryItems, !items.isEmpty else { return url }
+        let kept = items.filter { !trackingParams.contains($0.name.lowercased()) }
+        guard kept.count != items.count else { return url }
+        comps.queryItems = kept.isEmpty ? nil : kept
+        return comps.url ?? url
+    }
+}
+
 /// Renders an email's HTML body in a WKWebView. Remote content (images, fonts,
 /// scripts, external CSS) is blocked by default for privacy; pass blockRemote
 /// false to load it. Reports its content height so it can size itself.
@@ -76,7 +116,7 @@ struct HTMLMessageView: NSViewRepresentable {
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
-                NSWorkspace.shared.open(url)
+                NSWorkspace.shared.open(Privacy.cleanLink(url))
                 decisionHandler(.cancel)
                 return
             }

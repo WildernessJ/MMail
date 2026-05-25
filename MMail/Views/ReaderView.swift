@@ -269,9 +269,13 @@ private struct ReaderContent: View {
                 let trusted = model.isImageTrusted(email.fromEmail)
                 let showImages = loadImages || trusted
                 if !showImages {
+                    let trackers = Privacy.trackerCount(in: html)
                     HStack(spacing: 8) {
-                        Icon(name: "alert", size: 12).foregroundStyle(p.fg3)
-                        Text("Remote images are blocked for privacy.").font(.system(size: 12)).foregroundStyle(p.fg3)
+                        Icon(name: "shield", size: 12).foregroundStyle(p.brandBlue)
+                        Text(trackers > 0
+                             ? "Blocked \(trackers) tracker\(trackers == 1 ? "" : "s")"
+                             : "Remote images are blocked for privacy.")
+                            .font(.system(size: 12)).foregroundStyle(p.fg3)
                         Spacer()
                         Button { loadImages = true } label: {
                             Text("Load images").font(.system(size: 12, weight: .semibold)).foregroundStyle(p.brandBlue)
