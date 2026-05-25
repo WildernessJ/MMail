@@ -183,6 +183,23 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    if !model.trustedImageSenders.isEmpty {
+                        section("Remote images") {
+                            let trusted = model.trustedImageSenders.sorted()
+                            ForEach(Array(trusted.enumerated()), id: \.element) { idx, addr in
+                                HStack {
+                                    Icon(name: "photo", size: 13).foregroundStyle(p.fg3)
+                                    Text(addr).font(.system(size: 13)).foregroundStyle(p.fg1).lineLimit(1)
+                                    Spacer()
+                                    Button { model.untrustImages(addr) } label: {
+                                        Text("Stop").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.brandBlue)
+                                    }.buttonStyle(.plain)
+                                }
+                                .padding(.vertical, 10)
+                                if idx < trusted.count - 1 { Rectangle().fill(p.border).frame(height: 1) }
+                            }
+                        }
+                    }
                     section("Blocked contacts") {
                         if model.blockedSenders.isEmpty {
                             Text("No blocked contacts. Block a sender from a message's ⋯ menu — their mail goes straight to Trash.")

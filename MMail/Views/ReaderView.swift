@@ -46,6 +46,8 @@ private struct ReaderContent: View {
     @State private var newLabelName = ""
     @State private var htmlHeight: CGFloat = 0
     @State private var loadImages = false
+    @State private var snoozePickerOpen = false
+    @State private var snoozeDate = Date()
 
     private var sender: Sender? { email.resolvedSender }
     private var thread: [ThreadItem] { email.thread ?? model.relatedThread(for: email) }
@@ -81,6 +83,27 @@ private struct ReaderContent: View {
         } message: {
             Text("Create a label and apply it to this message.")
         }
+        .sheet(isPresented: $snoozePickerOpen) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Snooze until").font(.system(size: 16, weight: .bold)).foregroundStyle(p.fg1)
+                DatePicker("", selection: $snoozeDate, in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.graphical).labelsHidden()
+                HStack {
+                    Spacer()
+                    Button("Cancel") { snoozePickerOpen = false }.buttonStyle(.plain).foregroundStyle(p.fg2)
+                    Button {
+                        let df = DateFormatter(); df.dateFormat = "MMM d, h:mm a"
+                        model.snooze(email.id, until: snoozeDate, label: "until \(df.string(from: snoozeDate))")
+                        snoozePickerOpen = false
+                    } label: {
+                        Text("Snooze").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 16).padding(.vertical, 8)
+                            .background(p.brandBlue).clipShape(Capsule())
+                    }.buttonStyle(.plain)
+                }
+            }
+            .padding(20).frame(width: 360).background(p.bg1)
+        }
     }
 
     // MARK: Toolbar
@@ -99,8 +122,20 @@ private struct ReaderContent: View {
                 .buttonStyle(.plain)
                 .help("Back to list (esc)")
             }
-            PrimaryToolbarButton(icon: "check", label: "Done", kbd: "H") { model.markDone() }
-            PrimaryToolbarButton(icon: "replyAll", label: "Reply all", kbd: "A") { model.replyAll() }
+            if email.folder == "drafts" {
+                Button { model.editDraft(email) } label: {
+                    HStack(spacing: 6) {
+                        Icon(name: "pencil", size: 15)
+                        Text("Edit draft").font(.system(size: 12.5, weight: .semibold))
+                    }
+                    .foregroundStyle(.white).padding(.horizontal, 12).frame(height: 30)
+                    .background(p.brandBlue).clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            } else {
+                PrimaryToolbarButton(icon: "check", label: "Done", kbd: "H") { model.markDone() }
+                PrimaryToolbarButton(icon: "replyAll", label: "Reply all", kbd: "A") { model.replyAll() }
+            }
             Button { model.toggleStar(email.id) } label: {
                 Icon(name: email.starred ? "star.fill" : "star", size: 15)
                     .foregroundStyle(email.starred ? Color(hex: "F4A52A") : p.fg2)
@@ -144,7 +179,17 @@ private struct ReaderContent: View {
             Button { model.forward() } label: { Label("Forward", systemImage: "arrowshape.turn.up.right") }
             Divider()
             Button { model.archive() } label: { Label("Archive", systemImage: "archivebox") }
-            Button { model.snooze() } label: { Label("Snooze", systemImage: "clock") }
+            Menu {
+                ForEach(model.snoozePresets()) { preset in
+                    Button(preset.label) { model.snooze(email.id, until: preset.date, label: "· \(preset.label)") }
+                }
+                Divider()
+                Button("Pick date & time…") {
+                    snoozeDate = Calendar.current.date(byAdding: .day, value: 1, to: Date())
+                        .flatMap { Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: $0) } ?? Date()
+                    snoozePickerOpen = true
+                }
+            } label: { Label("Snooze", systemImage: "clock") }
             Button { model.markSpam() } label: { Label("Mark as Spam", systemImage: "exclamationmark.triangle") }
             let folders = model.folderNames(for: email.account)
             if !folders.isEmpty {
@@ -221,7 +266,9 @@ private struct ReaderContent: View {
                 }
                 .padding(.top, 24)
             } else if let html = email.bodyHTML, !html.isEmpty {
-                if !loadImages {
+                let trusted = model.isImageTrusted(email.fromEmail)
+                let showImages = loadImages || trusted
+                if !showImages {
                     HStack(spacing: 8) {
                         Icon(name: "alert", size: 12).foregroundStyle(p.fg3)
                         Text("Remote images are blocked for privacy.").font(.system(size: 12)).foregroundStyle(p.fg3)
@@ -229,6 +276,11 @@ private struct ReaderContent: View {
                         Button { loadImages = true } label: {
                             Text("Load images").font(.system(size: 12, weight: .semibold)).foregroundStyle(p.brandBlue)
                         }.buttonStyle(.plain)
+                        if let addr = sender?.email, !addr.isEmpty {
+                            Button { model.trustImages(addr); loadImages = true } label: {
+                                Text("Always").font(.system(size: 12, weight: .semibold)).foregroundStyle(p.fg2)
+                            }.buttonStyle(.plain).help("Always load images from \(addr)")
+                        }
                     }
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(p.bg2)
@@ -236,7 +288,7 @@ private struct ReaderContent: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .padding(.top, 16)
                 }
-                HTMLMessageView(html: html, blockRemote: !loadImages, height: $htmlHeight)
+                HTMLMessageView(html: html, blockRemote: !showImages, height: $htmlHeight)
                     .frame(height: max(htmlHeight, 80))
                     .padding(.top, 16)
             } else {

@@ -25,6 +25,7 @@ struct ComposeDraft: Identifiable {
     var fromId: String
     var attachments: [ComposeAttachment] = []
     var bodyHTML: String? = nil   // set when the body uses rich formatting
+    var originalDraftId: String? = nil   // the Draft this compose replaces, if any
 }
 
 struct ToastModel: Identifiable {
@@ -168,6 +169,10 @@ final class AppModel: ObservableObject {
     @Published var vipSenders: Set<String> = []
     private let kVIP = "mmail.vip"
 
+    // Senders whose remote images load automatically.
+    @Published var trustedImageSenders: Set<String> = []
+    private let kTrustedImages = "mmail.trustedImages"
+
     // Real (IMAP/SMTP) accounts
     @Published var realConfigs: [MailAccountConfig] = []
     @Published var loadingAccounts: Set<String> = []
@@ -235,6 +240,7 @@ final class AppModel: ObservableObject {
         }
         if let arr = d.array(forKey: kBlocked) as? [String] { blockedSenders = Set(arr) }
         if let arr = d.array(forKey: kVIP) as? [String] { vipSenders = Set(arr) }
+        if let arr = d.array(forKey: kTrustedImages) as? [String] { trustedImageSenders = Set(arr) }
         if let data = d.data(forKey: kRules),
            let decoded = try? JSONDecoder().decode([MailRule].self, from: data) { rules = decoded }
         if let data = d.data(forKey: kRealAccounts),
@@ -528,26 +534,52 @@ final class AppModel: ObservableObject {
         moveTo(target, dest: "spam", verb: "Marked as spam")
     }
     func snooze(_ id: String? = nil) {
+        let cal = Calendar.current
+        let wake = cal.date(byAdding: .day, value: 1, to: Date())
+            .flatMap { cal.date(bySettingHour: 8, minute: 0, second: 0, of: $0) } ?? Date().addingTimeInterval(57600)
+        snooze(id, until: wake, label: "until tomorrow")
+    }
+
+    func snooze(_ id: String? = nil, until date: Date, label: String) {
         let target = id ?? selectedId
         guard let target, let e = emails.first(where: { $0.id == target }) else { return }
         if isRealAccount(e.account), let uid = e.uid {
-            // Snooze until tomorrow morning (8am).
-            let cal = Calendar.current
-            let wake = cal.date(byAdding: .day, value: 1, to: Date())
-                .flatMap { cal.date(bySettingHour: 8, minute: 0, second: 0, of: $0) } ?? Date().addingTimeInterval(57600)
             let key = "\(e.account)#\(uid)"
-            // pick next selection before it disappears from view
             let fe = filteredEmails
             let idx = fe.firstIndex { $0.id == target }
-            snoozedUntil[key] = wake
+            snoozedUntil[key] = date
             persistSnoozed()
             if let idx { selectedId = (fe[safe: idx + 1] ?? fe[safe: idx - 1])?.id }
-            showToast("Snoozed until tomorrow", actionLabel: "Undo") { [weak self] in
+            showToast("Snoozed \(label)", actionLabel: "Undo") { [weak self] in
                 self?.snoozedUntil[key] = nil; self?.persistSnoozed()
             }
         } else {
             moveTo(target, dest: "snoozed", verb: "Snoozed")
         }
+    }
+
+    struct SnoozePreset: Identifiable { let id: String; let label: String; let date: Date }
+
+    func snoozePresets() -> [SnoozePreset] {
+        let cal = Calendar.current, now = Date()
+        var out: [SnoozePreset] = []
+        out.append(.init(id: "later", label: "Later today", date: now.addingTimeInterval(3 * 3600)))
+        if let eve = cal.date(bySettingHour: 18, minute: 0, second: 0, of: now), eve > now.addingTimeInterval(3600) {
+            out.append(.init(id: "evening", label: "This evening", date: eve))
+        }
+        if let base = cal.date(byAdding: .day, value: 1, to: now),
+           let tm = cal.date(bySettingHour: 8, minute: 0, second: 0, of: base) {
+            out.append(.init(id: "tomorrow", label: "Tomorrow", date: tm))
+        }
+        if let sat = cal.nextDate(after: now, matching: DateComponents(weekday: 7), matchingPolicy: .nextTime),
+           let s = cal.date(bySettingHour: 9, minute: 0, second: 0, of: sat) {
+            out.append(.init(id: "weekend", label: "This weekend", date: s))
+        }
+        if let mon = cal.nextDate(after: now, matching: DateComponents(weekday: 2), matchingPolicy: .nextTime),
+           let m = cal.date(bySettingHour: 8, minute: 0, second: 0, of: mon) {
+            out.append(.init(id: "nextweek", label: "Next week", date: m))
+        }
+        return out
     }
 
     func markUnread(_ id: String? = nil) {
@@ -709,6 +741,25 @@ final class AppModel: ObservableObject {
     func removeVIP(_ email: String) {
         vipSenders.remove(email.lowercased())
         UserDefaults.standard.set(Array(vipSenders), forKey: kVIP)
+    }
+
+    // MARK: - Trusted image senders
+
+    func isImageTrusted(_ email: String?) -> Bool {
+        guard let e = email?.lowercased(), !e.isEmpty else { return false }
+        return trustedImageSenders.contains(e)
+    }
+
+    func trustImages(_ email: String) {
+        let e = email.lowercased().trimmingCharacters(in: .whitespaces)
+        guard e.contains("@") else { return }
+        trustedImageSenders.insert(e)
+        UserDefaults.standard.set(Array(trustedImageSenders), forKey: kTrustedImages)
+    }
+
+    func untrustImages(_ email: String) {
+        trustedImageSenders.remove(email.lowercased())
+        UserDefaults.standard.set(Array(trustedImageSenders), forKey: kTrustedImages)
     }
 
     // MARK: - Rules
@@ -923,6 +974,48 @@ final class AppModel: ObservableObject {
                                titleLabel: titleLabel, fromId: from)
     }
 
+    /// Re-open a saved Draft in the composer (with its body + attachments).
+    func editDraft(_ email: Email) {
+        let subject = email.subject == "(no subject)" ? "" : email.subject
+        let to = email.to?.first ?? ""
+        guard isRealAccount(email.account), let uid = email.uid, let session = session(for: email.account) else {
+            var d = ComposeDraft(to: to, subject: subject, body: email.body, titleLabel: "Edit draft", fromId: email.account)
+            d.originalDraftId = email.id
+            compose = d
+            return
+        }
+        let box = mailboxName(email.account, email.folder) ?? "INBOX"
+        showToast("Opening draft…")
+        Task {
+            var body = email.body
+            var atts: [ComposeAttachment] = []
+            if let data = try? await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: nil) {
+                let parsed = MIME.parse(data)
+                if !parsed.text.isEmpty { body = parsed.text }
+                atts = parsed.attachments.map { ComposeAttachment(filename: $0.filename, mimeType: $0.mimeType, data: $0.data) }
+            }
+            await MainActor.run {
+                var d = ComposeDraft(to: to, subject: subject, body: body, titleLabel: "Edit draft",
+                                     fromId: email.account, attachments: atts)
+                d.originalDraftId = email.id
+                self.compose = d
+            }
+        }
+    }
+
+    /// Remove the draft a compose was editing (after it's sent or re-saved).
+    private func discardOriginalDraft(_ id: String) {
+        guard let e = emails.first(where: { $0.id == id }) else { return }
+        emails.removeAll { $0.id == id }
+        guard isRealAccount(e.account), let uid = e.uid, let session = session(for: e.account),
+              let from = mailboxName(e.account, e.folder) else { return }
+        if let trash = mailboxName(e.account, "trash") {
+            Task { try? await session.move(uid: uid, from: from, to: trash) }
+        } else {
+            Task { try? await session.store(mailbox: from, uid: uid, .deleted, add: true) }
+        }
+    }
+
     func signature(for accountId: String) -> String { signatures[accountId] ?? "" }
 
     func setSignature(_ accountId: String, _ text: String) {
@@ -1023,6 +1116,7 @@ final class AppModel: ObservableObject {
                         self.sending[i].done = true
                     }
                     self.recordSentLocally(draft, account: cfg.id)
+                    if let oid = draft.originalDraftId { self.discardOriginalDraft(oid) }
                     self.showToast("Sent to \(draft.to)")
                 }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -2021,6 +2115,7 @@ final class AppModel: ObservableObject {
     /// Save the compose contents as a draft (best-effort APPEND to Drafts), then close.
     func saveDraftAndClose(_ draft: ComposeDraft) {
         compose = nil
+        if let oid = draft.originalDraftId { discardOriginalDraft(oid) }
         let hasContent = !draft.to.isEmpty || !draft.subject.isEmpty
             || !draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasContent, isRealAccount(draft.fromId), let cfg = config(for: draft.fromId),
