@@ -12,3 +12,6 @@ xcuserdata/
 # SwiftPM
 .swiftpm/
 .build/
+
+# Release artifacts
+*.dmg

@@ -20,6 +20,31 @@ MMail is a native macOS mail app written in SwiftUI. It connects to any IMAP/SMT
 account, keeps a long-lived connection per account, caches mail to disk for instant
 launches, and leans heavily on keyboard navigation.
 
+**Privacy first.** Remote images, fonts, scripts, and external CSS in HTML mail are
+blocked by default — MMail shows how many trackers it blocked — and click-tracking
+parameters (`utm_*`, `fbclid`, `gclid`, …) are stripped from links you open. Your
+credentials live only in the macOS Keychain; nothing leaves your machine except to talk
+to your own mail provider.
+
+**No AI.** No models, no "smart" features phoning home, no content sent off for analysis.
+Just a fast, native mail client that does what you tell it.
+
+## Install
+
+A pre-built app is attached to the [latest release](https://github.com/moerdowo/MMail/releases/latest).
+
+1. Download **MMail.dmg**, open it, and drag **MMail** into **Applications**.
+2. The app is **not notarized** (this is a personal project with no paid Apple Developer
+   account), so macOS Gatekeeper blocks it on first launch. Open it one of these ways:
+   - **Right-click** `MMail.app` in Applications → **Open** → **Open** in the dialog, or
+   - run once in Terminal to clear the quarantine flag:
+     ```bash
+     xattr -dr com.apple.quarantine /Applications/MMail.app
+     ```
+3. Launch MMail and set up your IMAP/SMTP account.
+
+> Requires macOS 14 (Sonoma) or later. Prefer to build it yourself? See **Build & run** below.
+
 ## Features
 
 - **Real mail** — manual IMAP/SMTP setup; reads, sends, replies, forwards.
@@ -97,7 +122,9 @@ MMail/
 ## Notes & limitations
 
 - **No OAuth yet** — Google/iCloud/Outlook sign-in is not implemented; use manual
-  IMAP/SMTP. Email signatures are also not implemented.
+  IMAP/SMTP (an app-specific password for providers that require it).
+- **Not notarized** — pre-built releases are ad-hoc signed; see [Install](#install) to
+  open past Gatekeeper.
 
 ## License
 
