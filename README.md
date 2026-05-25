@@ -4,7 +4,7 @@
 
 # MMail
 
-**A fast, keyboard-first email client for macOS.**
+**A fast, No AI, privacy & keyboard-first email client for macOS.**
 
 Native SwiftUI · real IMAP/SMTP · built for people who'd rather use their keyboard.
 
