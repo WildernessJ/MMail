@@ -1411,11 +1411,21 @@ final class AppModel: ObservableObject {
         addingAccount = false
         manualSetupOpen = false
         if onboarding { persistOnboarded(); onboarding = false }
-        currentAccount = config.id
-        folder = "inbox"
         // Heal any pre-existing duplicate ids before the reader re-renders for
         // the new account's inbox.
         emails = AppModel.dedupById(emails)
+        // Reset per-account view state so nothing carries over from the old
+        // account (stale selectedId would point at an email we no longer show;
+        // a stale error or last-sync stamp could block the first fetch).
+        selectedId = nil
+        accountErrors[config.id] = nil
+        lastSyncAt = lastSyncAt.filter { !$0.key.hasPrefix("\(config.id)#") }
+        folder = "inbox"
+        currentAccount = config.id
+        // Kick off the initial fetch ourselves rather than relying on the
+        // SwiftUI onChange of currentAccount to fire didSelectAccount — that
+        // ordering is fragile, especially when the view we're animating in
+        // from is the add-account sheet.
         loadFolder(config.id, "inbox")
     }
 
