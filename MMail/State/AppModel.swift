@@ -715,6 +715,9 @@ final class AppModel: ObservableObject {
         for i in emails.indices where (emails[i].fromEmail?.lowercased() == e) && !skip.contains(emails[i].folder) {
             emails[i].folder = "trash"
         }
+        // Heal any pre-existing duplicate Email.id entries so reader rebuilds
+        // don't trap. Cheap (single linear pass) and only runs on user action.
+        emails = AppModel.dedupById(emails)
         if !filteredEmails.contains(where: { $0.id == selectedId }) { selectedId = filteredEmails.first?.id }
         showToast("Blocked \(e)")
     }
@@ -1354,6 +1357,9 @@ final class AppModel: ObservableObject {
         if onboarding { persistOnboarded(); onboarding = false }
         currentAccount = config.id
         folder = "inbox"
+        // Heal any pre-existing duplicate ids before the reader re-renders for
+        // the new account's inbox.
+        emails = AppModel.dedupById(emails)
         loadFolder(config.id, "inbox")
     }
 
@@ -1450,6 +1456,18 @@ final class AppModel: ObservableObject {
         return t.isEmpty ? nil : t
     }
 
+    /// Return `list` with duplicates by `Email.id` removed, keeping the first
+    /// occurrence (which preserves source order). Used across merge paths so
+    /// that one bad cache file or a quirky server response cannot poison the
+    /// in-memory `emails` array with duplicate ids.
+    static func dedupById(_ list: [Email]) -> [Email] {
+        var seen = Set<String>()
+        var out: [Email] = []
+        out.reserveCapacity(list.count)
+        for e in list where seen.insert(e.id).inserted { out.append(e) }
+        return out
+    }
+
     func relatedThread(for email: Email) -> [ThreadItem] {
         guard isRealAccount(email.account) else { return [] }
         let pool = emails.filter { $0.account == email.account }
@@ -1470,7 +1488,9 @@ final class AppModel: ObservableObject {
         while let cur = stack.popLast() {
             for n in adj[cur] ?? [] where seen.insert(n).inserted { stack.append(n) }
         }
-        let byId = Dictionary(uniqueKeysWithValues: pool.map { ($0.id, $0) })
+        // Duplicate ids shouldn't happen, but if they do (race between merges or a
+        // stale local optimistic copy) we mustn't trap. Keep the first occurrence.
+        let byId = Dictionary(pool.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var thread = seen.compactMap { byId[$0] }.filter { $0.id != email.id }
 
         // Fall back to normalized-subject grouping when there are no header links.
@@ -1520,7 +1540,9 @@ final class AppModel: ObservableObject {
         for cfg in realConfigs {
             if let cached = MailCache.load(account: cfg.id, folder: "inbox"), !cached.isEmpty {
                 emails.removeAll { $0.account == cfg.id && $0.folder == "inbox" }
-                emails.append(contentsOf: cached)
+                // Cache files from older builds may contain duplicate ids; dedup
+                // here so the live array never starts in a corrupt state.
+                emails.append(contentsOf: AppModel.dedupById(cached))
             }
             loadFolder(cfg.id, "inbox", silent: true)
         }
@@ -1768,7 +1790,9 @@ final class AppModel: ObservableObject {
         let existing = emails.filter { $0.account == accountId && $0.folder == folderId }
         var loadedByUID: [UInt32: Email] = [:]
         for e in existing where e.bodyLoaded && e.uid != nil { loadedByUID[e.uid!] = e }
-        var merged = newEmails
+        // Defensively dedup the incoming set by id so a buggy cache file or a
+        // server edge case can't introduce duplicate Email.id values downstream.
+        var merged = AppModel.dedupById(newEmails)
         for i in merged.indices {
             if let uid = merged[i].uid, !merged[i].bodyLoaded, let old = loadedByUID[uid] {
                 merged[i].body = old.body
@@ -1820,9 +1844,17 @@ final class AppModel: ObservableObject {
             }
         }
         let existingUIDs = Set(emails.filter { $0.account == accountId && $0.folder == folderId }.compactMap { $0.uid })
-        let fresh = sync.newMessages.filter { !existingUIDs.contains($0.uid) }
+        // Dedup within sync.newMessages too — duplicate UIDs in the same response
+        // would otherwise produce two Email rows with identical ids.
+        var seenUIDs = Set<UInt32>()
+        let fresh = sync.newMessages.filter { m in
+            guard !existingUIDs.contains(m.uid) else { return false }
+            return seenUIDs.insert(m.uid).inserted
+        }
         if !fresh.isEmpty {
+            let existingIDs = Set(emails.map { $0.id })
             let mapped = fresh.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
+                .filter { !existingIDs.contains($0.id) }
             if folderId == "inbox", notificationsEnabled, let last = lastSeenUID[accountId] {
                 for e in mapped.filter({ ($0.uid ?? 0) > last && $0.unread && !isBlocked($0.fromEmail) }).prefix(5) {
                     Notifier.notify(title: e.resolvedSender.name, body: e.subject, emailId: e.id)
