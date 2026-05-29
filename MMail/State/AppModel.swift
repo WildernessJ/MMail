@@ -1546,7 +1546,9 @@ final class AppModel: ObservableObject {
                     guard let session = await MainActor.run(body: { self.session(for: w.account) }) else {
                         return (w.account, [])
                     }
-                    let msgs = (try? await session.fetchOlder(mailbox: w.box, beforeUID: w.oldestUID, limit: 50)) ?? []
+                    let msgs: [IMAPMessage] = (try? await self.withTimeout(25) {
+                        try await session.fetchOlder(mailbox: w.box, beforeUID: w.oldestUID, limit: 50)
+                    }) ?? []
                     let mapped = msgs.map { AppModel.makeEmail($0, accountId: w.account, folder: folderId) }
                     return (w.account, mapped)
                 }
@@ -1729,6 +1731,49 @@ final class AppModel: ObservableObject {
         return s
     }
 
+    /// Race an async operation against a deadline. If the timer wins, the
+    /// operation task is cancelled and the call throws — callers catch the
+    /// error and clean up their spinner state. NIO's reads don't honour
+    /// `Task.cancel()` mid-operation, but the next response or write attempt
+    /// will surface the cancellation as a fail, and meanwhile the caller has
+    /// already moved on.
+    private func withTimeout<T: Sendable>(_ seconds: TimeInterval,
+                                          _ operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw URLError(.timedOut)
+            }
+            defer { group.cancelAll() }
+            guard let result = try await group.next() else { throw URLError(.timedOut) }
+            return result
+        }
+    }
+
+    /// Force-clear spinner state for an account after a deadline. If the Task
+    /// completes normally it'll have already cleared the entry; this just
+    /// guarantees the UI can't get stuck on a forever-spinner when the IMAP
+    /// channel wedges with no error.
+    private func scheduleSpinnerReset(_ accountId: String, after seconds: TimeInterval, message: String) {
+        let acct = accountId
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            guard let self else { return }
+            if self.loadingAccounts.contains(acct) {
+                self.loadingAccounts.remove(acct)
+                if !self.emails.contains(where: { $0.account == acct }) {
+                    self.accountErrors[acct] = message
+                }
+                // Drop the wedged primary session so the next call opens a
+                // fresh channel instead of queueing more work behind it.
+                if let s = self.imapSessions[acct] {
+                    Task { await s.close() }
+                    self.imapSessions[acct] = nil
+                }
+            }
+        }
+    }
+
     /// Show real accounts' cached inboxes immediately on launch, then refresh.
     func bootstrapRealAccounts() {
         guard !didBootstrap else { return }
@@ -1771,7 +1816,16 @@ final class AppModel: ObservableObject {
             if incremental && dt < 8 { return }
             if !incremental && dt < 30 { return }
         }
-        if !silent && !hasContent { loadingAccounts.insert(accountId) }
+        if !silent && !hasContent {
+            loadingAccounts.insert(accountId)
+            // Belt-and-suspenders: if the fetch hangs (NIO doesn't auto-time-
+            // out reads), clear the spinner after a generous deadline so the
+            // user isn't staring at a forever-loader. The Task itself races
+            // against a tighter timeout via withTimeout(); this is the safety
+            // net for the *spinner* state specifically.
+            scheduleSpinnerReset(accountId, after: 35,
+                                 message: "Couldn't reach the server. Retrying in the background…")
+        }
         accountErrors[accountId] = nil
         // We only need LIST to map server folder names for non-inbox folders
         // (sent, drafts, trash, archive). Inbox is always "INBOX", so skip the
@@ -1787,7 +1841,7 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 if needDiscover {
-                    let boxes = try await session.listMailboxes()
+                    let boxes = try await withTimeout(20) { try await session.listMailboxes() }
                     var m: [String: String] = [:]
                     for b in boxes where b.selectable {
                         switch b.kind {
@@ -1815,8 +1869,10 @@ final class AppModel: ObservableObject {
 
                 if canIncrement, let box {
                     let uids = loaded.compactMap { $0.uid }
-                    let sync = try await session.syncFolder(mailbox: box, afterUID: uids.max() ?? 0,
-                                                            oldestUID: uids.min() ?? 0, newLimit: 100)
+                    let sync = try await withTimeout(20) {
+                        try await session.syncFolder(mailbox: box, afterUID: uids.max() ?? 0,
+                                                     oldestUID: uids.min() ?? 0, newLimit: 100)
+                    }
                     await MainActor.run {
                         self.mergeIncremental(sync, accountId: accountId, folderId: folderId)
                         self.loadingAccounts.remove(accountId)
@@ -1830,13 +1886,17 @@ final class AppModel: ObservableObject {
                 // demand via `loadOlder()` (50 at a time), or in bulk via
                 // `loadAllOlder()`.
                 let initialLimit = 50
-                let msgs: [IMAPMessage]
-                switch folderId {
-                case "inbox": msgs = try await session.fetchRecent(mailbox: "INBOX", limit: initialLimit)
-                case "starred": msgs = try await session.searchFlagged(mailbox: "INBOX", limit: initialLimit)
-                default:
-                    if let box { msgs = try await session.fetchRecent(mailbox: box, limit: initialLimit) }
-                    else { msgs = [] }
+                let msgs: [IMAPMessage] = try await withTimeout(25) {
+                    switch folderId {
+                    case "inbox":
+                        return try await session.fetchRecent(mailbox: "INBOX", limit: initialLimit)
+                    case "starred":
+                        return try await session.searchFlagged(mailbox: "INBOX", limit: initialLimit)
+                    default:
+                        if let box {
+                            return try await session.fetchRecent(mailbox: box, limit: initialLimit)
+                        } else { return [] }
+                    }
                 }
                 let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
                 await MainActor.run {
@@ -1847,6 +1907,12 @@ final class AppModel: ObservableObject {
                 await MainActor.run {
                     if !silent && !hasContent { self.accountErrors[accountId] = error.localizedDescription }
                     self.loadingAccounts.remove(accountId)
+                    // Drop the wedged session so the next call gets a fresh
+                    // channel rather than queueing behind a hung one.
+                    if let s = self.imapSessions[accountId] {
+                        Task { await s.close() }
+                        self.imapSessions[accountId] = nil
+                    }
                 }
             }
         }
@@ -2149,8 +2215,11 @@ final class AppModel: ObservableObject {
         Task {
             // Batch the prefetch: one UID FETCH for every target uid instead of
             // one round-trip per message. Preview-sized cap keeps the payload
-            // small; full bodies are streamed on open.
-            guard let datas = try? await session.fetchMessageDatas(mailbox: box, uids: uids, byteLimit: 65_536) else { return }
+            // small; full bodies are streamed on open. Bounded by a timeout so
+            // a wedged read doesn't sit on the body channel forever.
+            guard let datas = try? await self.withTimeout(30, {
+                try await session.fetchMessageDatas(mailbox: box, uids: uids, byteLimit: 65_536)
+            }) else { return }
             var parsedByUID: [UInt32: (text: String, html: String?, atts: [AttachmentMeta], unsub: String?, cal: String?)] = [:]
             for (uid, data) in datas {
                 let p = MIME.parse(data)
@@ -2211,7 +2280,9 @@ final class AppModel: ObservableObject {
         let acct = e.account, fld = e.folder
         Task {
             do {
-                let data = try await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: 262_144)
+                let data = try await self.withTimeout(30) {
+                    try await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: 262_144)
+                }
                 let parsed = MIME.parse(data)
                 let metas = parsed.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
                 await MainActor.run {
@@ -2233,7 +2304,16 @@ final class AppModel: ObservableObject {
                     MailCache.save(self.emails.filter { $0.account == acct && $0.folder == fld },
                                    account: acct, folder: fld)
                 }
-            } catch { /* leave placeholder; surfaced via empty body */ }
+            } catch {
+                // Body fetch wedged or errored: drop the body session so the
+                // next open opens a fresh channel rather than queueing.
+                await MainActor.run {
+                    if let s = self.bodySessions[acct] {
+                        Task { await s.close() }
+                        self.bodySessions[acct] = nil
+                    }
+                }
+            }
         }
     }
 
