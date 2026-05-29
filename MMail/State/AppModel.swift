@@ -1270,11 +1270,32 @@ final class AppModel: ObservableObject {
         searchQuery = ""
         serverSearchResults = nil
         searching = false
-        // Folder navigation: use the cheap incremental sync (UID range above
-        // last seen) rather than re-running the week-window fetch. The cache
-        // is already in memory, so the user sees content instantly and we
-        // only round-trip for what's actually new.
-        loadForCurrentScope(f, silent: true, incremental: true)
+        // Apple-Mail-style navigation: hydrate from disk cache only. Never
+        // round-trip on a folder click. The background poll keeps the live
+        // window fresh on its own.
+        hydrateFolderIfNeeded(f)
+    }
+
+    /// Bring a folder into memory without touching the network when possible.
+    /// Used by every navigation path. Three cases per (account, folder):
+    ///   1. Already in memory: no-op.
+    ///   2. Has a cached file on disk: load it instantly (no spinner).
+    ///   3. Never loaded anywhere: trigger a first-time server fetch
+    ///      (with the spinner) so the user sees something instead of empty.
+    private func hydrateFolderIfNeeded(_ folderId: String) {
+        guard isServerFolder(folderId) else { return }
+        let scope = currentAccount == "all"
+            ? realConfigs.map { $0.id }
+            : (isRealAccount(currentAccount) ? [currentAccount] : [])
+        for a in scope where isRealAccount(a) {
+            let inMemory = emails.contains { $0.account == a && $0.folder == folderId }
+            if inMemory { continue }
+            if let cached = MailCache.load(account: a, folder: folderId), !cached.isEmpty {
+                mergeRealFolder(cached, accountId: a, folderId: folderId, persist: false)
+            } else {
+                loadFolder(a, folderId, silent: false)
+            }
+        }
     }
 
     // MARK: - Commands (palette)
@@ -1406,16 +1427,9 @@ final class AppModel: ObservableObject {
         if id != "all" && folder == "home" { folder = "inbox" }
         let f = folder == "home" ? "inbox" : folder
         guard isServerFolder(f) else { return }
-        // Account switching: every account already has its cached window in
-        // memory, so prefer an incremental (UID > last) sync — same shape as
-        // the poll, sub-second per account — over a full week-window
-        // re-fetch. The freshness gate inside loadFolder will skip the
-        // round-trip entirely if we just polled.
-        if id == "all" {
-            for cfg in realConfigs { loadFolder(cfg.id, f, silent: true, incremental: true) }
-        } else if isRealAccount(id) {
-            loadFolder(id, f, silent: true, incremental: true)
-        }
+        // No network on account switch — hydrate from cache and let the
+        // background poll catch up. Apple-Mail/Thunderbird-style instant nav.
+        hydrateFolderIfNeeded(f)
     }
 
     /// Load a folder for whatever account scope is selected — a single real
@@ -2347,18 +2361,35 @@ final class AppModel: ObservableObject {
 
     func startPolling() {
         guard pollTimer == nil else { return }
-        // Every 15s: incrementally refresh the current folder (new mail + flag
-        // changes only). The incremental sync is a tight UID-range FETCH so
-        // this stays cheap; the full re-fetch path is reserved for explicit
-        // user reloads (folder switch outside the freshness gate, or manual
-        // refresh) and account add/remove, so a busy poll never re-pulls the
-        // whole week's window.
+        // Every 15s: background-sync every account's inbox plus the currently-
+        // viewed folder. Matches the Thunderbird/Apple Mail model: navigation
+        // is purely a cache read, freshness is the poll's job. Each call is a
+        // tight UID-range incremental FETCH on the dedicated list connection,
+        // so the body-read channel stays unblocked.
         pollTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.pollCount += 1
-            self.refreshCurrentRealFolder(silent: true, incremental: true)
+            self.backgroundSync()
             self.processScheduledSends()
             self.wakeSnoozedIfDue()
+        }
+    }
+
+    /// Run one background poll cycle. Touches every account's inbox so unread
+    /// counts and the unified-inbox view stay current even while the user is
+    /// looking at a different account, plus the current non-inbox folder for
+    /// the current scope.
+    private func backgroundSync() {
+        for cfg in realConfigs {
+            loadFolder(cfg.id, "inbox", silent: true, incremental: true)
+        }
+        if folder != "inbox" && folder != "home" && isServerFolder(folder) {
+            let scope = currentAccount == "all"
+                ? realConfigs.map { $0.id }
+                : (isRealAccount(currentAccount) ? [currentAccount] : [])
+            for a in scope where isRealAccount(a) {
+                loadFolder(a, folder, silent: true, incremental: true)
+            }
         }
     }
 
