@@ -238,9 +238,15 @@ final class AppModel: ObservableObject {
         } else {
             labels = SampleData.labels
         }
-        if let arr = d.array(forKey: kBlocked) as? [String] { blockedSenders = Set(arr) }
-        if let arr = d.array(forKey: kVIP) as? [String] { vipSenders = Set(arr) }
-        if let arr = d.array(forKey: kTrustedImages) as? [String] { trustedImageSenders = Set(arr) }
+        if let arr = d.array(forKey: kBlocked) as? [String] {
+            blockedSenders = Set(arr.compactMap { AppModel.normalizeAddress($0) })
+        }
+        if let arr = d.array(forKey: kVIP) as? [String] {
+            vipSenders = Set(arr.compactMap { AppModel.normalizeAddress($0) })
+        }
+        if let arr = d.array(forKey: kTrustedImages) as? [String] {
+            trustedImageSenders = Set(arr.compactMap { AppModel.normalizeAddress($0) })
+        }
         if let data = d.data(forKey: kRules),
            let decoded = try? JSONDecoder().decode([MailRule].self, from: data) { rules = decoded }
         if let data = d.data(forKey: kRealAccounts),
@@ -691,8 +697,20 @@ final class AppModel: ObservableObject {
 
     // MARK: - Blocked senders
 
+    /// Normalize an email address for matching: lowercased, trimmed, and with
+    /// any surrounding angle brackets / whitespace stripped. New mail from the
+    /// IMAP envelope can arrive with subtly different casing or wrapping than
+    /// what the block UI captured, so every block/match path runs through this.
+    static func normalizeAddress(_ s: String?) -> String? {
+        guard var t = s?.lowercased() else { return nil }
+        t = t.trimmingCharacters(in: .whitespacesAndNewlines)
+        t = t.trimmingCharacters(in: CharacterSet(charactersIn: "<>"))
+        t = t.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+
     func isBlocked(_ email: String?) -> Bool {
-        guard let e = email?.lowercased(), !e.isEmpty else { return false }
+        guard let e = AppModel.normalizeAddress(email) else { return false }
         return blockedSenders.contains(e)
     }
 
@@ -703,16 +721,18 @@ final class AppModel: ObservableObject {
     /// Block a sender: remember the address and move any of their loaded mail to
     /// Trash now. Future arrivals are trashed on load (see `autoTrashBlocked`).
     func blockSender(_ email: String) {
-        let e = email.lowercased().trimmingCharacters(in: .whitespaces)
-        guard e.contains("@") else { return }
+        guard let e = AppModel.normalizeAddress(email), e.contains("@") else { return }
         blockedSenders.insert(e)
         persistBlocked()
         let skip: Set<String> = ["trash", "sent", "drafts"]
-        let targets = emails.filter { ($0.fromEmail?.lowercased() == e) && !skip.contains($0.folder) }
+        let targets = emails.filter {
+            AppModel.normalizeAddress($0.fromEmail) == e && !skip.contains($0.folder)
+        }
         for t in targets where isRealAccount(t.account) && mailboxName(t.account, "trash") != nil {
             realMove(t, to: "trash")
         }
-        for i in emails.indices where (emails[i].fromEmail?.lowercased() == e) && !skip.contains(emails[i].folder) {
+        for i in emails.indices where AppModel.normalizeAddress(emails[i].fromEmail) == e
+            && !skip.contains(emails[i].folder) {
             emails[i].folder = "trash"
         }
         // Heal any pre-existing duplicate Email.id entries so reader rebuilds
@@ -1820,10 +1840,23 @@ final class AppModel: ObservableObject {
             }
         }
         registerLabels(from: merged)
+        // For the inbox, fire server moves for any blocked-sender messages and
+        // drop them from the local set so they never appear in the inbox view.
+        if folderId == "inbox" && !blockedSenders.isEmpty {
+            let blocked = merged.filter { isBlocked($0.fromEmail) && !isVIP($0.fromEmail) }
+            for b in blocked where isRealAccount(accountId) && mailboxName(accountId, "trash") != nil {
+                realMove(b, to: "trash")
+            }
+            let blockedIDs = Set(blocked.map { $0.id })
+            merged.removeAll { blockedIDs.contains($0.id) }
+        }
         emails.removeAll { $0.account == accountId && $0.folder == folderId }
         emails.append(contentsOf: merged)
         if persist { MailCache.save(merged, account: accountId, folder: folderId) }
-        if persist { autoTrashBlocked(accountId: accountId, folderId: folderId); applyRules(accountId: accountId, folderId: folderId) }
+        // Run defensive auto-trash and rules on every load, not only persisted
+        // server fetches — a cached bootstrap should also hide blocked senders.
+        autoTrashBlocked(accountId: accountId, folderId: folderId)
+        if persist { applyRules(accountId: accountId, folderId: folderId) }
         let inScope = (currentAccount == accountId || currentAccount == "all")
         if inScope && folder == folderId && serverSearchResults == nil {
             if !filteredEmails.contains(where: { $0.id == selectedId }) {
@@ -1853,12 +1886,22 @@ final class AppModel: ObservableObject {
         }
         if !fresh.isEmpty {
             let existingIDs = Set(emails.map { $0.id })
-            let mapped = fresh.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
+            var mapped = fresh.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
                 .filter { !existingIDs.contains($0.id) }
             if folderId == "inbox", notificationsEnabled, let last = lastSeenUID[accountId] {
                 for e in mapped.filter({ ($0.uid ?? 0) > last && $0.unread && !isBlocked($0.fromEmail) }).prefix(5) {
                     Notifier.notify(title: e.resolvedSender.name, body: e.subject, emailId: e.id)
                 }
+            }
+            // Server-trash blocked senders immediately and exclude them from
+            // the local inbox so they never appear, even for a frame.
+            if folderId == "inbox" && !blockedSenders.isEmpty {
+                let blocked = mapped.filter { isBlocked($0.fromEmail) && !isVIP($0.fromEmail) }
+                for b in blocked where isRealAccount(accountId) && mailboxName(accountId, "trash") != nil {
+                    realMove(b, to: "trash")
+                }
+                let blockedIDs = Set(blocked.map { $0.id })
+                mapped.removeAll { blockedIDs.contains($0.id) }
             }
             emails.append(contentsOf: mapped)
             registerLabels(from: mapped)
