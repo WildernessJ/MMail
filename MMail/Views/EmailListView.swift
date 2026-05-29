@@ -253,9 +253,10 @@ struct EmailListView: View {
             if model.downloadingAllOlder {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Downloading older emails… \(model.olderDownloadedCount) downloaded")
+                    Text("Downloading messages older than a month… \(model.olderDownloadedCount) downloaded")
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(p.fg2)
+                        .multilineTextAlignment(.center)
                 }
                 Button("Cancel") { model.cancelLoadAllOlder() }
                     .buttonStyle(.plain)
@@ -265,7 +266,7 @@ struct EmailListView: View {
                 Button { model.loadOlder() } label: {
                     HStack(spacing: 6) {
                         if model.loadingOlder { ProgressView().controlSize(.small) }
-                        Text(model.loadingOlder ? "Loading older messages…" : "Load older messages")
+                        Text(model.loadingOlder ? "Loading older than a month…" : "Load mail older than a month")
                             .font(.system(size: 12.5, weight: .semibold))
                             .foregroundStyle(p.brandBlue)
                     }
@@ -275,7 +276,7 @@ struct EmailListView: View {
                 .disabled(model.loadingOlder)
 
                 Button { model.loadAllOlder() } label: {
-                    Text("Download all older messages")
+                    Text("Download all mail older than a month")
                         .font(.system(size: 11.5))
                         .foregroundStyle(p.fg3)
                         .underline()

@@ -1801,15 +1801,16 @@ final class AppModel: ObservableObject {
                 }
 
                 // Date-windowed initial fetch: server-side filter by
-                // INTERNALDATE keeps the payload tiny (only this-week's mail).
-                // Older messages load on demand via `loadOlder()`.
-                let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+                // INTERNALDATE keeps the payload tiny (only the last month
+                // of mail). Older messages load on demand via `loadOlder()`
+                // or in bulk via `loadAllOlder()`.
+                let monthAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
                 let msgs: [IMAPMessage]
                 switch folderId {
-                case "inbox": msgs = try await session.fetchSince(mailbox: "INBOX", since: weekAgo, limit: 200)
-                case "starred": msgs = try await session.searchFlagged(mailbox: "INBOX", limit: 200)
+                case "inbox": msgs = try await session.fetchSince(mailbox: "INBOX", since: monthAgo, limit: 500)
+                case "starred": msgs = try await session.searchFlagged(mailbox: "INBOX", limit: 500)
                 default:
-                    if let box { msgs = try await session.fetchSince(mailbox: box, since: weekAgo, limit: 200) }
+                    if let box { msgs = try await session.fetchSince(mailbox: box, since: monthAgo, limit: 500) }
                     else { msgs = [] }
                 }
                 let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
