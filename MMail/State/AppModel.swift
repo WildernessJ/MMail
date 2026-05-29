@@ -1396,6 +1396,10 @@ final class AppModel: ObservableObject {
 
     /// Called whenever the selected account changes; refreshes the current folder.
     func didSelectAccount(_ id: String) {
+        // Home is the cross-account dashboard; only "All inboxes" gets to see
+        // it. Switching to a specific account from Home drops the user into
+        // that account's inbox.
+        if id != "all" && folder == "home" { folder = "inbox" }
         let f = folder == "home" ? "inbox" : folder
         guard isServerFolder(f) else { return }
         if id == "all" {

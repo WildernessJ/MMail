@@ -18,7 +18,13 @@ struct SidebarView: View {
                 .padding(.bottom, 16)
 
             VStack(spacing: 1) {
-                ForEach(SampleData.folders) { f in
+                // Home is the cross-account dashboard (weather, contacts,
+                // journal, todos), so it only makes sense in the unified
+                // "All inboxes" scope. Hide it when a specific account is
+                // selected.
+                ForEach(SampleData.folders.filter { f in
+                    f.id != "home" || model.currentAccount == "all"
+                }) { f in
                     folderRow(f)
                 }
             }
