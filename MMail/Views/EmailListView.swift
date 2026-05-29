@@ -183,12 +183,17 @@ struct EmailListView: View {
                                 }
                             }
                             if model.canLoadMore {
-                                Button { model.loadMore() } label: {
-                                    Text("Load more")
-                                        .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.brandBlue)
-                                        .frame(maxWidth: .infinity).padding(.vertical, 14)
+                                Button { model.loadOlder() } label: {
+                                    HStack(spacing: 6) {
+                                        if model.loadingOlder { ProgressView().controlSize(.small) }
+                                        Text(model.loadingOlder ? "Loading older messages…" : "Load older messages")
+                                            .font(.system(size: 12.5, weight: .semibold))
+                                            .foregroundStyle(p.brandBlue)
+                                    }
+                                    .frame(maxWidth: .infinity).padding(.vertical, 14)
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(model.loadingOlder)
                             }
                         }
                     }

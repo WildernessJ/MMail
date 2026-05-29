@@ -265,6 +265,24 @@ final class IMAPService {
         return IMAPFolderSync(newMessages: newMessages, flags: flags)
     }
 
+    /// Fetch envelopes for every UID delivered on or after `date`. Far cheaper
+    /// than `fetchRecent` for a weekly window — the server filters by
+    /// INTERNALDATE and we FETCH only the matching subset.
+    func fetchSince(mailbox name: String, since date: Date, limit: Int) async throws -> [IMAPMessage] {
+        guard let day = IMAPService.imapDay(date) else { return [] }
+        return try await search(mailbox: name, key: .since(day), limit: limit)
+    }
+
+    /// Fetch envelopes for the page of messages immediately older than
+    /// `beforeUID`. The list is returned newest-first (by date) and capped at
+    /// `limit`. Used by "Load more" to extend the loaded window backwards.
+    func fetchOlder(mailbox name: String, beforeUID: UInt32, limit: Int) async throws -> [IMAPMessage] {
+        guard beforeUID > 1 else { return [] }
+        let range = MessageIdentifierRange<UID>(UID(rawValue: 1)...UID(rawValue: beforeUID - 1))
+        guard let set = MessageIdentifierSetNonEmpty(set: MessageIdentifierSet(range)) else { return [] }
+        return try await search(mailbox: name, key: .uid(.set(set)), limit: limit)
+    }
+
     func search(mailbox name: String, key: SearchKey, limit: Int) async throws -> [IMAPMessage] {
         _ = try await ensureSelected(name)
         let responses = try await send(.uidSearch(key: key))

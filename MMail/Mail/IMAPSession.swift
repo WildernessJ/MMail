@@ -42,6 +42,12 @@ actor IMAPSession {
     func fetchRecent(mailbox: String, limit: Int) async throws -> [IMAPMessage] {
         try await run { try await $0.fetchRecent(mailbox: mailbox, limit: limit) }
     }
+    func fetchSince(mailbox: String, since: Date, limit: Int) async throws -> [IMAPMessage] {
+        try await run { try await $0.fetchSince(mailbox: mailbox, since: since, limit: limit) }
+    }
+    func fetchOlder(mailbox: String, beforeUID: UInt32, limit: Int) async throws -> [IMAPMessage] {
+        try await run { try await $0.fetchOlder(mailbox: mailbox, beforeUID: beforeUID, limit: limit) }
+    }
     func fetchMessageData(mailbox: String, uid: UInt32, byteLimit: Int?) async throws -> Data {
         try await run { try await $0.fetchMessageData(mailbox: mailbox, uid: uid, byteLimit: byteLimit) }
     }

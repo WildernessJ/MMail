@@ -1453,23 +1453,84 @@ final class AppModel: ObservableObject {
 
     // MARK: - Pagination
 
+    /// Legacy hook (the new UID-based loader doesn't use it; kept so older call
+    /// sites still compile while we transition).
     func pageLimit(_ account: String, _ folderId: String) -> Int { pageLimits["\(account)#\(folderId)"] ?? 50 }
 
+    /// True when at least one account in the current scope still has older
+    /// messages we haven't fetched (no exhaustion marker yet).
     var canLoadMore: Bool {
-        guard isServerFolder(folder), serverSearchResults == nil,
+        guard isServerFolder(folder), folder != "starred", serverSearchResults == nil,
               !(searchActive && !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty) else { return false }
         let scope = currentAccount == "all" ? realConfigs.map { $0.id } : [currentAccount]
         for a in scope where isRealAccount(a) {
-            if emails.filter({ $0.account == a && $0.folder == folder }).count >= pageLimit(a, folder) { return true }
+            let hasAny = emails.contains { $0.account == a && $0.folder == folder && $0.uid != nil }
+            if hasAny && !loadMoreExhausted.contains("\(a)#\(folder)") { return true }
         }
         return false
     }
 
-    func loadMore() {
-        guard isServerFolder(folder) else { return }
-        let ids = currentAccount == "all" ? realConfigs.map { $0.id } : (isRealAccount(currentAccount) ? [currentAccount] : [])
-        for a in ids { pageLimits["\(a)#\(folder)"] = pageLimit(a, folder) + 50 }
-        loadForCurrentScope(folder, silent: true)
+    /// Per-(account, folder) marker set when the last `loadOlder` returned 0
+    /// new messages — there's nothing older to fetch.
+    private var loadMoreExhausted: Set<String> = []
+    /// Per-(account, folder) flag while a `loadOlder` round-trip is in flight.
+    @Published var loadingOlder = false
+
+    /// Fetch the next page of OLDER messages (50 per account, by UID < oldest
+    /// loaded UID). New messages keep arriving via the regular incremental
+    /// poll — this only extends the loaded window backwards.
+    func loadOlder() {
+        guard isServerFolder(folder), folder != "starred", !loadingOlder else { return }
+        let scope = currentAccount == "all" ? realConfigs.map { $0.id } : (isRealAccount(currentAccount) ? [currentAccount] : [])
+        let work: [(account: String, oldestUID: UInt32, box: String)] = scope.compactMap { a in
+            guard isRealAccount(a) else { return nil }
+            let folderEmails = emails.filter { $0.account == a && $0.folder == folder && $0.uid != nil }
+            guard let minUID = folderEmails.compactMap({ $0.uid }).min(), minUID > 1 else { return nil }
+            guard !loadMoreExhausted.contains("\(a)#\(folder)"),
+                  let box = mailboxName(a, folder) else { return nil }
+            return (a, minUID, box)
+        }
+        guard !work.isEmpty else { return }
+        loadingOlder = true
+        let folderId = folder
+        Task {
+            await withTaskGroup(of: (String, [Email]).self) { group in
+                for w in work {
+                    group.addTask { [weak self] in
+                        guard let self else { return (w.account, []) }
+                        guard let session = await MainActor.run(body: { self.session(for: w.account) }) else {
+                            return (w.account, [])
+                        }
+                        let msgs = (try? await session.fetchOlder(mailbox: w.box, beforeUID: w.oldestUID, limit: 50)) ?? []
+                        let mapped = msgs.map { AppModel.makeEmail($0, accountId: w.account, folder: folderId) }
+                        return (w.account, mapped)
+                    }
+                }
+                for await (account, mapped) in group {
+                    await MainActor.run {
+                        if mapped.isEmpty {
+                            self.loadMoreExhausted.insert("\(account)#\(folderId)")
+                        } else {
+                            self.mergeAppendFolder(mapped, accountId: account, folderId: folderId)
+                        }
+                    }
+                }
+            }
+            await MainActor.run { self.loadingOlder = false }
+        }
+    }
+
+    /// Append-only merge: add older envelopes to an already-loaded folder
+    /// without disturbing the existing live window. De-dupes by id; preserves
+    /// any locally-loaded bodies (older messages don't have one yet anyway).
+    private func mergeAppendFolder(_ newEmails: [Email], accountId: String, folderId: String) {
+        let existingIDs = Set(emails.filter { $0.account == accountId && $0.folder == folderId }.map { $0.id })
+        let toAdd = AppModel.dedupById(newEmails).filter { !existingIDs.contains($0.id) }
+        guard !toAdd.isEmpty else { return }
+        emails.append(contentsOf: toAdd)
+        registerLabels(from: toAdd)
+        MailCache.save(emails.filter { $0.account == accountId && $0.folder == folderId },
+                       account: accountId, folder: folderId)
     }
 
     // MARK: - Threading (client-side, from loaded mail)
@@ -1617,8 +1678,11 @@ final class AppModel: ObservableObject {
         }
         if !silent && !hasContent { loadingAccounts.insert(accountId) }
         accountErrors[accountId] = nil
-        let needDiscover = realMailboxes[accountId] == nil
-        let limit = pageLimit(accountId, folderId)
+        // We only need LIST to map server folder names for non-inbox folders
+        // (sent, drafts, trash, archive). Inbox is always "INBOX", so skip the
+        // LIST round-trip on the cold-launch path when the user just wants the
+        // inbox.
+        let needDiscover = realMailboxes[accountId] == nil && folderId != "inbox" && folderId != "starred"
         // Incremental for inbox whenever we already have a window of UIDs to
         // sync against. (Even if mailboxes haven't been discovered yet, the
         // inbox doesn't need discovery — we know it's "INBOX".)
@@ -1657,7 +1721,7 @@ final class AppModel: ObservableObject {
                 if canIncrement, let box {
                     let uids = loaded.compactMap { $0.uid }
                     let sync = try await session.syncFolder(mailbox: box, afterUID: uids.max() ?? 0,
-                                                            oldestUID: uids.min() ?? 0, newLimit: limit)
+                                                            oldestUID: uids.min() ?? 0, newLimit: 100)
                     await MainActor.run {
                         self.mergeIncremental(sync, accountId: accountId, folderId: folderId)
                         self.loadingAccounts.remove(accountId)
@@ -1665,12 +1729,16 @@ final class AppModel: ObservableObject {
                     return
                 }
 
+                // Date-windowed initial fetch: server-side filter by
+                // INTERNALDATE keeps the payload tiny (only this-week's mail).
+                // Older messages load on demand via `loadOlder()`.
+                let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
                 let msgs: [IMAPMessage]
                 switch folderId {
-                case "inbox": msgs = try await session.fetchRecent(mailbox: "INBOX", limit: limit)
-                case "starred": msgs = try await session.searchFlagged(mailbox: "INBOX", limit: limit)
+                case "inbox": msgs = try await session.fetchSince(mailbox: "INBOX", since: weekAgo, limit: 200)
+                case "starred": msgs = try await session.searchFlagged(mailbox: "INBOX", limit: 200)
                 default:
-                    if let box { msgs = try await session.fetchRecent(mailbox: box, limit: limit) }
+                    if let box { msgs = try await session.fetchSince(mailbox: box, since: weekAgo, limit: 200) }
                     else { msgs = [] }
                 }
                 let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
@@ -1890,6 +1958,9 @@ final class AppModel: ObservableObject {
         emails.append(contentsOf: merged)
         if persist { MailCache.save(merged, account: accountId, folder: folderId) }
         if persist { lastSyncAt["\(accountId)#\(folderId)"] = Date() }
+        // A full server re-fetch resets the "older" window, so allow loadOlder
+        // to try again even if a previous attempt exhausted.
+        if persist { loadMoreExhausted.remove("\(accountId)#\(folderId)") }
         // Run defensive auto-trash and rules on every load, not only persisted
         // server fetches — a cached bootstrap should also hide blocked senders.
         autoTrashBlocked(accountId: accountId, folderId: folderId)
@@ -2204,13 +2275,16 @@ final class AppModel: ObservableObject {
 
     func startPolling() {
         guard pollTimer == nil else { return }
-        // Every 30s: incrementally refresh the current folder (new mail + flag
-        // changes only). Every 10th tick (~5 min) do a full fetch to self-heal
-        // expunges / UID-validity resets. Also run scheduled sends + snooze wakes.
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+        // Every 15s: incrementally refresh the current folder (new mail + flag
+        // changes only). The incremental sync is a tight UID-range FETCH so
+        // this stays cheap; the full re-fetch path is reserved for explicit
+        // user reloads (folder switch outside the freshness gate, or manual
+        // refresh) and account add/remove, so a busy poll never re-pulls the
+        // whole week's window.
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.pollCount += 1
-            self.refreshCurrentRealFolder(silent: true, incremental: self.pollCount % 10 != 0)
+            self.refreshCurrentRealFolder(silent: true, incremental: true)
             self.processScheduledSends()
             self.wakeSnoozedIfDue()
         }
