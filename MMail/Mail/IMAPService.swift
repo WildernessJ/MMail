@@ -130,6 +130,9 @@ final class IMAPService {
     private let collector = IMAPResponseHandler()
     private var channel: Channel?
     private var tagCounter = 0
+    /// The mailbox currently SELECTed on this connection, if any. Lets us skip
+    /// redundant SELECTs (the slowest no-op an IMAP client can issue).
+    private var currentMailbox: String?
 
     init(config: MailAccountConfig, password: String) {
         self.host = config.imapHost
@@ -182,6 +185,7 @@ final class IMAPService {
             try? await channel.close().get()
         }
         self.channel = nil
+        self.currentMailbox = nil
     }
 
     // MARK: Commands
@@ -209,10 +213,22 @@ final class IMAPService {
     @discardableResult
     func select(_ name: String) async throws -> Int {
         let responses = try await send(.select(mailbox(name)))
+        currentMailbox = name
         for r in responses {
             if case .untagged(.mailboxData(.exists(let n))) = r { return n }
         }
         return 0
+    }
+
+    /// SELECT only if we're not already on `name`. Returns -1 when the SELECT
+    /// was skipped (the caller didn't need an EXISTS count); otherwise returns
+    /// the fresh count from the server.
+    @discardableResult
+    private func ensureSelected(_ name: String) async throws -> Int {
+        if let curr = currentMailbox, curr.compare(name, options: .caseInsensitive) == .orderedSame {
+            return -1
+        }
+        return try await select(name)
     }
 
     func fetchRecent(mailbox name: String, limit: Int) async throws -> [IMAPMessage] {
@@ -227,10 +243,10 @@ final class IMAPService {
 
     /// Incremental refresh: fetch only messages newer than `afterUID`, plus the
     /// current flags for the already-loaded range `[oldestUID...afterUID]` (so
-    /// read/star/label changes from other clients show up). One SELECT, two
-    /// cheap UID FETCHes — far less data than re-fetching every envelope.
+    /// read/star/label changes from other clients show up). Reuses the existing
+    /// SELECT when we're already on the mailbox.
     func syncFolder(mailbox name: String, afterUID: UInt32, oldestUID: UInt32, newLimit: Int) async throws -> IMAPFolderSync {
-        _ = try await select(name)
+        _ = try await ensureSelected(name)
 
         var newMessages: [IMAPMessage] = []
         if afterUID < UInt32.max {
@@ -250,7 +266,7 @@ final class IMAPService {
     }
 
     func search(mailbox name: String, key: SearchKey, limit: Int) async throws -> [IMAPMessage] {
-        _ = try await select(name)
+        _ = try await ensureSelected(name)
         let responses = try await send(.uidSearch(key: key))
         var uids: [UInt32] = []
         for r in responses {
@@ -297,7 +313,7 @@ final class IMAPService {
     /// Fetch the raw RFC822 message bytes. `byteLimit` caps the download (the
     /// text parts come first in MIME order); pass nil for the complete message.
     func fetchMessageData(mailbox name: String, uid: UInt32, byteLimit: Int?) async throws -> Data {
-        _ = try await select(name)
+        _ = try await ensureSelected(name)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
         let section: FetchAttribute = byteLimit.map { .bodySection(peek: true, .complete, 0...UInt32($0 - 1)) }
             ?? .bodySection(peek: true, .complete, nil)
@@ -309,8 +325,45 @@ final class IMAPService {
         return Data(raw.readableBytesView)
     }
 
+    /// Batched body fetch — pulls bytes for many UIDs in a single FETCH command
+    /// instead of one round-trip per message. Returns `[uid: data]`; uids that
+    /// the server didn't return are absent from the map.
+    func fetchMessageDatas(mailbox name: String, uids: [UInt32], byteLimit: Int?) async throws -> [UInt32: Data] {
+        guard !uids.isEmpty else { return [:] }
+        _ = try await ensureSelected(name)
+        let ranges = uids.map { MessageIdentifierRange<UID>(UID(rawValue: $0)...UID(rawValue: $0)) }
+        guard let set = MessageIdentifierSetNonEmpty(set: MessageIdentifierSet(ranges)) else { return [:] }
+        let section: FetchAttribute = byteLimit.map { .bodySection(peek: true, .complete, 0...UInt32($0 - 1)) }
+            ?? .bodySection(peek: true, .complete, nil)
+        let responses = try await send(.uidFetch(.set(set), [.uid, section], []))
+        var out: [UInt32: Data] = [:]
+        var currentUID: UInt32 = 0
+        var buf = ByteBuffer()
+        for r in responses {
+            guard case .fetch(let fr) = r else { continue }
+            switch fr {
+            case .start, .startUID:
+                currentUID = 0
+                buf.clear()
+            case .simpleAttribute(let attr):
+                if case .uid(let u) = attr { currentUID = u.rawValue }
+            case .streamingBytes(var chunk):
+                buf.writeBuffer(&chunk)
+            case .finish:
+                if currentUID > 0, buf.readableBytes > 0 {
+                    out[currentUID] = Data(buf.readableBytesView)
+                }
+                currentUID = 0
+                buf.clear()
+            default:
+                break
+            }
+        }
+        return out
+    }
+
     func store(mailbox name: String, uid: UInt32, _ kind: MailFlagKind, add: Bool) async throws {
-        _ = try await select(name)
+        _ = try await ensureSelected(name)
         let flag: Flag = kind == .seen ? .seen : (kind == .flagged ? .flagged : .deleted)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
         let storeFlags: StoreFlags = add ? .add(silent: true, list: [flag]) : .remove(silent: true, list: [flag])
@@ -318,14 +371,14 @@ final class IMAPService {
     }
 
     func move(uid: UInt32, from: String, to: String) async throws {
-        _ = try await select(from)
+        _ = try await ensureSelected(from)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
         _ = try await send(.uidMove(.range(range), mailbox(to)))
     }
 
     /// Add or remove a custom keyword (label) on a message.
     func storeKeyword(mailbox name: String, uid: UInt32, keyword: String, add: Bool) async throws {
-        _ = try await select(name)
+        _ = try await ensureSelected(name)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
         let flag = Flag(keyword)
         let store: StoreFlags = add ? .add(silent: true, list: [flag]) : .remove(silent: true, list: [flag])
