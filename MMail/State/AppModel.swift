@@ -1270,7 +1270,11 @@ final class AppModel: ObservableObject {
         searchQuery = ""
         serverSearchResults = nil
         searching = false
-        loadForCurrentScope(f)
+        // Folder navigation: use the cheap incremental sync (UID range above
+        // last seen) rather than re-running the week-window fetch. The cache
+        // is already in memory, so the user sees content instantly and we
+        // only round-trip for what's actually new.
+        loadForCurrentScope(f, silent: true, incremental: true)
     }
 
     // MARK: - Commands (palette)
@@ -1402,10 +1406,15 @@ final class AppModel: ObservableObject {
         if id != "all" && folder == "home" { folder = "inbox" }
         let f = folder == "home" ? "inbox" : folder
         guard isServerFolder(f) else { return }
+        // Account switching: every account already has its cached window in
+        // memory, so prefer an incremental (UID > last) sync — same shape as
+        // the poll, sub-second per account — over a full week-window
+        // re-fetch. The freshness gate inside loadFolder will skip the
+        // round-trip entirely if we just polled.
         if id == "all" {
-            for cfg in realConfigs { loadFolder(cfg.id, f, silent: true) }
+            for cfg in realConfigs { loadFolder(cfg.id, f, silent: true, incremental: true) }
         } else if isRealAccount(id) {
-            loadFolder(id, f)
+            loadFolder(id, f, silent: true, incremental: true)
         }
     }
 
@@ -1727,14 +1736,16 @@ final class AppModel: ObservableObject {
             mergeRealFolder(cached, accountId: accountId, folderId: folderId, persist: false)
             hasContent = true
         }
-        // Fresh-cache gate: if the user just navigated here and we synced this
-        // folder seconds ago, skip the server round-trip. The 30-second poll
-        // will refresh it shortly anyway. Doesn't apply to explicit incremental
-        // calls (those are how the poll asks for new mail).
+        // Fresh-cache gate. If we synced this folder recently, skip the
+        // round-trip entirely — the cache is already in memory and the
+        // 15-second poll will refresh it shortly. The window is tighter for
+        // incremental calls (the poll itself uses these and we don't want to
+        // throttle the poll), wider for full reloads (folder/account switch).
         let syncKey = "\(accountId)#\(folderId)"
-        if !incremental, hasContent, let t = lastSyncAt[syncKey],
-           Date().timeIntervalSince(t) < 12 {
-            return
+        if hasContent, let t = lastSyncAt[syncKey] {
+            let dt = Date().timeIntervalSince(t)
+            if incremental && dt < 8 { return }
+            if !incremental && dt < 30 { return }
         }
         if !silent && !hasContent { loadingAccounts.insert(accountId) }
         accountErrors[accountId] = nil
@@ -1743,11 +1754,11 @@ final class AppModel: ObservableObject {
         // LIST round-trip on the cold-launch path when the user just wants the
         // inbox.
         let needDiscover = realMailboxes[accountId] == nil && folderId != "inbox" && folderId != "starred"
-        // Incremental for inbox whenever we already have a window of UIDs to
-        // sync against. (Even if mailboxes haven't been discovered yet, the
-        // inbox doesn't need discovery — we know it's "INBOX".)
+        // Incremental sync (UID > maxLoaded) works for any plain folder that
+        // already has a loaded window. Starred is a server-side search so it
+        // can't be UID-windowed — leave it on the full-fetch path.
         let loaded = emails.filter { $0.account == accountId && $0.folder == folderId }
-        let canIncrement = incremental && folderId == "inbox"
+        let canIncrement = incremental && folderId != "starred"
             && !loaded.isEmpty && loaded.compactMap { $0.uid }.max() != nil
         Task {
             do {
