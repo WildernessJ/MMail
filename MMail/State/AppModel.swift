@@ -1473,51 +1473,111 @@ final class AppModel: ObservableObject {
     /// Per-(account, folder) marker set when the last `loadOlder` returned 0
     /// new messages — there's nothing older to fetch.
     private var loadMoreExhausted: Set<String> = []
-    /// Per-(account, folder) flag while a `loadOlder` round-trip is in flight.
+    /// True while a single "Load older" page is being fetched.
     @Published var loadingOlder = false
+    /// True while the recursive "Download all older messages" action is
+    /// running. Lets the UI show progress + a Cancel control.
+    @Published var downloadingAllOlder = false
+    /// Number of older messages added during the current `loadAllOlder` run.
+    @Published var olderDownloadedCount = 0
+    /// Set to true to abort an in-flight `loadAllOlder`. Cleared automatically
+    /// at the next call.
+    private var cancelAllOlder = false
+
+    /// Compute the work list (one entry per account in scope that has more to
+    /// fetch) for an older-messages round.
+    private func olderWorkList(folderId: String) -> [(account: String, oldestUID: UInt32, box: String)] {
+        let scope = currentAccount == "all" ? realConfigs.map { $0.id } : (isRealAccount(currentAccount) ? [currentAccount] : [])
+        return scope.compactMap { a in
+            guard isRealAccount(a) else { return nil }
+            let folderEmails = emails.filter { $0.account == a && $0.folder == folderId && $0.uid != nil }
+            guard let minUID = folderEmails.compactMap({ $0.uid }).min(), minUID > 1 else { return nil }
+            guard !loadMoreExhausted.contains("\(a)#\(folderId)"),
+                  let box = mailboxName(a, folderId) else { return nil }
+            return (a, minUID, box)
+        }
+    }
+
+    /// Run one round of older-message fetching across every account that still
+    /// has work. Returns the number of new messages appended; 0 means every
+    /// account in scope is exhausted for this folder.
+    @discardableResult
+    private func runOlderRound(folderId: String) async -> Int {
+        let work = olderWorkList(folderId: folderId)
+        guard !work.isEmpty else { return 0 }
+        var roundAdded = 0
+        await withTaskGroup(of: (String, [Email]).self) { group in
+            for w in work {
+                group.addTask { [weak self] in
+                    guard let self else { return (w.account, []) }
+                    guard let session = await MainActor.run(body: { self.session(for: w.account) }) else {
+                        return (w.account, [])
+                    }
+                    let msgs = (try? await session.fetchOlder(mailbox: w.box, beforeUID: w.oldestUID, limit: 50)) ?? []
+                    let mapped = msgs.map { AppModel.makeEmail($0, accountId: w.account, folder: folderId) }
+                    return (w.account, mapped)
+                }
+            }
+            for await (account, mapped) in group {
+                let added: Int = await MainActor.run {
+                    if mapped.isEmpty {
+                        self.loadMoreExhausted.insert("\(account)#\(folderId)")
+                        return 0
+                    }
+                    self.mergeAppendFolder(mapped, accountId: account, folderId: folderId)
+                    return mapped.count
+                }
+                roundAdded += added
+            }
+        }
+        return roundAdded
+    }
 
     /// Fetch the next page of OLDER messages (50 per account, by UID < oldest
     /// loaded UID). New messages keep arriving via the regular incremental
     /// poll — this only extends the loaded window backwards.
     func loadOlder() {
-        guard isServerFolder(folder), folder != "starred", !loadingOlder else { return }
-        let scope = currentAccount == "all" ? realConfigs.map { $0.id } : (isRealAccount(currentAccount) ? [currentAccount] : [])
-        let work: [(account: String, oldestUID: UInt32, box: String)] = scope.compactMap { a in
-            guard isRealAccount(a) else { return nil }
-            let folderEmails = emails.filter { $0.account == a && $0.folder == folder && $0.uid != nil }
-            guard let minUID = folderEmails.compactMap({ $0.uid }).min(), minUID > 1 else { return nil }
-            guard !loadMoreExhausted.contains("\(a)#\(folder)"),
-                  let box = mailboxName(a, folder) else { return nil }
-            return (a, minUID, box)
-        }
-        guard !work.isEmpty else { return }
+        guard isServerFolder(folder), folder != "starred", !loadingOlder, !downloadingAllOlder else { return }
+        guard !olderWorkList(folderId: folder).isEmpty else { return }
         loadingOlder = true
         let folderId = folder
         Task {
-            await withTaskGroup(of: (String, [Email]).self) { group in
-                for w in work {
-                    group.addTask { [weak self] in
-                        guard let self else { return (w.account, []) }
-                        guard let session = await MainActor.run(body: { self.session(for: w.account) }) else {
-                            return (w.account, [])
-                        }
-                        let msgs = (try? await session.fetchOlder(mailbox: w.box, beforeUID: w.oldestUID, limit: 50)) ?? []
-                        let mapped = msgs.map { AppModel.makeEmail($0, accountId: w.account, folder: folderId) }
-                        return (w.account, mapped)
-                    }
-                }
-                for await (account, mapped) in group {
-                    await MainActor.run {
-                        if mapped.isEmpty {
-                            self.loadMoreExhausted.insert("\(account)#\(folderId)")
-                        } else {
-                            self.mergeAppendFolder(mapped, accountId: account, folderId: folderId)
-                        }
-                    }
-                }
-            }
+            _ = await runOlderRound(folderId: folderId)
             await MainActor.run { self.loadingOlder = false }
         }
+    }
+
+    /// Recursively page back through every older message in the current scope
+    /// (all accounts when on "All inboxes", or just the selected account)
+    /// until nothing older remains, then stop. The UI shows a running counter
+    /// and a Cancel button.
+    func loadAllOlder() {
+        guard isServerFolder(folder), folder != "starred", !downloadingAllOlder else { return }
+        guard !olderWorkList(folderId: folder).isEmpty else { return }
+        downloadingAllOlder = true
+        loadingOlder = true
+        olderDownloadedCount = 0
+        cancelAllOlder = false
+        let folderId = folder
+        Task {
+            // Safety cap: 500 rounds × 50/account = up to 25k messages per
+            // account. Plenty for any normal mailbox, finite for runaways.
+            for _ in 0..<500 {
+                if await MainActor.run(body: { self.cancelAllOlder }) { break }
+                let added = await runOlderRound(folderId: folderId)
+                await MainActor.run { self.olderDownloadedCount += added }
+                if added == 0 { break }
+            }
+            await MainActor.run {
+                self.downloadingAllOlder = false
+                self.loadingOlder = false
+                self.cancelAllOlder = false
+            }
+        }
+    }
+
+    func cancelLoadAllOlder() {
+        cancelAllOlder = true
     }
 
     /// Append-only merge: add older envelopes to an already-loaded folder

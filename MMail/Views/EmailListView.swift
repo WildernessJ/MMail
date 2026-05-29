@@ -182,18 +182,8 @@ struct EmailListView: View {
                                         .id(e.id)
                                 }
                             }
-                            if model.canLoadMore {
-                                Button { model.loadOlder() } label: {
-                                    HStack(spacing: 6) {
-                                        if model.loadingOlder { ProgressView().controlSize(.small) }
-                                        Text(model.loadingOlder ? "Loading older messages…" : "Load older messages")
-                                            .font(.system(size: 12.5, weight: .semibold))
-                                            .foregroundStyle(p.brandBlue)
-                                    }
-                                    .frame(maxWidth: .infinity).padding(.vertical, 14)
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(model.loadingOlder)
+                            if model.canLoadMore || model.downloadingAllOlder {
+                                loadOlderFooter
                             }
                         }
                     }
@@ -244,9 +234,58 @@ struct EmailListView: View {
                 .foregroundStyle(p.fg3)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 360)
+            if model.canLoadMore || model.downloadingAllOlder {
+                loadOlderFooter
+                    .padding(.top, 22)
+                    .frame(maxWidth: 360)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
+    }
+
+    /// Shared footer shown both below the inbox list and inside the empty
+    /// state: "Load older messages" for one page + "Download all older
+    /// messages" for an automated recursive backfill. Swaps to a progress
+    /// line with a Cancel button while a recursive download is running.
+    private var loadOlderFooter: some View {
+        VStack(spacing: 6) {
+            if model.downloadingAllOlder {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Downloading older emails… \(model.olderDownloadedCount) downloaded")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(p.fg2)
+                }
+                Button("Cancel") { model.cancelLoadAllOlder() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(p.brandBlue)
+            } else {
+                Button { model.loadOlder() } label: {
+                    HStack(spacing: 6) {
+                        if model.loadingOlder { ProgressView().controlSize(.small) }
+                        Text(model.loadingOlder ? "Loading older messages…" : "Load older messages")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(p.brandBlue)
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.loadingOlder)
+
+                Button { model.loadAllOlder() } label: {
+                    Text("Download all older messages")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(p.fg3)
+                        .underline()
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.loadingOlder)
+            }
+        }
+        .padding(.vertical, 10)
     }
 
     // MARK: Grouping
