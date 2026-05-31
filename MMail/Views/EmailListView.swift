@@ -434,6 +434,63 @@ struct EmailRowView: View {
         }
         .overlay(Rectangle().fill(p.border).frame(height: 1), alignment: .bottom)
         .onHover { hovered = $0 }
+        .contextMenu { contextMenuItems }
+    }
+
+    /// Right-click menu for the row. Reply/forward set the selection first
+    /// since those actions read from `selectedEmail`; the triage actions
+    /// already take an explicit id.
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        Button { model.selectedId = email.id; model.reply() } label: {
+            Label("Reply", systemImage: "arrowshape.turn.up.left")
+        }
+        Button { model.selectedId = email.id; model.replyAll() } label: {
+            Label("Reply all", systemImage: "arrowshape.turn.up.left.2")
+        }
+        Button { model.selectedId = email.id; model.forward() } label: {
+            Label("Forward", systemImage: "arrowshape.turn.up.right")
+        }
+        Divider()
+        Button { model.markDone(email.id) } label: {
+            Label("Mark as done", systemImage: "checkmark.circle")
+        }
+        Button { model.archive(email.id) } label: {
+            Label("Archive", systemImage: "archivebox")
+        }
+        Button { model.toggleStar(email.id) } label: {
+            Label(email.starred ? "Unstar" : "Star", systemImage: email.starred ? "star.slash" : "star")
+        }
+        Button { model.markUnread(email.id) } label: {
+            Label(email.unread ? "Mark as read" : "Mark as unread", systemImage: "envelope.badge")
+        }
+        Button { model.snooze(email.id) } label: {
+            Label("Snooze until tomorrow", systemImage: "clock")
+        }
+        Divider()
+        let mailboxes = model.folderNames(for: email.account)
+        if !mailboxes.isEmpty {
+            Menu {
+                ForEach(mailboxes, id: \.self) { name in
+                    Button(name) { model.moveToMailbox(email.id, mailbox: name) }
+                }
+            } label: { Label("Move to…", systemImage: "tray.and.arrow.up") }
+        }
+        Button { model.markSpam(email.id) } label: {
+            Label("Mark as spam", systemImage: "exclamationmark.triangle")
+        }
+        if let addr = email.fromEmail, !addr.isEmpty {
+            Button { model.toggleVIP(addr) } label: {
+                Label(model.isVIP(addr) ? "Remove VIP" : "Mark sender as VIP", systemImage: "crown")
+            }
+            Button(role: .destructive) { model.blockSender(addr) } label: {
+                Label("Block \(sender?.firstName ?? addr)", systemImage: "hand.raised")
+            }
+        }
+        Divider()
+        Button(role: .destructive) { model.delete(email.id) } label: {
+            Label("Delete", systemImage: "trash")
+        }
     }
 
     private var avatar: some View {
