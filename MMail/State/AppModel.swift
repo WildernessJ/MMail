@@ -1446,12 +1446,12 @@ final class AppModel: ObservableObject {
 
     /// Load a folder for whatever account scope is selected — a single real
     /// account, or every real account when the unified "All inboxes" is active.
-    func loadForCurrentScope(_ folderId: String, silent: Bool = false, incremental: Bool = false) {
+    func loadForCurrentScope(_ folderId: String, silent: Bool = false, incremental: Bool = false, force: Bool = false) {
         guard isServerFolder(folderId) else { return }
         if currentAccount == "all" {
-            for cfg in realConfigs { loadFolder(cfg.id, folderId, silent: silent, incremental: incremental) }
+            for cfg in realConfigs { loadFolder(cfg.id, folderId, silent: silent, incremental: incremental, force: force) }
         } else if isRealAccount(currentAccount) {
-            loadFolder(currentAccount, folderId, silent: silent, incremental: incremental)
+            loadFolder(currentAccount, folderId, silent: silent, incremental: incremental, force: force)
         }
     }
 
@@ -1482,8 +1482,92 @@ final class AppModel: ObservableObject {
         performSend(draft)
     }
 
-    func refreshCurrentRealFolder(silent: Bool = false, incremental: Bool = false) {
-        loadForCurrentScope(folder, silent: silent, incremental: incremental)
+    func refreshCurrentRealFolder(silent: Bool = false, incremental: Bool = false, force: Bool = false) {
+        loadForCurrentScope(folder, silent: silent, incremental: incremental, force: force)
+    }
+
+    /// True while the user-initiated refresh button's fan-out is in flight.
+    /// Drives the toolbar spinner that replaces the refresh icon.
+    @Published var refreshing = false
+
+    /// User clicked the refresh button. Forces an incremental sync even if we
+    /// polled seconds ago, and flips `refreshing` for the duration so the
+    /// toolbar swaps the refresh icon for a spinner.
+    func userRefresh() {
+        guard !refreshing else { return }
+        let folderId = folder
+        let scope = currentAccount == "all"
+            ? realConfigs.map { $0.id }
+            : (isRealAccount(currentAccount) ? [currentAccount] : [])
+        guard !scope.isEmpty, isServerFolder(folderId) else { return }
+        refreshing = true
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for a in scope {
+                    group.addTask { [weak self] in
+                        guard let self else { return }
+                        // Run the same per-account fetch loadFolder does, but
+                        // synchronously await it here so we know when every
+                        // account has finished — that's what the spinner waits
+                        // on. Force-bypasses the freshness gate.
+                        await self.performUserRefresh(accountId: a, folderId: folderId)
+                    }
+                }
+            }
+            await MainActor.run { self.refreshing = false }
+        }
+    }
+
+    /// One account's worth of user-refresh work. Mirrors the relevant arms of
+    /// `loadFolder` but inline so we can await completion (the public
+    /// `loadFolder` is fire-and-forget, which is fine for poll/nav but not
+    /// for the spinner.)
+    private func performUserRefresh(accountId: String, folderId: String) async {
+        guard isRealAccount(accountId),
+              let session = await MainActor.run(body: { self.session(for: accountId) }) else { return }
+        let loaded = await MainActor.run {
+            self.emails.filter { $0.account == accountId && $0.folder == folderId }
+        }
+        let box: String? = await MainActor.run {
+            if folderId == "inbox" { return "INBOX" as String? }
+            return self.realMailboxes[accountId]?[folderId == "done" ? "archive" : folderId]
+        }
+        do {
+            // Prefer incremental (UID > maxLoaded) when we have a window.
+            if let box, !loaded.isEmpty, let maxUID = loaded.compactMap({ $0.uid }).max() {
+                let oldestUID = loaded.compactMap({ $0.uid }).min() ?? 0
+                let sync = try await withTimeout(20) {
+                    try await session.syncFolder(mailbox: box, afterUID: maxUID,
+                                                 oldestUID: oldestUID, newLimit: 100)
+                }
+                await MainActor.run {
+                    self.mergeIncremental(sync, accountId: accountId, folderId: folderId)
+                }
+                return
+            }
+            // No window yet: fall back to the recent-N fetch.
+            let msgs: [IMAPMessage] = try await withTimeout(25) {
+                if folderId == "starred" {
+                    return try await session.searchFlagged(mailbox: "INBOX", limit: 50)
+                }
+                if let box {
+                    return try await session.fetchRecent(mailbox: box, limit: 50)
+                }
+                return []
+            }
+            let mapped = msgs.map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
+            await MainActor.run {
+                self.mergeRealFolder(mapped, accountId: accountId, folderId: folderId, persist: true)
+            }
+        } catch {
+            await MainActor.run {
+                self.accountErrors[accountId] = error.localizedDescription
+                if let s = self.imapSessions[accountId] {
+                    Task { await s.close() }
+                    self.imapSessions[accountId] = nil
+                }
+            }
+        }
     }
 
     // MARK: - Pagination
@@ -1796,7 +1880,7 @@ final class AppModel: ObservableObject {
         if selectedId == nil { selectedId = filteredEmails.first?.id }
     }
 
-    func loadFolder(_ accountId: String, _ folderId: String, silent: Bool = false, incremental: Bool = false) {
+    func loadFolder(_ accountId: String, _ folderId: String, silent: Bool = false, incremental: Bool = false, force: Bool = false) {
         guard isRealAccount(accountId), isServerFolder(folderId), let session = session(for: accountId) else {
             if config(for: accountId)?.imapPassword == nil { accountErrors[accountId] = "Missing saved password." }
             return
@@ -1813,7 +1897,7 @@ final class AppModel: ObservableObject {
         // incremental calls (the poll itself uses these and we don't want to
         // throttle the poll), wider for full reloads (folder/account switch).
         let syncKey = "\(accountId)#\(folderId)"
-        if hasContent, let t = lastSyncAt[syncKey] {
+        if !force, hasContent, let t = lastSyncAt[syncKey] {
             let dt = Date().timeIntervalSince(t)
             if incremental && dt < 8 { return }
             if !incremental && dt < 30 { return }

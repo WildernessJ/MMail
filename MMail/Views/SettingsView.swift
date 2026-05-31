@@ -48,7 +48,7 @@ struct SettingsView: View {
                                         Text("\(cfg.imapHost) · IMAP/SMTP").font(.system(size: 12)).foregroundStyle(p.fg3)
                                     }
                                     Spacer()
-                                    Button { model.loadFolder(cfg.id, "inbox") } label: {
+                                    Button { model.loadFolder(cfg.id, "inbox", force: true) } label: {
                                         HStack(spacing: 6) { Icon(name: "refresh", size: 14); Text("Resync").font(.system(size: 12.5, weight: .medium)) }
                                             .foregroundStyle(p.fg2).padding(.horizontal, 10).frame(height: 30)
                                             .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))

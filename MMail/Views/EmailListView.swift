@@ -63,14 +63,16 @@ struct EmailListView: View {
                     .foregroundStyle(p.fg1)
                 Spacer()
                 if scopeIsRealMail {
-                    Button { model.refreshCurrentRealFolder() } label: {
-                        if scopeLoading {
+                    Button { model.userRefresh() } label: {
+                        if model.refreshing || scopeLoading {
                             ProgressView().controlSize(.small)
                         } else {
                             Icon(name: "refresh", size: 14).foregroundStyle(p.fg3)
                         }
                     }
-                    .buttonStyle(.plain).help("Refresh")
+                    .buttonStyle(.plain)
+                    .disabled(model.refreshing)
+                    .help(model.refreshing ? "Refreshing…" : "Refresh")
                 }
             }
             HStack(spacing: 6) {
@@ -210,11 +212,19 @@ struct EmailListView: View {
             Text("Couldn't connect").font(.system(size: 18, weight: .bold)).foregroundStyle(p.fg2)
             Text(message).font(.system(size: 12.5)).foregroundStyle(p.fg3)
                 .multilineTextAlignment(.center).frame(maxWidth: 320)
-            Button { model.refreshCurrentRealFolder() } label: {
-                Text("Retry").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 7)
-                    .background(p.brandBlue).clipShape(Capsule())
-            }.buttonStyle(.plain).padding(.top, 4)
+            Button { model.userRefresh() } label: {
+                HStack(spacing: 6) {
+                    if model.refreshing { ProgressView().controlSize(.small).colorScheme(.dark) }
+                    Text(model.refreshing ? "Retrying…" : "Retry")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(p.brandBlue).clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(model.refreshing)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity).padding(40)
     }
