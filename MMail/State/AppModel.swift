@@ -2193,16 +2193,13 @@ final class AppModel: ObservableObject {
             }
         }
         registerLabels(from: merged)
-        // For the inbox, fire server moves for any blocked-sender messages and
-        // drop them from the local set so they never appear in the inbox view.
-        if folderId == "inbox" && !blockedSenders.isEmpty {
-            let blocked = merged.filter { isBlocked($0.fromEmail) && !isVIP($0.fromEmail) }
-            for b in blocked where isRealAccount(accountId) && mailboxName(accountId, "trash") != nil {
-                realMove(b, to: "trash")
-            }
-            let blockedIDs = Set(blocked.map { $0.id })
-            merged.removeAll { blockedIDs.contains($0.id) }
-        }
+        // NOTE: do NOT auto-trash blocked senders here. mergeRealFolder runs
+        // on bulk historical fetches (adding an account, full reload, etc.);
+        // applying the global block list to mail the user never saw means a
+        // fresh account can get half its inbox silently trashed because of
+        // blocks set on a different account. Auto-trash is the right move for
+        // *new arrivals* — handled in mergeIncremental — and for explicit
+        // user blockSender calls. Historical mail stays put.
         emails.removeAll { $0.account == accountId && $0.folder == folderId }
         emails.append(contentsOf: merged)
         if persist { MailCache.save(merged, account: accountId, folder: folderId) }
@@ -2210,9 +2207,6 @@ final class AppModel: ObservableObject {
         // A full server re-fetch resets the "older" window, so allow loadOlder
         // to try again even if a previous attempt exhausted.
         if persist { loadMoreExhausted.remove("\(accountId)#\(folderId)") }
-        // Run defensive auto-trash and rules on every load, not only persisted
-        // server fetches — a cached bootstrap should also hide blocked senders.
-        autoTrashBlocked(accountId: accountId, folderId: folderId)
         if persist { applyRules(accountId: accountId, folderId: folderId) }
         let inScope = (currentAccount == accountId || currentAccount == "all")
         if inScope && folder == folderId && serverSearchResults == nil {
