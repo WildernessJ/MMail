@@ -2355,12 +2355,36 @@ final class AppModel: ObservableObject {
     }
 
     /// Fetch the body (and mark seen) the first time a real message is opened.
+    /// Email ids whose body fetch failed or timed out. The reader watches this
+    /// to swap the perpetual "Loading…" spinner for an error + Retry button.
+    @Published var bodyLoadFailed: Set<String> = []
+    /// Email ids whose body fetch is currently in flight. Prevents firing a
+    /// duplicate fetch on every selection / re-render.
+    private var bodyLoadInFlight: Set<String> = []
+
     func loadBodyIfNeeded() {
         guard let e = selectedEmail, isRealAccount(e.account), !e.bodyLoaded, let uid = e.uid,
               let session = bodySession(for: e.account) else { return }
+        // Don't auto-retry if a previous attempt failed — wait for the user to
+        // tap Retry. Also dedupe in-flight loads for the same email.
+        if bodyLoadFailed.contains(e.id) || bodyLoadInFlight.contains(e.id) { return }
+        bodyLoadInFlight.insert(e.id)
         let box = mailboxName(e.account, e.folder) ?? "INBOX"
         let id = e.id
         let acct = e.account, fld = e.folder
+
+        // Belt-and-suspenders: if the Task somehow neither succeeds nor errors
+        // within 35s, force the email into the failed state so the spinner
+        // can't run forever. The Task itself has a 30s internal timeout but
+        // this guards against any unexpected silent hang.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 35) { [weak self] in
+            guard let self else { return }
+            if self.bodyLoadInFlight.contains(id) {
+                self.bodyLoadInFlight.remove(id)
+                self.bodyLoadFailed.insert(id)
+            }
+        }
+
         Task {
             do {
                 let data = try await self.withTimeout(30) {
@@ -2369,6 +2393,8 @@ final class AppModel: ObservableObject {
                 let parsed = MIME.parse(data)
                 let metas = parsed.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
                 await MainActor.run {
+                    self.bodyLoadInFlight.remove(id)
+                    self.bodyLoadFailed.remove(id)
                     if let i = self.emails.firstIndex(where: { $0.id == id }) {
                         self.emails[i].body = parsed.text
                         self.emails[i].preview = String(parsed.text.replacingOccurrences(of: "\n", with: " ").prefix(140))
@@ -2388,9 +2414,12 @@ final class AppModel: ObservableObject {
                                    account: acct, folder: fld)
                 }
             } catch {
-                // Body fetch wedged or errored: drop the body session so the
-                // next open opens a fresh channel rather than queueing.
+                // Body fetch wedged or errored: surface the failure to the
+                // reader and drop the body session so the next attempt opens
+                // a fresh channel rather than queueing behind a stuck one.
                 await MainActor.run {
+                    self.bodyLoadInFlight.remove(id)
+                    self.bodyLoadFailed.insert(id)
                     if let s = self.bodySessions[acct] {
                         Task { await s.close() }
                         self.bodySessions[acct] = nil
@@ -2398,6 +2427,15 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// User clicked Retry on the reader's "Couldn't load message" state.
+    /// Clears the failed flag and re-runs the body fetch on a fresh session.
+    func retryBodyLoad() {
+        guard let id = selectedEmail?.id else { return }
+        bodyLoadFailed.remove(id)
+        bodyLoadInFlight.remove(id)
+        loadBodyIfNeeded()
     }
 
     enum AttachmentOpenMode { case quickLook, defaultApp, app(URL), reveal, saveToDownloads }

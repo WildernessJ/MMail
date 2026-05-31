@@ -260,11 +260,32 @@ private struct ReaderContent: View {
             }
 
             if email.body.isEmpty && !email.bodyLoaded {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Loading message…").font(.system(size: 13.5)).foregroundStyle(p.fg3)
+                if model.bodyLoadFailed.contains(email.id) {
+                    HStack(spacing: 10) {
+                        Icon(name: "alert", size: 14).foregroundStyle(p.danger)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Couldn't load this message")
+                                .font(.system(size: 13.5, weight: .semibold))
+                                .foregroundStyle(p.fg2)
+                            Text("The mail server didn't respond. The connection has been reset.")
+                                .font(.system(size: 12)).foregroundStyle(p.fg3)
+                        }
+                        Spacer()
+                        Button { model.retryBodyLoad() } label: {
+                            Text("Retry").font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12).padding(.vertical, 6)
+                                .background(p.brandBlue).clipShape(Capsule())
+                        }.buttonStyle(.plain)
+                    }
+                    .padding(.top, 24)
+                } else {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Loading message…").font(.system(size: 13.5)).foregroundStyle(p.fg3)
+                    }
+                    .padding(.top, 24)
                 }
-                .padding(.top, 24)
             } else if let html = email.bodyHTML, !html.isEmpty {
                 let trusted = model.isImageTrusted(email.fromEmail)
                 let showImages = loadImages || trusted
