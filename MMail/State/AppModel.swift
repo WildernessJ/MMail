@@ -1586,9 +1586,6 @@ final class AppModel: ObservableObject {
             let hasAny = emails.contains { $0.account == a && $0.folder == folder && $0.uid != nil }
             if hasAny && !loadMoreExhausted.contains("\(a)#\(folder)") { return true }
         }
-        // Keep the button alive for inbox if there are cached Trash items we
-        // can still recover from a previous auto-trash run.
-        if folder == "inbox" && canRecoverTrashedInbox() { return true }
         return false
     }
 
@@ -1662,86 +1659,13 @@ final class AppModel: ObservableObject {
     /// poll — this only extends the loaded window backwards.
     func loadOlder() {
         guard isServerFolder(folder), folder != "starred", !loadingOlder, !downloadingAllOlder else { return }
-        // Two reasons to fire: there's older mail to fetch, OR there's
-        // mis-trashed mail to recover. The button shouldn't dead-end just
-        // because the server inbox is empty if Trash still has cached
-        // messages for the account.
-        let hasOlderWork = !olderWorkList(folderId: folder).isEmpty
-        let hasRecoveryWork = folder == "inbox" && canRecoverTrashedInbox()
-        guard hasOlderWork || hasRecoveryWork else { return }
+        guard !olderWorkList(folderId: folder).isEmpty else { return }
         loadingOlder = true
         let folderId = folder
         Task {
-            let added = await runOlderRound(folderId: folderId)
-            if added == 0 && folderId == "inbox" {
-                // Server fetch produced nothing — try to undo earlier auto-
-                // trash by moving messages back from Trash to Inbox. They
-                // land in the local cache via the next incremental sync.
-                let recovered = await recoverTrashedInbox()
-                await MainActor.run { self.loadingOlder = false }
-                if recovered > 0 { showToast("Recovered \(recovered) message\(recovered == 1 ? "" : "s") from Trash") }
-            } else {
-                await MainActor.run { self.loadingOlder = false }
-            }
+            _ = await runOlderRound(folderId: folderId)
+            await MainActor.run { self.loadingOlder = false }
         }
-    }
-
-    /// True iff at least one account in the current scope has cached items in
-    /// Trash that we could move back to Inbox.
-    private func canRecoverTrashedInbox() -> Bool {
-        let scope = currentAccount == "all"
-            ? realConfigs.map { $0.id }
-            : (isRealAccount(currentAccount) ? [currentAccount] : [])
-        for a in scope where isRealAccount(a) {
-            if let cached = MailCache.load(account: a, folder: "trash"), !cached.isEmpty {
-                return true
-            }
-        }
-        return false
-    }
-
-    /// Move every cached Trash message for the current scope back to that
-    /// account's server Inbox. Used to undo the earlier auto-trash-on-bulk-
-    /// fetch regression; fires per-message MOVE commands and clears each
-    /// account's local trash cache so the next sync reflects the new state.
-    /// Returns the total count moved.
-    private func recoverTrashedInbox() async -> Int {
-        let scope: [String] = await MainActor.run {
-            self.currentAccount == "all"
-                ? self.realConfigs.map { $0.id }
-                : (self.isRealAccount(self.currentAccount) ? [self.currentAccount] : [])
-        }
-        var total = 0
-        for a in scope {
-            let cached = MailCache.load(account: a, folder: "trash") ?? []
-            guard !cached.isEmpty else { continue }
-            guard let session = await MainActor.run(body: { self.session(for: a) }),
-                  let trashBox = await MainActor.run(body: { self.mailboxName(a, "trash") }) else { continue }
-            for e in cached {
-                guard let uid = e.uid else { continue }
-                do {
-                    try await withTimeout(15) {
-                        try await session.move(uid: uid, from: trashBox, to: "INBOX")
-                    }
-                    total += 1
-                } catch { /* skip individual failures */ }
-            }
-            // Wipe the local trash cache for this account — the server moved
-            // them, so the cached copy is now stale.
-            await MainActor.run {
-                self.emails.removeAll { $0.account == a && $0.folder == "trash" }
-            }
-            MailCache.save([], account: a, folder: "trash")
-        }
-        // Force the next inbox sync to actually round-trip so the recovered
-        // mail shows up immediately.
-        await MainActor.run {
-            for a in scope {
-                self.lastSyncAt["\(a)#inbox"] = nil
-                self.loadFolder(a, "inbox", silent: true, force: true)
-            }
-        }
-        return total
     }
 
     /// Recursively page back through every older message in the current scope
