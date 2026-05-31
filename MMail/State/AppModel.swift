@@ -288,7 +288,9 @@ final class AppModel: ObservableObject {
     // MARK: - Derived
 
     var accountsById: [String: Account] {
-        Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0) })
+        // Duplicate ids shouldn't happen, but if they do (e.g., re-adding an
+        // account that was just removed) we must not trap. Keep the first.
+        Dictionary(accounts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     private var accountFiltered: [Email] {
@@ -2208,9 +2210,12 @@ final class AppModel: ObservableObject {
         var seenIds = Set<String>()
         for e in (Array(newest) + starred) where seenIds.insert(e.id).inserted { targets.append(e) }
         let acct = accountId, fld = folderId
-        let uidToId: [UInt32: String] = Dictionary(uniqueKeysWithValues: targets.compactMap { e in
-            e.uid.map { ($0, e.id) }
-        })
+        // Two targets sharing a UID would trap with uniqueKeysWithValues.
+        // Shouldn't happen for one (account, folder) but defend anyway.
+        let uidToId: [UInt32: String] = Dictionary(
+            targets.compactMap { e in e.uid.map { ($0, e.id) } },
+            uniquingKeysWith: { first, _ in first }
+        )
         let uids = Array(uidToId.keys)
         Task {
             // Batch the prefetch: one UID FETCH for every target uid instead of
