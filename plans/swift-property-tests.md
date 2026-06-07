@@ -13,7 +13,7 @@
 
 ---
 
-- [ ] **T001 (SC: 001, 003): Add `MMailTests` target + prove it runs** — In `project.yml`: (a) add target `MMailTests` (`type: bundle.unit-test`, `platform: macOS`, `sources: [MMailTests]`, `dependencies: [- target: MMail]`) — the test bundle links the app target so `@testable import MMail` resolves. (b) Add an explicit scheme so headless `xcodebuild test` actually runs the bundle (don't rely on auto-scheme):
+- [x] **T001 (SC: 001, 003): Add `MMailTests` target + prove it runs** — In `project.yml`: (a) add target `MMailTests` (`type: bundle.unit-test`, `platform: macOS`, `sources: [MMailTests]`, `dependencies: [- target: MMail]`) — the test bundle links the app target so `@testable import MMail` resolves. (b) Add an explicit scheme so headless `xcodebuild test` actually runs the bundle (don't rely on auto-scheme):
 
     ```yaml
     schemes:

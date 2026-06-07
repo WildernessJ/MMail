@@ -50,8 +50,19 @@
 		E4A244B8CB12DB2C8DE2B069 /* AdvancedSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF837DA11612E96523D7324 /* AdvancedSearchView.swift */; };
 		EDF6BA1F4277388005EA5BDA /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B303764555CA0F1AA5D6431 /* ReaderView.swift */; };
 		F7178A73DD13D48B77E377D0 /* Atoms.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC7062ED4848255AFB2D1992 /* Atoms.swift */; };
+		F9D622A3054E831F4DE20D1E /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF62F5D25A3B7EBCF065FB8 /* SmokeTests.swift */; };
 		FAD1D259B8395302EEB3C64B /* NIOIMAP in Frameworks */ = {isa = PBXBuildFile; productRef = 95385FAB221056A9B50D7261 /* NIOIMAP */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8D23A89D2FFD2FDC63B73EE7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7F210DE68C92080F2962BB1C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 148FB4CA6DD5085BB9C5EE7B;
+			remoteInfo = MMail;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		027847810F2667C4489873BC /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
@@ -82,6 +93,7 @@
 		903AD651E0AA8087A7D60DFF /* MiscViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiscViews.swift; sourceTree = "<group>"; };
 		98D419268CA68F3EEBD01D83 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		9C44FF3EE733F7A86D87AE28 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		9FF62F5D25A3B7EBCF065FB8 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		B14BFD1E3DA5FBB37448F3FC /* MailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailCache.swift; sourceTree = "<group>"; };
 		B1839AA4256AD539B7E201FD /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B669678B83AECA83BA6DF4CD /* HelpSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpSheetView.swift; sourceTree = "<group>"; };
@@ -90,6 +102,7 @@
 		D55AA6D4C8349A644BFB08F5 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
 		E2CF45DFB8B78E1224BD9514 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		E68E9DF829AD4EBED12B2F2E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		E7292F99D4DC4A62C6721CE1 /* MMailTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MMailTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		EA2148554E9EF016B1B83B1F /* IMAPSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPSession.swift; sourceTree = "<group>"; };
 		EE36DEB176137963E3CA7FE9 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
 		EF0FD3634640269304B4DE33 /* MailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailProvider.swift; sourceTree = "<group>"; };
@@ -133,6 +146,7 @@
 			isa = PBXGroup;
 			children = (
 				3717DE86372DA2EB6CD1D04A /* MMail.app */,
+				E7292F99D4DC4A62C6721CE1 /* MMailTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -141,6 +155,7 @@
 			isa = PBXGroup;
 			children = (
 				89BC115E030851168966F292 /* MMail */,
+				E69206C5220FEFE0783CCEB1 /* MMailTests */,
 				46660F53D031ECF79743F93C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -193,6 +208,14 @@
 				E68E9DF829AD4EBED12B2F2E /* Theme.swift */,
 			);
 			path = Theme;
+			sourceTree = "<group>";
+		};
+		E69206C5220FEFE0783CCEB1 /* MMailTests */ = {
+			isa = PBXGroup;
+			children = (
+				9FF62F5D25A3B7EBCF065FB8 /* SmokeTests.swift */,
+			);
+			path = MMailTests;
 			sourceTree = "<group>";
 		};
 		EE29428FC16FA34B0AD24A66 /* Mail */ = {
@@ -249,6 +272,24 @@
 			productReference = 3717DE86372DA2EB6CD1D04A /* MMail.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D91C03D350D1135915B86751 /* MMailTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F5F88DFEE52183F56E3542C5 /* Build configuration list for PBXNativeTarget "MMailTests" */;
+			buildPhases = (
+				34201C386DDFBBF1AACC8449 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D5A71D2917BD940073E60C45 /* PBXTargetDependency */,
+			);
+			name = MMailTests;
+			packageProductDependencies = (
+			);
+			productName = MMailTests;
+			productReference = E7292F99D4DC4A62C6721CE1 /* MMailTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -259,6 +300,10 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					148FB4CA6DD5085BB9C5EE7B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					D91C03D350D1135915B86751 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
@@ -284,6 +329,7 @@
 			projectRoot = "";
 			targets = (
 				148FB4CA6DD5085BB9C5EE7B /* MMail */,
+				D91C03D350D1135915B86751 /* MMailTests */,
 			);
 		};
 /* End PBXProject section */
@@ -300,6 +346,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		34201C386DDFBBF1AACC8449 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9D622A3054E831F4DE20D1E /* SmokeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CBECEB013E788022F17ADD98 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -346,6 +400,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D5A71D2917BD940073E60C45 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 148FB4CA6DD5085BB9C5EE7B /* MMail */;
+			targetProxy = 8D23A89D2FFD2FDC63B73EE7 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		44A1B7AD2C942FE2F89E8875 /* Debug */ = {
@@ -502,6 +564,40 @@
 			};
 			name = Debug;
 		};
+		7DF6AC754907A8F1054B14BE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = studio.cobalt.MMailTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MMail.app/Contents/MacOS/MMail";
+			};
+			name = Debug;
+		};
+		9B60D3BE76024BF4D6D93460 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = studio.cobalt.MMailTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MMail.app/Contents/MacOS/MMail";
+			};
+			name = Release;
+		};
 		E753678EB17468C3A11F8FF3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -542,6 +638,15 @@
 			buildConfigurations = (
 				7D2879C17203073B38685440 /* Debug */,
 				E753678EB17468C3A11F8FF3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F5F88DFEE52183F56E3542C5 /* Build configuration list for PBXNativeTarget "MMailTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7DF6AC754907A8F1054B14BE /* Debug */,
+				9B60D3BE76024BF4D6D93460 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
