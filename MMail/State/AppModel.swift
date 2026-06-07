@@ -2664,7 +2664,11 @@ final class AppModel: ObservableObject {
         field.split(whereSeparator: { $0 == "," || $0 == ";" })
             .map { piece -> String in
                 let s = piece.trimmingCharacters(in: .whitespaces)
-                if let lt = s.range(of: "<"), let gt = s.range(of: ">") {
+                // Search for the closing `>` only AFTER the opening `<`, so a `>`
+                // that precedes the first `<` cannot form a backwards range
+                // (which would trap on the String subscript).
+                if let lt = s.range(of: "<"),
+                   let gt = s.range(of: ">", range: lt.upperBound..<s.endIndex) {
                     return String(s[lt.upperBound..<gt.lowerBound]).trimmingCharacters(in: .whitespaces)
                 }
                 return s

@@ -57,11 +57,11 @@
   - **Files:** `MMailTests/Properties/MIMEProperties.swift`
   - Run: `TEST` — Expected: PASS. Commit.
 
-- [ ] **T009 (SC: 005): `parseRecipients` crash-freedom property — RED** — Add the crash-freedom property using the UNCONSTRAINED recipient-field generator (display names with arbitrary `<`/`>` in any order). Do NOT fix the production code yet and do NOT commit this red state.
+- [x] **T009 (SC: 005): `parseRecipients` crash-freedom property — RED** — Add the crash-freedom property using the UNCONSTRAINED recipient-field generator (display names with arbitrary `<`/`>` in any order). Do NOT fix the production code yet and do NOT commit this red state.
   - **Files:** `MMailTests/Properties/ParseRecipientsProperties.swift`
   - Run: `TEST` — Expected: FAIL/CRASH — the backwards-range trap at `AppModel.swift:2667-2668` fires. NOTE: this aborts the test *process* (fatal precondition); it shows up as a crashed test run, NOT a swift-testing assertion failure with a shrunk counterexample — the process death IS the expected signal here. Do not commit this red state.
 
-- [ ] **T010 (SC: 005): `parseRecipients` fix — GREEN** — Fix `AppModel.parseRecipients` by searching for the closing `>` only AFTER the opening `<`: change the `gt` lookup to `s.range(of: ">", range: lt.upperBound..<s.endIndex)`. A `>` that precedes the first `<` can then no longer form a backwards range. Prefer this over a bare `guard lt.upperBound <= gt.lowerBound else { return s }`: both stop the crash, but the guard returns the whole piece and leaks the display name, whereas search-after-`<` also extracts the address correctly. If no `>` follows the `<`, the `if let` fails and the existing bare-string branch returns `s`. This is the one in-scope production change; `current_feature` is set so the `*.swift` gate allows it.
+- [x] **T010 (SC: 005): `parseRecipients` fix — GREEN** — Fix `AppModel.parseRecipients` by searching for the closing `>` only AFTER the opening `<`: change the `gt` lookup to `s.range(of: ">", range: lt.upperBound..<s.endIndex)`. A `>` that precedes the first `<` can then no longer form a backwards range. Prefer this over a bare `guard lt.upperBound <= gt.lowerBound else { return s }`: both stop the crash, but the guard returns the whole piece and leaks the display name, whereas search-after-`<` also extracts the address correctly. If no `>` follows the `<`, the `if let` fails and the existing bare-string branch returns `s`. This is the one in-scope production change; `current_feature` is set so the `*.swift` gate allows it.
   - **Files:** `MMail/State/AppModel.swift`
   - Run: `TEST` — Expected: the T009 crash-freedom property now PASSES. Then `BUILD` — Expected: BUILD SUCCEEDED (app still compiles). Commit test + fix together.
 
