@@ -65,7 +65,7 @@
   - **Files:** `MMail/State/AppModel.swift`
   - Run: `TEST` — Expected: the T009 crash-freedom property now PASSES. Then `BUILD` — Expected: BUILD SUCCEEDED (app still compiles). Commit test + fix together.
 
-- [ ] **T011 (SC: 002): `parseRecipients` extraction property** — Constrained generator (display names contain neither `@` nor `<`/`>`; addresses contain `@`), separators `,` and `;`: each embedded address appears in the result; every returned entry contains `@`; no returned entry contains its source display-name text.
+- [x] **T011 (SC: 002): `parseRecipients` extraction property** — Constrained generator (display names contain neither `@` nor `<`/`>`; addresses contain `@`), separators `,` and `;`: each embedded address appears in the result; every returned entry contains `@`; no returned entry contains its source display-name text.
   - **Files:** `MMailTests/Properties/ParseRecipientsProperties.swift`
   - Run: `TEST` — Expected: PASS. Commit.
 

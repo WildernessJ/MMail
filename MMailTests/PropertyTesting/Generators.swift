@@ -245,8 +245,11 @@ extension Gen where T == String {
 
     /// Same as above but exposes the structured entries for assertions.
     static func constrainedEntries(_ rng: inout SplitMix64) -> [RecipientEntry] {
-        let names = ["Alice", "Bob Jones", "carol", "", "Team Lead"]
-        let locals = ["a", "bob.jones", "carol_99", "team"]
+        // Display names and address local-parts are kept textually disjoint so a
+        // correct extraction never produces a result that incidentally
+        // *contains* the display text (e.g. local "carol_99" contains "carol").
+        let names = ["Alice", "Bob Jones", "Director", "", "Team Lead"]
+        let locals = ["u1", "x.y", "z99", "team-box"]
         let domains = ["x.com", "mail.org", "sub.co.uk"]
         let count = 1 + Int(rng.next() % 4)
         var out: [RecipientEntry] = []
