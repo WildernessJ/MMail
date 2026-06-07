@@ -49,7 +49,7 @@
   - **Files:** `MMailTests/Properties/CleanLinkProperties.swift`
   - Run: `TEST` — Expected: PASS (`cleanLink` is already correct; this locks the behavior in). Commit.
 
-- [ ] **T007 (SC: 001, 002): `AppModel.dedupById` properties** — no duplicate ids; first-occurrence order preserved; result is a subsequence of input; result count equals number of distinct input ids; idempotence; many-duplicate input returns without trapping.
+- [x] **T007 (SC: 001, 002): `AppModel.dedupById` properties** — no duplicate ids; first-occurrence order preserved; result is a subsequence of input; result count equals number of distinct input ids; idempotence; many-duplicate input returns without trapping.
   - **Files:** `MMailTests/Properties/DedupByIdProperties.swift`
   - Run: `TEST` — Expected: PASS. Commit.
 
