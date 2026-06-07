@@ -29,7 +29,7 @@
   - **Files:** `project.yml`, `MMailTests/SmokeTests.swift`
   - Run: `REGEN` then `TEST` — Expected: builds clean; exactly one test (`Smoke.ok`) runs and passes — **confirm the executed-test count is non-zero** (a green run with zero tests means the scheme wiring is wrong). Then `BUILD` — Expected: BUILD SUCCEEDED (app unaffected). Commit (including the regenerated `project.pbxproj`).
 
-- [ ] **T002 (SC: 004): Seedable RNG (SplitMix64)** — Implement a `SplitMix64: RandomNumberGenerator` seeded from a `UInt64` (public-domain algorithm, no dependency). This is the seedability the spec/reviewer flagged as the open risk — Swift's `SystemRandomNumberGenerator` is not seedable.
+- [x] **T002 (SC: 004): Seedable RNG (SplitMix64)** — Implement a `SplitMix64: RandomNumberGenerator` seeded from a `UInt64` (public-domain algorithm, no dependency). This is the seedability the spec/reviewer flagged as the open risk — Swift's `SystemRandomNumberGenerator` is not seedable.
   - **Files:** `MMailTests/PropertyTesting/SeededRNG.swift`, `MMailTests/PropertyTesting/SeededRNGTests.swift`
   - Run: `TEST` — Expected: PASS (same seed → identical `next()` sequence; two different seeds → different sequences). Commit.
 

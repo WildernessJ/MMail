@@ -7,9 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0C3D2D6DF305A9065ABEB1EF /* SeededRNG.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2603E4A689D84FECFCD69D12 /* SeededRNG.swift */; };
 		0F7E81BAFA7C74724201EB54 /* IMAPSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2148554E9EF016B1B83B1F /* IMAPSession.swift */; };
 		146126565746E851913100B2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 56B9453C38CC079125745AC8 /* Assets.xcassets */; };
 		17BB225EB35F1847D5C57B7E /* AddAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3415F5DC40ADAD49F09977A1 /* AddAccountView.swift */; };
+		19285F804F6884A30716E15E /* SeededRNGTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3213D3CC90190DC70BF895C /* SeededRNGTests.swift */; };
 		1DA1A0882FD4131DB44249F2 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98D419268CA68F3EEBD01D83 /* Keychain.swift */; };
 		1DFC3F2DAF0EC366C0C09CA0 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = F42875495E2357EB4CCAA6AE /* NIOCore */; };
 		249EC9BE7F8321C47676CAA9 /* IMAPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314CDDF0121DFE61BA2FDF2E /* IMAPService.swift */; };
@@ -75,6 +77,7 @@
 		1EABA6D5E51F2CB475040F67 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		2217A8D681EDC9DC08448B20 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		25E2E797661314505349C42D /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
+		2603E4A689D84FECFCD69D12 /* SeededRNG.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeededRNG.swift; sourceTree = "<group>"; };
 		274298C9FD13E7C8D90BB22E /* SMTPService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMTPService.swift; sourceTree = "<group>"; };
 		314CDDF0121DFE61BA2FDF2E /* IMAPService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPService.swift; sourceTree = "<group>"; };
 		3415F5DC40ADAD49F09977A1 /* AddAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountView.swift; sourceTree = "<group>"; };
@@ -106,6 +109,7 @@
 		EA2148554E9EF016B1B83B1F /* IMAPSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPSession.swift; sourceTree = "<group>"; };
 		EE36DEB176137963E3CA7FE9 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
 		EF0FD3634640269304B4DE33 /* MailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailProvider.swift; sourceTree = "<group>"; };
+		F3213D3CC90190DC70BF895C /* SeededRNGTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeededRNGTests.swift; sourceTree = "<group>"; };
 		FC7062ED4848255AFB2D1992 /* Atoms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atoms.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -140,6 +144,15 @@
 				EE36DEB176137963E3CA7FE9 /* SampleData.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		40876145EE0BFD2170EE60EF /* PropertyTesting */ = {
+			isa = PBXGroup;
+			children = (
+				2603E4A689D84FECFCD69D12 /* SeededRNG.swift */,
+				F3213D3CC90190DC70BF895C /* SeededRNGTests.swift */,
+			);
+			path = PropertyTesting;
 			sourceTree = "<group>";
 		};
 		46660F53D031ECF79743F93C /* Products */ = {
@@ -213,6 +226,7 @@
 		E69206C5220FEFE0783CCEB1 /* MMailTests */ = {
 			isa = PBXGroup;
 			children = (
+				40876145EE0BFD2170EE60EF /* PropertyTesting */,
 				9FF62F5D25A3B7EBCF065FB8 /* SmokeTests.swift */,
 			);
 			path = MMailTests;
@@ -350,6 +364,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0C3D2D6DF305A9065ABEB1EF /* SeededRNG.swift in Sources */,
+				19285F804F6884A30716E15E /* SeededRNGTests.swift in Sources */,
 				F9D622A3054E831F4DE20D1E /* SmokeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
