@@ -45,6 +45,7 @@
 		B0BA08AB466E59C9742A188D /* SMTPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 274298C9FD13E7C8D90BB22E /* SMTPService.swift */; };
 		B7635E5A653911A58EC8EC63 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE36DEB176137963E3CA7FE9 /* SampleData.swift */; };
 		B7A899BAA4C3DD629951E464 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4AF498A0E6F2A7C049FDFD /* SidebarView.swift */; };
+		B895E35C6C37202A764D5638 /* CleanLinkProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E60C955FE0B61EFC788EF9 /* CleanLinkProperties.swift */; };
 		BE505C010C09F6AFB384E8C9 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E339A5381F119E119D179F2 /* AppModel.swift */; };
 		C2E07547425A80AD42EAD413 /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9FE22A6CEE48BF1C394B2A /* CommandPaletteView.swift */; };
 		CC5ED000189ABA9C357BED33 /* PeopleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9E1FBE4FCEF6BB8A40762A /* PeopleView.swift */; };
@@ -98,6 +99,7 @@
 		6AA1B25C3AD475F5E76149ED /* ForAll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForAll.swift; sourceTree = "<group>"; };
 		6AEEC3FA80A90CA8EAC08ECD /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		6EC4277C859DBC1033E01D12 /* QuickLook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLook.swift; sourceTree = "<group>"; };
+		71E60C955FE0B61EFC788EF9 /* CleanLinkProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanLinkProperties.swift; sourceTree = "<group>"; };
 		7605E1D3B63AA900A3661F9C /* MailAccountConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailAccountConfig.swift; sourceTree = "<group>"; };
 		780066BE547CD3FF8C4BAAEA /* Generators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Generators.swift; sourceTree = "<group>"; };
 		7B4AF498A0E6F2A7C049FDFD /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
@@ -188,6 +190,14 @@
 			);
 			sourceTree = "<group>";
 		};
+		65884CCB71F7E4B729A65A42 /* Properties */ = {
+			isa = PBXGroup;
+			children = (
+				71E60C955FE0B61EFC788EF9 /* CleanLinkProperties.swift */,
+			);
+			path = Properties;
+			sourceTree = "<group>";
+		};
 		89BC115E030851168966F292 /* MMail */ = {
 			isa = PBXGroup;
 			children = (
@@ -241,6 +251,7 @@
 		E69206C5220FEFE0783CCEB1 /* MMailTests */ = {
 			isa = PBXGroup;
 			children = (
+				65884CCB71F7E4B729A65A42 /* Properties */,
 				40876145EE0BFD2170EE60EF /* PropertyTesting */,
 				9FF62F5D25A3B7EBCF065FB8 /* SmokeTests.swift */,
 			);
@@ -379,6 +390,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B895E35C6C37202A764D5638 /* CleanLinkProperties.swift in Sources */,
 				D44F0647EB8CD4A4165C6230 /* ForAll.swift in Sources */,
 				A0E4189C6C630B35D26E29B2 /* ForAllSmokeTests.swift in Sources */,
 				176319134E244076A6D32A6D /* ForAllTests.swift in Sources */,

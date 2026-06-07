@@ -45,7 +45,7 @@
   - **Files:** `MMailTests/PropertyTesting/ForAllTests.swift`
   - Run: `TEST` — Expected: PASS. Commit.
 
-- [ ] **T006 (SC: 001, 002): `Privacy.cleanLink` properties** — idempotence; all tracking keys removed; every non-tracking query item retained and scheme/host/path unchanged; edge case "components cannot re-serialize" returns without trapping (and if a tracking key survives, the test fails loudly — do not weaken the generator). Generator: `http(s)` URLs only.
+- [x] **T006 (SC: 001, 002): `Privacy.cleanLink` properties** — idempotence; all tracking keys removed; every non-tracking query item retained and scheme/host/path unchanged; edge case "components cannot re-serialize" returns without trapping (and if a tracking key survives, the test fails loudly — do not weaken the generator). Generator: `http(s)` URLs only.
   - **Files:** `MMailTests/Properties/CleanLinkProperties.swift`
   - Run: `TEST` — Expected: PASS (`cleanLink` is already correct; this locks the behavior in). Commit.
 
