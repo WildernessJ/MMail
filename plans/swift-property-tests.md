@@ -37,7 +37,7 @@
   - **Files:** `MMailTests/PropertyTesting/Generators.swift`
   - Run: `TEST` — Expected: PASS (a self-test drawing 50 values from each generator returns without trapping). Commit.
 
-- [ ] **T004 (SC: 001, 004): `forAll` runner** — Implement `forAll` returning a `PropertyResult` (`.passed` or `.failed(counterexample:String, seed:UInt64)`), defaulting to 200 iterations, seeded by `SplitMix64` (seed defaultable/overridable), shrinking the first failing input via the generator's `shrink` toward a minimal case, and a thin `check(...)` wrapper that turns `.failed` into a `swift-testing` `#expect` failure carrying the counterexample + seed. Returning a result (not only `#expect`) is what makes the harness self-testable.
+- [x] **T004 (SC: 001, 004): `forAll` runner** — Implement `forAll` returning a `PropertyResult` (`.passed` or `.failed(counterexample:String, seed:UInt64)`), defaulting to 200 iterations, seeded by `SplitMix64` (seed defaultable/overridable), shrinking the first failing input via the generator's `shrink` toward a minimal case, and a thin `check(...)` wrapper that turns `.failed` into a `swift-testing` `#expect` failure carrying the counterexample + seed. Returning a result (not only `#expect`) is what makes the harness self-testable.
   - **Files:** `MMailTests/PropertyTesting/ForAll.swift`
   - Run: `TEST` — Expected: PASS (compiles; trivial always-true property via `check` passes). Commit.
 
