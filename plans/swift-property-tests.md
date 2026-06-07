@@ -53,7 +53,7 @@
   - **Files:** `MMailTests/Properties/DedupByIdProperties.swift`
   - Run: `TEST` — Expected: PASS. Commit.
 
-- [ ] **T008 (SC: 001, 005): MIME robustness properties** — `decodeHeader`: input with no `=?` substring anywhere returns unchanged (exact equality, whitespace included); arbitrary input returns without trapping. `parse`/`extractText`: arbitrary `Data` (random/truncated/empty) returns without trapping.
+- [x] **T008 (SC: 001, 005): MIME robustness properties** — `decodeHeader`: input with no `=?` substring anywhere returns unchanged (exact equality, whitespace included); arbitrary input returns without trapping. `parse`/`extractText`: arbitrary `Data` (random/truncated/empty) returns without trapping.
   - **Files:** `MMailTests/Properties/MIMEProperties.swift`
   - Run: `TEST` — Expected: PASS. Commit.
 

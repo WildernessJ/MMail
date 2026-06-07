@@ -41,6 +41,7 @@
 		82FD7DC1B326B431F597D040 /* MailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0FD3634640269304B4DE33 /* MailProvider.swift */; };
 		839C08C0B268C946970A9C32 /* QuickLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC4277C859DBC1033E01D12 /* QuickLook.swift */; };
 		99D3EA2AB149562DAF3C6362 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AEEC3FA80A90CA8EAC08ECD /* SearchResultsView.swift */; };
+		9A64757C7E1C42D9943F9967 /* MIMEProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04043577BAF81A16B42607E5 /* MIMEProperties.swift */; };
 		A0E4189C6C630B35D26E29B2 /* ForAllSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A5E7C83395FC5B1CB3CE04 /* ForAllSmokeTests.swift */; };
 		A531BB607FF979E32825D772 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2E797661314505349C42D /* Notifier.swift */; };
 		B0BA08AB466E59C9742A188D /* SMTPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 274298C9FD13E7C8D90BB22E /* SMTPService.swift */; };
@@ -75,6 +76,7 @@
 
 /* Begin PBXFileReference section */
 		027847810F2667C4489873BC /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
+		04043577BAF81A16B42607E5 /* MIMEProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIMEProperties.swift; sourceTree = "<group>"; };
 		0649229767316E20454C74A6 /* ForAllTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForAllTests.swift; sourceTree = "<group>"; };
 		067FDA44372798C7B298D335 /* AccountRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRailView.swift; sourceTree = "<group>"; };
 		0D01C5709231036FDB9444F7 /* ManualAccountSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualAccountSetupView.swift; sourceTree = "<group>"; };
@@ -197,6 +199,7 @@
 			children = (
 				71E60C955FE0B61EFC788EF9 /* CleanLinkProperties.swift */,
 				1214F2376A565FBA125FD04D /* DedupByIdProperties.swift */,
+				04043577BAF81A16B42607E5 /* MIMEProperties.swift */,
 			);
 			path = Properties;
 			sourceTree = "<group>";
@@ -400,6 +403,7 @@
 				176319134E244076A6D32A6D /* ForAllTests.swift in Sources */,
 				2A1D47A6E753328E3CEA1704 /* Generators.swift in Sources */,
 				FEE0524D7C46394D2AEC35DE /* GeneratorsTests.swift in Sources */,
+				9A64757C7E1C42D9943F9967 /* MIMEProperties.swift in Sources */,
 				0C3D2D6DF305A9065ABEB1EF /* SeededRNG.swift in Sources */,
 				19285F804F6884A30716E15E /* SeededRNGTests.swift in Sources */,
 				F9D622A3054E831F4DE20D1E /* SmokeTests.swift in Sources */,
