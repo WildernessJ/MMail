@@ -41,7 +41,7 @@
   - **Files:** `MMailTests/PropertyTesting/ForAll.swift`
   - Run: `TEST` — Expected: PASS (compiles; trivial always-true property via `check` passes). Commit.
 
-- [ ] **T005 (SC: 001, 004): Harness self-tests** — Cover the spec's "forAll PBT harness" scenarios against the result-returning API: (a) always-true property → `.passed`; (b) sometimes-false property → `.failed` with a non-empty counterexample and a seed; (c) re-running pinned to that seed reproduces the same first counterexample; (d) shrinking: property `n < 5` over non-negative `Int` yields minimal counterexample `5`.
+- [x] **T005 (SC: 001, 004): Harness self-tests** — Cover the spec's "forAll PBT harness" scenarios against the result-returning API: (a) always-true property → `.passed`; (b) sometimes-false property → `.failed` with a non-empty counterexample and a seed; (c) re-running pinned to that seed reproduces the same first counterexample; (d) shrinking: property `n < 5` over non-negative `Int` yields minimal counterexample `5`.
   - **Files:** `MMailTests/PropertyTesting/ForAllTests.swift`
   - Run: `TEST` — Expected: PASS. Commit.
 

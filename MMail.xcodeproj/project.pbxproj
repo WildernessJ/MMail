@@ -10,6 +10,7 @@
 		0C3D2D6DF305A9065ABEB1EF /* SeededRNG.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2603E4A689D84FECFCD69D12 /* SeededRNG.swift */; };
 		0F7E81BAFA7C74724201EB54 /* IMAPSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2148554E9EF016B1B83B1F /* IMAPSession.swift */; };
 		146126565746E851913100B2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 56B9453C38CC079125745AC8 /* Assets.xcassets */; };
+		176319134E244076A6D32A6D /* ForAllTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0649229767316E20454C74A6 /* ForAllTests.swift */; };
 		17BB225EB35F1847D5C57B7E /* AddAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3415F5DC40ADAD49F09977A1 /* AddAccountView.swift */; };
 		19285F804F6884A30716E15E /* SeededRNGTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3213D3CC90190DC70BF895C /* SeededRNGTests.swift */; };
 		1DA1A0882FD4131DB44249F2 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98D419268CA68F3EEBD01D83 /* Keychain.swift */; };
@@ -72,6 +73,7 @@
 
 /* Begin PBXFileReference section */
 		027847810F2667C4489873BC /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
+		0649229767316E20454C74A6 /* ForAllTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForAllTests.swift; sourceTree = "<group>"; };
 		067FDA44372798C7B298D335 /* AccountRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRailView.swift; sourceTree = "<group>"; };
 		0D01C5709231036FDB9444F7 /* ManualAccountSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualAccountSetupView.swift; sourceTree = "<group>"; };
 		0F9E1FBE4FCEF6BB8A40762A /* PeopleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleView.swift; sourceTree = "<group>"; };
@@ -159,6 +161,7 @@
 			children = (
 				6AA1B25C3AD475F5E76149ED /* ForAll.swift */,
 				E9A5E7C83395FC5B1CB3CE04 /* ForAllSmokeTests.swift */,
+				0649229767316E20454C74A6 /* ForAllTests.swift */,
 				780066BE547CD3FF8C4BAAEA /* Generators.swift */,
 				14E0D2516F70A53B36F44534 /* GeneratorsTests.swift */,
 				2603E4A689D84FECFCD69D12 /* SeededRNG.swift */,
@@ -378,6 +381,7 @@
 			files = (
 				D44F0647EB8CD4A4165C6230 /* ForAll.swift in Sources */,
 				A0E4189C6C630B35D26E29B2 /* ForAllSmokeTests.swift in Sources */,
+				176319134E244076A6D32A6D /* ForAllTests.swift in Sources */,
 				2A1D47A6E753328E3CEA1704 /* Generators.swift in Sources */,
 				FEE0524D7C46394D2AEC35DE /* GeneratorsTests.swift in Sources */,
 				0C3D2D6DF305A9065ABEB1EF /* SeededRNG.swift in Sources */,
