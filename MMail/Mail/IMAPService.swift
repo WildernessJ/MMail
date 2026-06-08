@@ -50,6 +50,7 @@ struct IMAPFlagState {
 struct IMAPFolderSync {
     var newMessages: [IMAPMessage]               // UID greater than the highest we had
     var flags: [UInt32: IMAPFlagState]           // current flags for the already-loaded range
+    var flagRange: ClosedRange<UInt32>?          // UID range the FLAGS fetch covered; nil if it didn't run
 }
 
 // NIO-free advanced-search criteria. The app builds this; IMAPService turns it
@@ -335,12 +336,14 @@ final class IMAPService {
         }
 
         var flags: [UInt32: IMAPFlagState] = [:]
+        var flagRange: ClosedRange<UInt32>? = nil
         if oldestUID > 0 && oldestUID <= afterUID {
-            let flagRange = MessageIdentifierRange<UID>(UID(rawValue: oldestUID)...UID(rawValue: afterUID))
-            let r = try await send(.uidFetch(.range(flagRange), [.uid, .flags], []))
+            let fetchRange = MessageIdentifierRange<UID>(UID(rawValue: oldestUID)...UID(rawValue: afterUID))
+            let r = try await send(.uidFetch(.range(fetchRange), [.uid, .flags], []))
             flags = parseFlags(r)
+            flagRange = oldestUID...afterUID
         }
-        return IMAPFolderSync(newMessages: newMessages, flags: flags)
+        return IMAPFolderSync(newMessages: newMessages, flags: flags, flagRange: flagRange)
     }
 
     /// Fetch envelopes for every UID delivered on or after `date`. Far cheaper
