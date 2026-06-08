@@ -71,7 +71,7 @@ A pure function SHALL map an unread count to the Dock badge label string: the co
 
 ### Requirement: Badge stays in sync
 
-The Dock badge SHALL be set on launch and SHALL update whenever the unread inbox total changes — new mail arriving, marking read/unread, or triage moving a message out of the inbox. The sync observer SHALL be attached at the `WindowGroup` scene / root-view level in `MMailApp.swift` (where the `@StateObject model` lives) — NOT inside a child view that can be conditionally removed from the hierarchy (sheets, navigation) — so badge updates are never dropped. Implementation: `.onChange(of: model.<unreadTotal>, initial: true)` on the root view, with the `NSApp.dockTile.badgeLabel` assignment wrapped to run on the main thread (per the invariant).
+The Dock badge SHALL be set on launch and SHALL update whenever the unread inbox total changes — new mail arriving, marking read/unread, or triage moving a message out of the inbox. The update MUST be driven by the model's data (the `emails` source of truth), NOT by a SwiftUI view's lifecycle: a Dock badge must update even while the app's window is in the background or minimized (new mail arrives on the 15s background poll), and a backgrounded window's SwiftUI body may not re-render — so a view `.onChange` is NOT a reliable trigger. Implementation: observe `emails` at the model level (a `didSet` on the `@Published emails` property, or a Combine subscription on `$emails`) and set `NSApp.dockTile.badgeLabel` from there; also set it once on startup. The setter MUST run on the main thread per the invariant (the trigger can fire on whatever thread mutated `emails`).
 
 #### Scenario: Badge set on launch
 
