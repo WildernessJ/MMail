@@ -105,7 +105,7 @@ final class AppModel: ObservableObject {
     @Published var accounts: [Account] = []
     @Published var currentAccount: String = "all"
     @Published var folder: String = "home"
-    @Published var emails: [Email] = []
+    @Published var emails: [Email] = [] { didSet { refreshDockBadge() } }
     @Published var selectedId: String?
     @Published var filter: InboxFilter = .all
     // When the reading pane is off, this opens the selected message full-width.
@@ -270,6 +270,8 @@ final class AppModel: ObservableObject {
         // Welcome shows on first launch and whenever no account is connected.
         onboarding = accounts.isEmpty
         purgeSeedData()
+        // Set the Dock badge correctly on launch (empty -> cleared when nothing unread).
+        refreshDockBadge()
     }
 
     /// Remove the old demo to-dos / journal entries that earlier builds seeded,
@@ -372,6 +374,17 @@ final class AppModel: ObservableObject {
 
     /// Total unread inbox count across accounts, delegating to the pure seam over `emails`.
     var unreadInboxTotal: Int { Self.unreadInboxCount(emails) }
+
+    /// Recompute the unread-inbox total and push it to the macOS Dock badge.
+    /// Reads `emails` only (never mutates it — that would recurse via `didSet`).
+    /// `AppModel` is NOT @MainActor and `emails` can be mutated from background
+    /// IMAP callbacks, so the AppKit assignment MUST hop to the main thread.
+    private func refreshDockBadge() {
+        let n = Self.unreadInboxCount(emails)
+        DispatchQueue.main.async {
+            NSApp.dockTile.badgeLabel = AppModel.dockBadgeLabel(unread: n)
+        }
+    }
 
     var position: Int {
         max(1, (filteredEmails.firstIndex(where: { $0.id == selectedId }) ?? 0) + 1)
