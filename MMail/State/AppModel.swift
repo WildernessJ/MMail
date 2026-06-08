@@ -386,6 +386,25 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Display formatting (pure seams)
+
+    /// Pure formatter: the reader's recipient ("to …") line for a message.
+    /// Shows the address the message was *delivered to* (`email.to`, parsed from
+    /// the IMAP envelope) so an aliased message surfaces its alias rather than the
+    /// account's canonical address. Never fabricates: when `email.to` is empty/absent
+    /// it falls back to the account address — `me` when even that is missing — except
+    /// in `sent`/`drafts`/`outbox`, which keep their "(no recipient)" placeholder.
+    static func recipientLine(for email: Email, account: Account?) -> String {
+        let recips = (email.to ?? []).filter { !$0.isEmpty }
+        if !recips.isEmpty {
+            return "to " + recips.prefix(3).joined(separator: ", ")
+        }
+        if ["sent", "drafts", "outbox"].contains(email.folder) {
+            return "to (no recipient)"
+        }
+        return "to \(account?.email ?? "me")"
+    }
+
     var position: Int {
         max(1, (filteredEmails.firstIndex(where: { $0.id == selectedId }) ?? 0) + 1)
     }
