@@ -68,7 +68,7 @@ private struct ReaderContent: View {
                         if !expanded && hiddenInStack > 0 { stackMoreButton }
                     }
                 }
-                .frame(maxWidth: 820, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 40).padding(.top, 28).padding(.bottom, 96)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
