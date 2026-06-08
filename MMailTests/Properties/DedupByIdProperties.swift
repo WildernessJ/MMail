@@ -25,6 +25,13 @@ import Testing
             for e in list where seen.insert(e.id).inserted { firstSeen.append(e.id) }
             if outIds != firstSeen { return false }
 
+            // First-occurrence by CONTENT: each surviving email must be the FIRST
+            // input email with its id (subjects vary per instance), so a
+            // wrong-occurrence bug (e.g. last-wins) is caught, not just wrong id.
+            var firstSubjectById: [String: String] = [:]
+            for e in list where firstSubjectById[e.id] == nil { firstSubjectById[e.id] = e.subject }
+            for e in out where firstSubjectById[e.id] != e.subject { return false }
+
             // Subsequence: result ids are a subsequence of input ids (since they
             // are exactly the first-occurrence order, this holds, but check
             // explicitly that result ids all came from the input).

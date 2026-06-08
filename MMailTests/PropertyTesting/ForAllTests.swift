@@ -21,7 +21,9 @@ import Testing
             Issue.record("expected .failed, got \(r)")
             return
         }
-        #expect(!counterexample.isEmpty)
+        // Always-false ⇒ the reported counterexample shrinks all the way to the
+        // simplest value, so assert the minimized value, not just non-empty.
+        #expect(counterexample == "0")
         #expect(seed == 12345)
     }
 

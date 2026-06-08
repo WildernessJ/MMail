@@ -170,7 +170,23 @@ extension Gen where T == URL {
                 if !items.isEmpty { comps.queryItems = items }
                 return comps.url ?? URL(string: "https://example.com")!
             },
-            shrink: { _ in [] }
+            // Shrink toward fewer query params (where cleanLink bugs live): a
+            // no-query variant plus each single-param-removed variant, so a
+            // failing URL is reported minimized rather than as-generated.
+            shrink: { url in
+                guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                      let items = comps.queryItems, !items.isEmpty else { return [] }
+                var out: [URL] = []
+                var noQuery = comps; noQuery.queryItems = nil
+                if let u = noQuery.url { out.append(u) }
+                for i in items.indices {
+                    var c = comps
+                    var its = items; its.remove(at: i)
+                    c.queryItems = its.isEmpty ? nil : its
+                    if let u = c.url { out.append(u) }
+                }
+                return out
+            }
         )
     }
 }
@@ -185,8 +201,12 @@ extension Gen where T == Email {
         Gen<Email>(
             generate: { rng in
                 let id = idPool[Int(rng.next() % UInt64(idPool.count))]
+                // Vary content per instance so two emails sharing an id are
+                // distinguishable — lets the dedup property assert the FIRST
+                // occurrence (by content) is kept, not merely the right id.
+                let tag = rng.next()
                 return Email(id: id, account: "acct", from: "you",
-                             subject: "s", preview: "p", body: "b",
+                             subject: "s\(tag)", preview: "p", body: "b",
                              time: "t", day: "today", folder: "inbox")
             }
         )

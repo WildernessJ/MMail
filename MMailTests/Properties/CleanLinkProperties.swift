@@ -53,4 +53,35 @@ import Foundation
             return true
         }
     }
+
+    /// Spec "Edge case: components cannot re-serialize".
+    ///
+    /// The `comps.url ?? url` fallback at `HTMLMessageView.swift:40` is defensive
+    /// code that is UNREACHABLE for valid http(s) URLs — removing query items from
+    /// a parseable http(s) URL always yields components that re-serialize, so
+    /// `comps.url` is never nil and the fallback never fires. We therefore cannot
+    /// drive that branch from real input. Instead this locks down the trickiest
+    /// *reachable* http(s) shapes (fragments, percent-encoding, all-tracking →
+    /// empty query, no query, duplicate tracking keys): cleanLink must not trap,
+    /// must strip every tracking key, and must keep every non-tracking item.
+    @Test func trickyReachableUrlsAndNilFallbackNote() {
+        let cases = [
+            "https://example.com",                                   // no query at all
+            "https://example.com/p%20s?q=a%20b&utm_source=x",        // percent-encoded path + value
+            "https://example.com/path?utm_source=x&fbclid=y",        // all-tracking → empty query result
+            "https://example.com?a=1#frag",                          // fragment, no tracking
+            "https://example.com?utm_source=x&utm_source=y&q=1#sec", // duplicate tracking keys + fragment
+            "http://sub.domain.co.uk/a/b/c?gclid=z&keep=1"
+        ]
+        for raw in cases {
+            guard let url = URL(string: raw) else { Issue.record("bad test URL: \(raw)"); continue }
+            let cleaned = Privacy.cleanLink(url) // must not trap
+            #expect(trackingKeysIn(cleaned).isEmpty, "tracking key survived in \(raw)")
+            let after = URLComponents(url: cleaned, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            for item in nonTrackingItems(url) {
+                #expect(after.contains { $0.name == item.name && $0.value == item.value },
+                        "non-tracking item \(item.name) dropped from \(raw)")
+            }
+        }
+    }
 }
