@@ -72,6 +72,20 @@ struct MailSearchCriteria {
 
 enum MailboxKind: String { case inbox, sent, drafts, trash, junk, archive, other }
 
+/// How `IMAPService.move` relocates a message, chosen from the server's
+/// advertised capabilities. This is the pure, unit-testable policy seam: the
+/// decision has no I/O.
+enum MoveStrategy: Equatable {
+    /// Native `UID MOVE` (RFC 6851) — server advertises `MOVE`.
+    case nativeMove
+    /// `UID COPY` + `UID STORE +FLAGS (\Deleted)` + `UID EXPUNGE` — server lacks
+    /// `MOVE` but advertises `UIDPLUS` (so the targeted `UID EXPUNGE` is safe).
+    case copyThenUidExpunge
+    /// Server advertises neither `MOVE` nor `UIDPLUS`: there is no safe way to
+    /// relocate, so the move fails loudly with no side effects.
+    case unsupported
+}
+
 struct IMAPMailbox {
     let name: String          // server mailbox path (used for SELECT/MOVE)
     let kind: MailboxKind
@@ -186,6 +200,20 @@ final class IMAPService {
         }
         self.channel = nil
         self.currentMailbox = nil
+    }
+
+    // MARK: Move strategy (pure policy seam)
+
+    /// Map a connection's advertised IMAP capabilities to exactly one move
+    /// strategy. Pure: no I/O. Capability atoms are matched case-insensitively
+    /// (RFC 9051 §2.3 defines them as case-insensitive); callers SHOULD pass a
+    /// set already normalized to a single canonical case, but this function
+    /// uppercases defensively so it is correct regardless.
+    static func moveStrategy(capabilities: Set<String>) -> MoveStrategy {
+        let caps = Set(capabilities.map { $0.uppercased() })
+        if caps.contains("MOVE") { return .nativeMove }
+        if caps.contains("UIDPLUS") { return .copyThenUidExpunge }
+        return .unsupported
     }
 
     // MARK: Commands

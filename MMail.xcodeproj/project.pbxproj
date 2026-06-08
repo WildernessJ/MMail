@@ -36,6 +36,7 @@
 		6F7B251114D6AC0C0EC1DFCA /* HelpSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B669678B83AECA83BA6DF4CD /* HelpSheetView.swift */; };
 		70289C8E18AFF23A0FF1E46B /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2CF45DFB8B78E1224BD9514 /* ComposeView.swift */; };
 		724B0BD8337C5B7A22384EDC /* MailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14BFD1E3DA5FBB37448F3FC /* MailCache.swift */; };
+		76B2A0A2CDF524DBCB4EE5E6 /* MoveStrategyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00731FF03A6C03F55F73C3BA /* MoveStrategyTests.swift */; };
 		7816788B343DCF37413C00FA /* AccountRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067FDA44372798C7B298D335 /* AccountRailView.swift */; };
 		79881C9E5E0484CBE5BEC329 /* JournalArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B99833A4A34A3B059F965D2 /* JournalArchiveView.swift */; };
 		8240DB9802A6B1CF6F49FCD3 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1839AA4256AD539B7E201FD /* OnboardingView.swift */; };
@@ -76,6 +77,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		00731FF03A6C03F55F73C3BA /* MoveStrategyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoveStrategyTests.swift; sourceTree = "<group>"; };
 		027847810F2667C4489873BC /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
 		04043577BAF81A16B42607E5 /* MIMEProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIMEProperties.swift; sourceTree = "<group>"; };
 		0649229767316E20454C74A6 /* ForAllTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForAllTests.swift; sourceTree = "<group>"; };
@@ -262,6 +264,7 @@
 			children = (
 				65884CCB71F7E4B729A65A42 /* Properties */,
 				40876145EE0BFD2170EE60EF /* PropertyTesting */,
+				00731FF03A6C03F55F73C3BA /* MoveStrategyTests.swift */,
 				9FF62F5D25A3B7EBCF065FB8 /* SmokeTests.swift */,
 			);
 			path = MMailTests;
@@ -407,6 +410,7 @@
 				2A1D47A6E753328E3CEA1704 /* Generators.swift in Sources */,
 				FEE0524D7C46394D2AEC35DE /* GeneratorsTests.swift in Sources */,
 				9A64757C7E1C42D9943F9967 /* MIMEProperties.swift in Sources */,
+				76B2A0A2CDF524DBCB4EE5E6 /* MoveStrategyTests.swift in Sources */,
 				683D803BA3BF1064B65743A0 /* ParseRecipientsProperties.swift in Sources */,
 				0C3D2D6DF305A9065ABEB1EF /* SeededRNG.swift in Sources */,
 				19285F804F6884A30716E15E /* SeededRNGTests.swift in Sources */,
