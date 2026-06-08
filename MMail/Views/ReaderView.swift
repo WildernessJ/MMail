@@ -644,11 +644,7 @@ private struct ReaderContent: View {
     // MARK: Helpers
 
     private var toLine: String {
-        if ["sent", "drafts", "outbox"].contains(email.folder) {
-            let recips = (email.to ?? []).filter { !$0.isEmpty }
-            return recips.isEmpty ? "to (no recipient)" : "to " + recips.prefix(3).joined(separator: ", ")
-        }
-        return "to \(account?.email ?? "me")"
+        AppModel.recipientLine(for: email, account: account)
     }
 
     private func copyEmail(_ addr: String) {
