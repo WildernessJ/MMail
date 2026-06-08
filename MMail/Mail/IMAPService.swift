@@ -147,6 +147,12 @@ final class IMAPService {
     /// The mailbox currently SELECTed on this connection, if any. Lets us skip
     /// redundant SELECTs (the slowest no-op an IMAP client can issue).
     private var currentMailbox: String?
+    /// The server's advertised capability atoms, normalized to uppercase
+    /// (RFC 9051 §2.3 makes them case-insensitive). Populated in
+    /// `connectAndLogin()` so move decisions never need an extra round-trip and
+    /// survive idle-timeout reconnects (each reconnect makes a fresh service and
+    /// re-runs `connectAndLogin()`). Only the atoms `move()` needs are consulted.
+    private(set) var capabilities: Set<String> = []
 
     init(config: MailAccountConfig, password: String) {
         self.host = config.imapHost
@@ -190,7 +196,40 @@ final class IMAPService {
             try await channel.pipeline.addHandler(ssl, position: .first).get()
         }
 
-        _ = try await send(.login(username: username, password: password))
+        let loginResponses = try await send(.login(username: username, password: password))
+        // Capabilities may ride along in the login OK's `[CAPABILITY ...]` code
+        // or an untagged CAPABILITY line (RFC 3501 §6.2.3 — optional). If the
+        // server omitted them, ask explicitly so the set is never empty.
+        capabilities = Self.extractCapabilities(from: loginResponses)
+        if capabilities.isEmpty {
+            let capResponses = try await send(.capability)
+            capabilities = Self.extractCapabilities(from: capResponses)
+        }
+    }
+
+    /// Pull capability atoms out of a response batch, normalized to uppercase.
+    /// Handles both the untagged `CAPABILITY` line and the tagged login
+    /// `OK [CAPABILITY ...]` response code. Uses `Capability.name` (the public
+    /// accessor) which equals the raw atom for the simple atoms we care about
+    /// (`MOVE`, `UIDPLUS`); the internal `rawValue` is not module-visible.
+    private static func extractCapabilities(from responses: [Response]) -> Set<String> {
+        var out: Set<String> = []
+        func ingest(_ caps: [Capability]) {
+            for c in caps { out.insert(c.name.uppercased()) }
+        }
+        for r in responses {
+            switch r {
+            case .untagged(.capabilityData(let caps)):
+                ingest(caps)
+            case .tagged(let t):
+                if case .ok(let text) = t.state, case .capability(let caps) = text.code {
+                    ingest(caps)
+                }
+            default:
+                break
+            }
+        }
+        return out
     }
 
     func disconnect() async {
@@ -419,7 +458,23 @@ final class IMAPService {
     func move(uid: UInt32, from: String, to: String) async throws {
         _ = try await ensureSelected(from)
         let range = MessageIdentifierRange<UID>(UID(rawValue: uid)...UID(rawValue: uid))
-        _ = try await send(.uidMove(.range(range), mailbox(to)))
+        switch Self.moveStrategy(capabilities: capabilities) {
+        case .nativeMove:
+            _ = try await send(.uidMove(.range(range), mailbox(to)))
+        case .copyThenUidExpunge:
+            // COPY first; each `send` throws on a tagged NO/BAD, so a failed
+            // COPY naturally prevents the STORE/EXPUNGE — do not catch between
+            // steps. If EXPUNGE fails after COPY+STORE, the error propagates and
+            // the source keeps its \Deleted flag: an acceptable transient
+            // duplicate the next sync reconciles. NEVER substitute a blind
+            // (non-UID) EXPUNGE to force cleanup. `UID EXPUNGE` targets the
+            // currently-SELECTed mailbox, which `ensureSelected(from)` set.
+            _ = try await send(.uidCopy(.range(range), mailbox(to)))
+            _ = try await send(.uidStore(.range(range), [], .flags(.add(silent: true, list: [.deleted]))))
+            _ = try await send(.uidExpunge(.range(range)))
+        case .unsupported:
+            throw MailError.commandFailed("Server supports neither MOVE nor UIDPLUS; cannot move message")
+        }
     }
 
     /// Add or remove a custom keyword (label) on a message.

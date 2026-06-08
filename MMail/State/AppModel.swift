@@ -440,10 +440,8 @@ final class AppModel: ObservableObject {
         let ids = selectedIds
         for id in ids {
             guard let e = emails.first(where: { $0.id == id }) else { continue }
-            if isRealAccount(e.account) {
-                if mailboxName(e.account, "trash") != nil { realMove(e, to: "trash") }
-                else { applyRealFlag(e, .deleted, add: true) }
-            }
+            // realMove handles the trash→\Deleted fallback itself.
+            if isRealAccount(e.account) { realMove(e, to: "trash") }
             if let i = emails.firstIndex(where: { $0.id == id }) { emails[i].folder = "trash" }
         }
         finishBulk(ids.count, "Deleted")
@@ -463,7 +461,7 @@ final class AppModel: ObservableObject {
         let ids = selectedIds
         for id in ids {
             guard let e = emails.first(where: { $0.id == id }) else { continue }
-            if isRealAccount(e.account), mailboxName(e.account, serverFolder) != nil { realMove(e, to: serverFolder) }
+            if isRealAccount(e.account) { realMove(e, to: serverFolder) }
             if let i = emails.firstIndex(where: { $0.id == id }) { emails[i].folder = localFolder }
         }
         finishBulk(ids.count, verb)
@@ -519,32 +517,30 @@ final class AppModel: ObservableObject {
 
     func archive(_ id: String? = nil) {
         let target = id ?? selectedId
-        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account),
-           mailboxName(e.account, "archive") != nil {
+        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account) {
             realMove(e, to: "archive")
         }
         moveTo(target, dest: "archive", verb: "Archived")
     }
     func markDone(_ id: String? = nil) {
         let target = id ?? selectedId
-        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account),
-           mailboxName(e.account, "archive") != nil {
+        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account) {
             realMove(e, to: "archive")
         }
         moveTo(target, dest: "done", verb: "Marked done")
     }
     func delete(_ id: String? = nil) {
         let target = id ?? selectedId
+        // realMove handles the trash→\Deleted fallback itself when no Trash
+        // folder exists, so we route deletes through it unconditionally.
         if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account) {
-            if mailboxName(e.account, "trash") != nil { realMove(e, to: "trash") }
-            else { applyRealFlag(e, .deleted, add: true) }
+            realMove(e, to: "trash")
         }
         moveTo(target, dest: "trash", verb: "Deleted")
     }
     func markSpam(_ id: String? = nil) {
         let target = id ?? selectedId
-        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account),
-           mailboxName(e.account, "spam") != nil {
+        if let target, let e = emails.first(where: { $0.id == target }), isRealAccount(e.account) {
             realMove(e, to: "spam")
         }
         moveTo(target, dest: "spam", verb: "Marked as spam")
@@ -738,7 +734,7 @@ final class AppModel: ObservableObject {
         let targets = emails.filter {
             AppModel.normalizeAddress($0.fromEmail) == e && !skip.contains($0.folder)
         }
-        for t in targets where isRealAccount(t.account) && mailboxName(t.account, "trash") != nil {
+        for t in targets where isRealAccount(t.account) {
             realMove(t, to: "trash")
         }
         for i in emails.indices where AppModel.normalizeAddress(emails[i].fromEmail) == e
@@ -833,7 +829,7 @@ final class AppModel: ObservableObject {
             }
             for l in labelsToAdd { applyLabel(e, l, add: true) }
             if let move, let cur = emails.first(where: { $0.id == e.id }) {
-                if isRealAccount(accountId), mailboxName(accountId, move) != nil { realMove(cur, to: move) }
+                if isRealAccount(accountId) { realMove(cur, to: move) }
                 if let i = emails.firstIndex(where: { $0.id == e.id }) { emails[i].folder = move }
             }
         }
@@ -925,7 +921,7 @@ final class AppModel: ObservableObject {
             $0.account == accountId && $0.folder == "inbox" && isBlocked($0.fromEmail) && !isVIP($0.fromEmail)
         }
         guard !targets.isEmpty else { return }
-        for t in targets where isRealAccount(t.account) && mailboxName(t.account, "trash") != nil {
+        for t in targets where isRealAccount(t.account) {
             realMove(t, to: "trash")
         }
         let ids = Set(targets.map { $0.id })
@@ -1917,7 +1913,13 @@ final class AppModel: ObservableObject {
         // (sent, drafts, trash, archive). Inbox is always "INBOX", so skip the
         // LIST round-trip on the cold-launch path when the user just wants the
         // inbox.
-        let needDiscover = realMailboxes[accountId] == nil && folderId != "inbox" && folderId != "starred"
+        // Discover the folder map whenever it's missing — including on the
+        // cold inbox path. Triage from a freshly-loaded inbox needs the
+        // archive/trash/spam destinations resolvable, so we no longer skip
+        // discovery for "inbox" (the old `folderId != "inbox"` gate caused the
+        // silent triage no-op). Starred is a server-side search with no folder
+        // map of its own, so it still doesn't trigger discovery on its own.
+        let needDiscover = realMailboxes[accountId] == nil && folderId != "starred"
         // Incremental sync (UID > maxLoaded) works for any plain folder that
         // already has a loaded window. Starred is a server-side search so it
         // can't be UID-windowed — leave it on the full-fetch path.
@@ -1927,20 +1929,7 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 if needDiscover {
-                    let boxes = try await withTimeout(20) { try await session.listMailboxes() }
-                    var m: [String: String] = [:]
-                    for b in boxes where b.selectable {
-                        switch b.kind {
-                        case .sent: m["sent"] = b.name
-                        case .drafts: m["drafts"] = b.name
-                        case .trash: m["trash"] = b.name
-                        case .junk: m["spam"] = b.name
-                        case .archive: m["archive"] = b.name
-                        default: break
-                        }
-                    }
-                    let names = boxes.filter { $0.selectable }.map { $0.name }
-                    await MainActor.run { self.realMailboxes[accountId] = m; self.allMailboxes[accountId] = names }
+                    _ = try await self.discoverMailboxes(account: accountId, session: session)
                 }
                 let map = await MainActor.run { self.realMailboxes[accountId] ?? [:] }
 
@@ -2248,7 +2237,7 @@ final class AppModel: ObservableObject {
             // the local inbox so they never appear, even for a frame.
             if folderId == "inbox" && !blockedSenders.isEmpty {
                 let blocked = mapped.filter { isBlocked($0.fromEmail) && !isVIP($0.fromEmail) }
-                for b in blocked where isRealAccount(accountId) && mailboxName(accountId, "trash") != nil {
+                for b in blocked where isRealAccount(accountId) {
                     realMove(b, to: "trash")
                 }
                 let blockedIDs = Set(blocked.map { $0.id })
@@ -2542,12 +2531,20 @@ final class AppModel: ObservableObject {
         guard let id = id ?? selectedId, let e = emails.first(where: { $0.id == id }),
               isRealAccount(e.account), let uid = e.uid, let session = session(for: e.account),
               let from = mailboxName(e.account, e.folder) else { return }
+        let account = e.account
+        let sourceFolder = e.folder
         let fe = filteredEmails
         if let ci = fe.firstIndex(where: { $0.id == id }) {
             selectedId = (fe[safe: ci + 1] ?? fe[safe: ci - 1])?.id
         }
         emails.removeAll { $0.id == id }
-        Task { try? await session.move(uid: uid, from: from, to: name) }
+        Task {
+            do {
+                try await session.move(uid: uid, from: from, to: name)
+            } catch {
+                await self.handleMoveFailure(account: account, sourceFolder: sourceFolder, error: error)
+            }
+        }
         showToast("Moved to \(name)")
     }
 
@@ -2556,18 +2553,76 @@ final class AppModel: ObservableObject {
         for id in ids {
             guard let e = emails.first(where: { $0.id == id }), isRealAccount(e.account), let uid = e.uid,
                   let session = session(for: e.account), let from = mailboxName(e.account, e.folder) else { continue }
-            Task { try? await session.move(uid: uid, from: from, to: name) }
+            let account = e.account
+            let sourceFolder = e.folder
+            Task {
+                do {
+                    try await session.move(uid: uid, from: from, to: name)
+                } catch {
+                    await self.handleMoveFailure(account: account, sourceFolder: sourceFolder, error: error)
+                }
+            }
         }
         emails.removeAll { ids.contains($0.id) }
         finishBulk(ids.count, "Moved to \(name)")
     }
 
+    /// Surface a failed server-side move: show a toast, record the per-account
+    /// error, and refresh the source folder so the still-present message becomes
+    /// visible again promptly (rather than waiting up to ~15s for the next poll).
+    /// All state mutation runs on the main actor (`AppModel` is not @MainActor).
+    private func handleMoveFailure(account: String, sourceFolder: String, error: Error) async {
+        await MainActor.run {
+            self.showToast("Couldn't move: \(error.localizedDescription)")
+            self.accountErrors[account] = error.localizedDescription
+            // The message was never relocated server-side, so it's still in its
+            // source folder — pull it back into view without waiting for the poll.
+            self.loadFolder(account, sourceFolder, silent: true, force: true)
+        }
+    }
+
+    /// Relocate a real-account message to a canonical triage folder. `from`
+    /// always resolves (inbox is special-cased to "INBOX"); the destination may
+    /// not be mapped yet on a cold inbox, so we resolve-with-discovery inside the
+    /// Task rather than bailing on a nil `to` (the old silent no-op). If the
+    /// destination genuinely doesn't exist we surface an error — except for
+    /// `trash`, which falls back to flagging \Deleted in place (matching the
+    /// historic delete behavior). Move failures are surfaced, never swallowed.
     func realMove(_ email: Email, to folderId: String) {
         guard isRealAccount(email.account), let uid = email.uid, let session = session(for: email.account),
-              let from = mailboxName(email.account, email.folder),
-              let to = mailboxName(email.account, folderId) else { return }
+              let from = mailboxName(email.account, email.folder) else { return }
+        let account = email.account
+        let sourceFolder = email.folder
         Task {
-            try? await session.move(uid: uid, from: from, to: to)
+            // Resolve the destination, discovering the folder map if it's a cold
+            // inbox that hasn't LISTed yet.
+            var to = await MainActor.run { self.mailboxName(account, folderId) }
+            if to == nil, let kind = Self.mailboxKind(forFolderId: folderId) {
+                to = await self.resolveMailbox(account, kind: kind, session: session)
+            }
+            guard let destination = to else {
+                // The destination folder genuinely doesn't exist on this server.
+                if folderId == "trash" {
+                    // Preserve the delete semantics: flag \Deleted in place.
+                    do {
+                        try await session.store(mailbox: from, uid: uid, .deleted, add: true)
+                    } catch {
+                        await self.handleMoveFailure(account: account, sourceFolder: sourceFolder, error: error)
+                    }
+                } else {
+                    await MainActor.run {
+                        self.showToast("Couldn't move: no \(folderId) folder on the server")
+                        self.accountErrors[account] = "No \(folderId) folder on the server."
+                        self.loadFolder(account, sourceFolder, silent: true, force: true)
+                    }
+                }
+                return
+            }
+            do {
+                try await session.move(uid: uid, from: from, to: destination)
+            } catch {
+                await self.handleMoveFailure(account: account, sourceFolder: sourceFolder, error: error)
+            }
         }
     }
 
@@ -2638,25 +2693,59 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Resolve a special mailbox name, discovering the folder list if needed.
-    private func resolveMailbox(_ accountId: String, kind: MailboxKind, session: IMAPSession) async -> String? {
-        let folderId: String = {
-            switch kind {
-            case .sent: return "sent"; case .drafts: return "drafts"; case .trash: return "trash"
-            case .junk: return "spam"; case .archive: return "archive"; default: return ""
-            }
-        }()
-        if let name = await MainActor.run(body: { self.realMailboxes[accountId]?[folderId] }) { return name }
-        guard let boxes = try? await session.listMailboxes() else { return nil }
+    /// The canonical folder id a special `MailboxKind` maps to (the inverse of
+    /// `resolveMailbox`'s switch). Returns nil for kinds with no canonical id.
+    private static func folderId(for kind: MailboxKind) -> String? {
+        switch kind {
+        case .sent: return "sent"; case .drafts: return "drafts"; case .trash: return "trash"
+        case .junk: return "spam"; case .archive: return "archive"
+        case .inbox: return "inbox"; case .other: return nil
+        }
+    }
+
+    /// The special `MailboxKind` a triage folder id maps to (the inverse of the
+    /// above). Returns nil for ids that aren't a discoverable special folder.
+    private static func mailboxKind(forFolderId folderId: String) -> MailboxKind? {
+        switch folderId {
+        case "archive", "done": return .archive
+        case "trash": return .trash
+        case "spam": return .junk
+        case "sent": return .sent
+        case "drafts": return .drafts
+        default: return nil
+        }
+    }
+
+    /// Single source of truth for folder discovery: LIST the account's mailboxes
+    /// and populate BOTH `realMailboxes` (canonical-id → server name) and
+    /// `allMailboxes` (every selectable name). Returns the canonical map. Both
+    /// the cold-load (`needDiscover`) path and `resolveMailbox` route through
+    /// here so the LIST→map switch lives in exactly one place.
+    @discardableResult
+    private func discoverMailboxes(account accountId: String, session: IMAPSession) async throws -> [String: String] {
+        let boxes = try await withTimeout(20) { try await session.listMailboxes() }
         var m: [String: String] = [:]
         for b in boxes where b.selectable {
             switch b.kind {
-            case .sent: m["sent"] = b.name; case .drafts: m["drafts"] = b.name
-            case .trash: m["trash"] = b.name; case .junk: m["spam"] = b.name
-            case .archive: m["archive"] = b.name; default: break
+            case .sent: m["sent"] = b.name
+            case .drafts: m["drafts"] = b.name
+            case .trash: m["trash"] = b.name
+            case .junk: m["spam"] = b.name
+            case .archive: m["archive"] = b.name
+            default: break
             }
         }
-        await MainActor.run { self.realMailboxes[accountId] = m }
+        let names = boxes.filter { $0.selectable }.map { $0.name }
+        let map = m
+        await MainActor.run { self.realMailboxes[accountId] = map; self.allMailboxes[accountId] = names }
+        return map
+    }
+
+    /// Resolve a special mailbox name, discovering the folder list if needed.
+    private func resolveMailbox(_ accountId: String, kind: MailboxKind, session: IMAPSession) async -> String? {
+        guard let folderId = Self.folderId(for: kind) else { return nil }
+        if let name = await MainActor.run(body: { self.realMailboxes[accountId]?[folderId] }) { return name }
+        guard let m = try? await discoverMailboxes(account: accountId, session: session) else { return nil }
         return m[folderId]
     }
 
