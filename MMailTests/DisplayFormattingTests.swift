@@ -68,6 +68,30 @@ import Testing
                 == "to (no recipient)")
     }
 
+    @Test func draftsFolderShowsItsRecipients() {
+        let e = email(to: ["bob@example.com", "carol@example.com"], folder: "drafts")
+        #expect(AppModel.recipientLine(for: e, account: account("j_holdy@mailbox.org"))
+                == "to bob@example.com, carol@example.com")
+    }
+
+    @Test func draftsFolderWithNoRecipientShowsPlaceholder() {
+        let e = email(to: [], folder: "drafts")
+        #expect(AppModel.recipientLine(for: e, account: account("j_holdy@mailbox.org"))
+                == "to (no recipient)")
+    }
+
+    @Test func outboxFolderShowsItsRecipients() {
+        let e = email(to: ["bob@example.com", "carol@example.com"], folder: "outbox")
+        #expect(AppModel.recipientLine(for: e, account: account("j_holdy@mailbox.org"))
+                == "to bob@example.com, carol@example.com")
+    }
+
+    @Test func outboxFolderWithNoRecipientShowsPlaceholder() {
+        let e = email(to: [], folder: "outbox")
+        #expect(AppModel.recipientLine(for: e, account: account("j_holdy@mailbox.org"))
+                == "to (no recipient)")
+    }
+
     // MARK: - Within-day newest-first comparator (SC-003)
 
     /// Sorts via the production comparator, mirroring the AppModel seam.
@@ -132,7 +156,7 @@ import Testing
     }
 
     /// Comparator is render-stable: re-sorting an already-sorted list is a fixpoint.
-    @Test func sortIsStableAcrossReRenders() {
+    @Test func reSortingSortedListIsIdempotent() {
         let list = [
             email("a", uid: 5),
             email("c", uid: 5),
