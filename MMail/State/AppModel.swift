@@ -105,7 +105,7 @@ final class AppModel: ObservableObject {
     @Published var accounts: [Account] = []
     @Published var currentAccount: String = "all"
     @Published var folder: String = "home"
-    @Published var emails: [Email] = []
+    @Published var emails: [Email] = [] { didSet { refreshDockBadge() } }
     @Published var selectedId: String?
     @Published var filter: InboxFilter = .all
     // When the reading pane is off, this opens the selected message full-width.
@@ -270,6 +270,8 @@ final class AppModel: ObservableObject {
         // Welcome shows on first launch and whenever no account is connected.
         onboarding = accounts.isEmpty
         purgeSeedData()
+        // Set the Dock badge correctly on launch (empty -> cleared when nothing unread).
+        refreshDockBadge()
     }
 
     /// Remove the old demo to-dos / journal entries that earlier builds seeded,
@@ -354,6 +356,34 @@ final class AppModel: ObservableObject {
         var m: [String: Int] = [:]
         for e in emails where e.unread && e.folder == "inbox" { m[e.account, default: 0] += 1 }
         return m
+    }
+
+    // MARK: - Dock badge (pure seams)
+
+    /// Pure formatter: maps an unread count to the Dock badge label string.
+    /// Positive → decimal string; zero/negative → "" (clears the badge, never "0").
+    static func dockBadgeLabel(unread: Int) -> String {
+        return unread > 0 ? String(unread) : ""
+    }
+
+    /// Pure counter: total unread INBOX messages across all accounts.
+    /// Mirrors `sum(unreadByAccount.values)` so the Dock and in-app counts never diverge.
+    static func unreadInboxCount(_ emails: [Email]) -> Int {
+        return emails.filter { $0.unread && $0.folder == "inbox" }.count
+    }
+
+    /// Total unread inbox count across accounts, delegating to the pure seam over `emails`.
+    var unreadInboxTotal: Int { Self.unreadInboxCount(emails) }
+
+    /// Recompute the unread-inbox total and push it to the macOS Dock badge.
+    /// Reads `emails` only (never mutates it — that would recurse via `didSet`).
+    /// `AppModel` is NOT @MainActor and `emails` can be mutated from background
+    /// IMAP callbacks, so the AppKit assignment MUST hop to the main thread.
+    private func refreshDockBadge() {
+        let n = Self.unreadInboxCount(emails)
+        DispatchQueue.main.async {
+            NSApp.dockTile.badgeLabel = AppModel.dockBadgeLabel(unread: n)
+        }
     }
 
     var position: Int {
