@@ -304,6 +304,8 @@ final class AppModel: ObservableObject {
     }
 
     var visibleEmails: [Email] {
+        // Search is exempt from the within-day sort: preserve the server-provided
+        // (or live-filtered) result order unchanged.
         if searchIsActive {
             if let results = serverSearchResults { return results }
             let ql = searchQuery.lowercased()
@@ -314,15 +316,21 @@ final class AppModel: ObservableObject {
                 (SampleData.senders[e.from]?.name.lowercased().contains(ql) ?? false)
             }
         }
+        // All non-search views funnel through one sort so the rendered order,
+        // selection fallback, navigation, and triage can never disagree.
+        let base: [Email]
         if let lf = labelFilter {
-            return accountFiltered.filter { $0.labels.contains(lf) && !isSnoozed($0) }
+            base = accountFiltered.filter { $0.labels.contains(lf) && !isSnoozed($0) }
+        } else if folder == "snoozed" {
+            base = accountFiltered.filter { isSnoozed($0) }
+        } else {
+            base = accountFiltered.filter { e in
+                if isSnoozed(e) { return false }
+                if folder == "starred" { return e.starred && e.folder != "trash" }
+                return e.folder == folder
+            }
         }
-        if folder == "snoozed" { return accountFiltered.filter { isSnoozed($0) } }
-        return accountFiltered.filter { e in
-            if isSnoozed(e) { return false }
-            if folder == "starred" { return e.starred && e.folder != "trash" }
-            return e.folder == folder
-        }
+        return base.sorted(by: AppModel.isNewerFirst)
     }
 
     func isSnoozed(_ e: Email) -> Bool {
@@ -403,6 +411,16 @@ final class AppModel: ObservableObject {
             return "to (no recipient)"
         }
         return "to \(account?.email ?? "me")"
+    }
+
+    /// Pure comparator: orders two messages newest-first by descending `uid`
+    /// (the arrival proxy the app already sorts by). To keep the order total,
+    /// deterministic, and render-stable when `uid` values are equal or absent
+    /// (a missing `uid` is treated as 0), ties break by ascending `id`.
+    static func isNewerFirst(_ a: Email, _ b: Email) -> Bool {
+        let ua = a.uid ?? 0, ub = b.uid ?? 0
+        if ua != ub { return ua > ub }
+        return a.id < b.id
     }
 
     var position: Int {

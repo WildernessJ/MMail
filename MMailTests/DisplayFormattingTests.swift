@@ -67,4 +67,81 @@ import Testing
         #expect(AppModel.recipientLine(for: e, account: account("j_holdy@mailbox.org"))
                 == "to (no recipient)")
     }
+
+    // MARK: - Within-day newest-first comparator (SC-003)
+
+    /// Sorts via the production comparator, mirroring the AppModel seam.
+    private func sortedNewestFirst(_ list: [Email]) -> [Email] {
+        list.sorted(by: AppModel.isNewerFirst)
+    }
+
+    /// (a) Higher `uid` is "newer" → sorts before a lower `uid`.
+    @Test func higherUidSortsFirst() {
+        let newer = email("a", uid: 200)
+        let older = email("b", uid: 100)
+        #expect(AppModel.isNewerFirst(newer, older))
+        #expect(!AppModel.isNewerFirst(older, newer))
+    }
+
+    /// (b) Equal `uid` → deterministic tiebreak by ascending `id`.
+    @Test func equalUidBreaksTieById() {
+        let lowId = email("aaa", uid: 100)
+        let highId = email("zzz", uid: 100)
+        #expect(AppModel.isNewerFirst(lowId, highId))
+        #expect(!AppModel.isNewerFirst(highId, lowId))
+    }
+
+    /// (c) `nil` vs `nil` `uid` → both treated as 0, tiebreak by `id`, stable.
+    @Test func nilUidsBreakTieByIdStably() {
+        let lowId = email("aaa", uid: nil)
+        let highId = email("zzz", uid: nil)
+        #expect(AppModel.isNewerFirst(lowId, highId))
+        #expect(!AppModel.isNewerFirst(highId, lowId))
+    }
+
+    /// `nil` uid is treated as 0 → loses to any present positive uid.
+    @Test func nilUidIsOlderThanPresentUid() {
+        let present = email("a", uid: 1)
+        let missing = email("b", uid: nil)
+        #expect(AppModel.isNewerFirst(present, missing))
+        #expect(!AppModel.isNewerFirst(missing, present))
+    }
+
+    /// Three Today messages arriving 08:00 (uid 10), 10:00 (uid 20), 11:24 (uid 30)
+    /// render top-to-bottom as 11:24, 10:00, 08:00 (highest uid first).
+    @Test func newestArrivalAppearsAtTop() {
+        let m0800 = email("m0800", uid: 10)
+        let m1000 = email("m1000", uid: 20)
+        let m1124 = email("m1124", uid: 30)
+        let sorted = sortedNewestFirst([m0800, m1124, m1000])
+        #expect(sorted.map(\.id) == ["m1124", "m1000", "m0800"])
+    }
+
+    /// (d) Sorting a mixed list drops/duplicates nothing: count and id-set preserved.
+    @Test func sortPreservesEveryMessage() {
+        let list = [
+            email("a", uid: 5),
+            email("b", uid: nil),
+            email("c", uid: 5),    // dup uid with a
+            email("d", uid: 99),
+            email("e", uid: nil),  // dup nil uid with b
+        ]
+        let sorted = sortedNewestFirst(list)
+        #expect(sorted.count == list.count)
+        #expect(Set(sorted.map(\.id)) == Set(list.map(\.id)))
+    }
+
+    /// Comparator is render-stable: re-sorting an already-sorted list is a fixpoint.
+    @Test func sortIsStableAcrossReRenders() {
+        let list = [
+            email("a", uid: 5),
+            email("c", uid: 5),
+            email("b", uid: nil),
+            email("e", uid: nil),
+            email("d", uid: 99),
+        ]
+        let once = sortedNewestFirst(list)
+        let twice = sortedNewestFirst(once)
+        #expect(once.map(\.id) == twice.map(\.id))
+    }
 }
