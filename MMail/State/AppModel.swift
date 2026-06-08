@@ -356,6 +356,23 @@ final class AppModel: ObservableObject {
         return m
     }
 
+    // MARK: - Dock badge (pure seams)
+
+    /// Pure formatter: maps an unread count to the Dock badge label string.
+    /// Positive → decimal string; zero/negative → "" (clears the badge, never "0").
+    static func dockBadgeLabel(unread: Int) -> String {
+        return unread > 0 ? String(unread) : ""
+    }
+
+    /// Pure counter: total unread INBOX messages across all accounts.
+    /// Mirrors `sum(unreadByAccount.values)` so the Dock and in-app counts never diverge.
+    static func unreadInboxCount(_ emails: [Email]) -> Int {
+        return emails.filter { $0.unread && $0.folder == "inbox" }.count
+    }
+
+    /// Total unread inbox count across accounts, delegating to the pure seam over `emails`.
+    var unreadInboxTotal: Int { Self.unreadInboxCount(emails) }
+
     var position: Int {
         max(1, (filteredEmails.firstIndex(where: { $0.id == selectedId }) ?? 0) + 1)
     }
