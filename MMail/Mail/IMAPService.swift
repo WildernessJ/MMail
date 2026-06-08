@@ -262,8 +262,19 @@ final class IMAPService {
     }
 
     func listMailboxes() async throws -> [IMAPMailbox] {
+        // Request RETURN (SPECIAL-USE) so the server returns RFC 6154 attributes
+        // (e.g. \Junk) that classify() prefers over name heuristics — but ONLY
+        // when the server advertises BOTH the attributes (SPECIAL-USE) and the
+        // LIST … RETURN mechanism (LIST-EXTENDED). send() throws on a tagged
+        // BAD/NO, so sending this option to a non-supporting server would break
+        // ALL folder discovery; the dual-capability gate is the conservative
+        // fallback to today's plain LIST. NOTE: `.specialUse` here is the
+        // ReturnOption (encodes RETURN (SPECIAL-USE)), NOT the ListSelectOption
+        // selection filter — the first arg stays nil so all folders are listed.
+        let opts: [ReturnOption] = (capabilities.contains("SPECIAL-USE") && capabilities.contains("LIST-EXTENDED"))
+            ? [.specialUse] : []
         let responses = try await send(.list(nil, reference: MailboxName(ByteBuffer(string: "")),
-                                             .mailbox(ByteBuffer(string: "*")), []))
+                                             .mailbox(ByteBuffer(string: "*")), opts))
         var out: [IMAPMailbox] = []
         for r in responses {
             guard case .untagged(.mailboxData(.list(let info))) = r else { continue }
