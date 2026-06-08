@@ -69,10 +69,10 @@
   - **Files:** `MMailTests/Properties/ParseRecipientsProperties.swift`
   - Run: `TEST` — Expected: PASS. Commit.
 
-- [ ] **T012 (SC: 002, 004): Prove the net actually catches regressions** — Temporarily break one value function (e.g. make `dedupById` return its input unchanged), run, confirm the matching property FAILS with a concrete counterexample + seed, then confirm re-running pinned to that printed seed reproduces it; revert the break. This is a manual verification of SC-002/SC-004; nothing from this task is committed.
+- [x] **T012 (SC: 002, 004): Prove the net actually catches regressions** — Temporarily break one value function (e.g. make `dedupById` return its input unchanged), run, confirm the matching property FAILS with a concrete counterexample + seed, then confirm re-running pinned to that printed seed reproduces it; revert the break. This is a manual verification of SC-002/SC-004; nothing from this task is committed.
   - **Files:** (temporary edit to `MMail/State/AppModel.swift`, reverted)
   - Run: `TEST` (broken) — Expected: FAIL with counterexample + seed; replay with that seed reproduces; `TEST` (after revert) — Expected: PASS.
 
-- [ ] **T013 (SC: 001, 003): Full green + no-new-dependency check + final commit** — Confirm the whole suite is green and the audit posture is intact.
+- [x] **T013 (SC: 001, 003): Full green + no-new-dependency check + final commit** — Confirm the whole suite is green and the audit posture is intact.
   - **Files:** `project.yml` (read-only check)
   - Run: `TEST` — Expected: all properties pass. Then `git diff project.yml` review — Expected: `packages:` list unchanged (only the `MMailTests` target was added; no third-party dependency). Commit.
