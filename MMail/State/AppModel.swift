@@ -173,6 +173,14 @@ final class AppModel: ObservableObject {
     @Published var trustedImageSenders: Set<String> = []
     private let kTrustedImages = "mmail.trustedImages"
 
+    // Image privacy proxy: when enabled with a base URL (+ a Keychain secret),
+    // remote <img src> for shown-with-images messages is routed through the
+    // Cloudflare Worker. The HMAC signing secret lives ONLY in the Keychain.
+    @Published var proxyEnabled: Bool = true
+    @Published var proxyBaseURL: String = ""
+    private let kProxyEnabled = "mmail.imageProxy.enabled"
+    private let kProxyBaseURL = "mmail.imageProxy.baseURL"
+
     // Real (IMAP/SMTP) accounts
     @Published var realConfigs: [MailAccountConfig] = []
     @Published var loadingAccounts: Set<String> = []
@@ -255,6 +263,8 @@ final class AppModel: ObservableObject {
         if let arr = d.array(forKey: kTrustedImages) as? [String] {
             trustedImageSenders = Set(arr.compactMap { AppModel.normalizeAddress($0) })
         }
+        proxyEnabled = d.object(forKey: kProxyEnabled) as? Bool ?? true
+        proxyBaseURL = d.string(forKey: kProxyBaseURL) ?? ""
         if let data = d.data(forKey: kRules),
            let decoded = try? JSONDecoder().decode([MailRule].self, from: data) { rules = decoded }
         if let data = d.data(forKey: kRealAccounts),
@@ -866,6 +876,45 @@ final class AppModel: ObservableObject {
     func untrustImages(_ email: String) {
         trustedImageSenders.remove(email.lowercased())
         UserDefaults.standard.set(Array(trustedImageSenders), forKey: kTrustedImages)
+    }
+
+    // MARK: - Image privacy proxy
+
+    func setProxyEnabled(_ v: Bool) {
+        proxyEnabled = v
+        UserDefaults.standard.set(v, forKey: kProxyEnabled)
+    }
+
+    /// Persist the proxy base URL. Clearing it makes proxying inert WITHOUT
+    /// flipping the enabled toggle (the toggle is never auto-changed).
+    func setProxyBaseURL(_ url: String) {
+        proxyBaseURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        UserDefaults.standard.set(proxyBaseURL, forKey: kProxyBaseURL)
+    }
+
+    /// Store (or clear) the HMAC signing secret in the Keychain. `objectWillChange`
+    /// fires so dependent views (and `imageProxyConfig`) re-evaluate.
+    func setProxySecret(_ secret: String) {
+        objectWillChange.send()
+        Keychain.storeProxySecret(secret)
+    }
+
+    /// True when a secret is present in the Keychain.
+    var hasProxySecret: Bool {
+        !(Keychain.readProxySecret()?.isEmpty ?? true)
+    }
+
+    /// The active proxy configuration, or nil when proxying is inert. Active ONLY
+    /// when the toggle is on AND the base URL is non-empty (and a valid URL) AND a
+    /// signing secret is present in the Keychain. Otherwise behavior falls back to
+    /// the pre-feature build.
+    var imageProxyConfig: ImageProxyConfig? {
+        guard proxyEnabled else { return nil }
+        let trimmed = proxyBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let url = URL(string: trimmed), url.host != nil,
+              let secret = Keychain.readProxySecret(), !secret.isEmpty else { return nil }
+        return ImageProxyConfig(baseURL: url, signingSecret: secret)
     }
 
     // MARK: - Rules
