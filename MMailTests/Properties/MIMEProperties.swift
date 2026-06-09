@@ -38,4 +38,22 @@ import Foundation
             return true
         }
     }
+
+    /// Regression: quoted-printable CRLF soft line breaks (`=\r\n`) MUST be
+    /// stripped when decoding a body. Swift treats "\r\n" as a single Character,
+    /// so the prior char-based decoder never matched `=`+`\r`+`\n` and left soft
+    /// breaks in — splitting `src` URLs across lines and breaking image rendering
+    /// (and the image proxy). The byte-based decoder rejoins them.
+    @Test func quotedPrintableDecodesCRLFSoftBreaks() {
+        let raw =
+            "Content-Type: text/html; charset=utf-8\r\n" +
+            "Content-Transfer-Encoding: quoted-printable\r\n" +
+            "\r\n" +
+            "<img src=3D\"https://x.test/a=\r\nb.gif?x=3D1\">\r\n"
+        let html = MIME.parse(Data(raw.utf8)).html ?? ""
+        // `=3D` → `=`, and the `=\r\n` soft break is removed (rejoining a…b).
+        #expect(html.contains("<img src=\"https://x.test/ab.gif?x=1\">"))
+        #expect(!html.contains("=\r\n"))
+        #expect(!html.contains("=3D"))
+    }
 }
