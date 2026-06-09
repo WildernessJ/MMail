@@ -1,7 +1,16 @@
 {
-  "_comment": "Pinned cross-language HMAC vector for the image privacy proxy. Source of truth computed with: printf '%s' \"<e>:<A>\" | openssl dgst -sha256 -hmac \"<K>\" -binary | openssl base64 | tr '+/' '-_' | tr -d '='. Asserted byte-for-byte by BOTH proxy-worker/test/crypto.test.js (Worker, crypto.subtle) and MMailTests/ImageProxyTests.swift (CryptoKit). K is ASCII-printable so its UTF-8 bytes are unambiguous on every side. A deliberately contains a space and an '&' to exercise RFC-3986 percent-encoding (space -> %20, not '+').",
+  "_comment": "Pinned cross-language HMAC vectors for the image privacy proxy. Source of truth computed with: printf '%s' \"<e>:<A>\" | openssl dgst -sha256 -hmac \"<K>\" -binary | openssl base64 | tr '+/' '-_' | tr -d '='. Asserted byte-for-byte by BOTH proxy-worker/test/crypto.test.js (Worker, crypto.subtle) and MMailTests/ImageProxyTests.swift (CryptoKit). K is ASCII-printable so its UTF-8 bytes are unambiguous on every side. Vector 1 (A) contains a space and an '&' to exercise RFC-3986 percent-encoding (space -> %20, not '+'). Vector 2 (A2) contains a LITERAL '%XX' sequence (caf%C3%A9, q=a%2Fb) AND a multi-byte UTF-8 char, so it is the regression guard for the 'decode u exactly once' contract: after a SINGLE decode of the minted u, the recovered value must equal A2 byte-for-byte (a double-decode would corrupt the %XX and break the HMAC).",
   "K": "mmail-proxy-test-secret-v1",
-  "e": 1900000300,
-  "A": "https://x.test/a b.gif?u=1&v=2",
-  "S": "uWhC12gGW0FwsCdVPPxtSTEUlhqu3PPL-z9mFQBPgd0"
+  "vectors": [
+    {
+      "e": 1900000300,
+      "A": "https://x.test/a b.gif?u=1&v=2",
+      "S": "uWhC12gGW0FwsCdVPPxtSTEUlhqu3PPL-z9mFQBPgd0"
+    },
+    {
+      "e": 1900000300,
+      "A": "https://x.test/caf%C3%A9  details.gif?q=a%2Fb",
+      "S": "vsny-_a3X6xftatAQKcbdKNv9mdmNVb_RriwvjfKurA"
+    }
+  ]
 }
