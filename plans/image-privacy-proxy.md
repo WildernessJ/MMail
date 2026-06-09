@@ -51,7 +51,7 @@
 - [x] **T011 (SC: 005): Failing rewriter tests** — Add tests: single remote `<img src>` → signed proxy URL; `<script>`/`<iframe>`/`<link>`/`cid:`/`data:`/relative/`srcset`/CSS `url()` untouched; already-proxied URL idempotent; image-free HTML unchanged; `<img src="">` & `<img>` not rewritten; HTML-entity-decoded `src` (`&amp;`→`&`) is the signed value. FAILS because `rewrite` is a stub. Run: `xcodebuild test ...` Expected: FAIL.
   **Files:** `MMailTests/ImageProxyTests.swift`
 
-- [ ] **T012 (SC: 005): Implement rewriter + commit** — Match remote `<img ... src=...>`, HTML-entity-decode the src to canonical assetURL, replace via `proxiedURL`; leave all else byte-for-byte. Run: `xcodebuild test ...` Expected: PASS. Commit.
+- [x] **T012 (SC: 005): Implement rewriter + commit** — Match remote `<img ... src=...>`, HTML-entity-decode the src to canonical assetURL, replace via `proxiedURL`; leave all else byte-for-byte. Run: `xcodebuild test ...` Expected: PASS. Commit.
   **Files:** `MMail/Mail/ImageProxy.swift`
 
 ---

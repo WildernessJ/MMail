@@ -71,9 +71,86 @@ enum ImageProxy {
         return URL(string: urlString)
     }
 
+    /// Matches an `<img ...>` start tag (capturing its attribute span). Case-
+    /// insensitive; does not span the closing `>`.
+    private static let imgTagRegex = try! NSRegularExpression(
+        pattern: "<img\\b[^>]*>",
+        options: [.caseInsensitive]
+    )
+
+    /// Within an img tag's attribute text, matches a `src` attribute and captures
+    /// the quote char (group 1) and the quoted value (group 2). Only matches
+    /// `src`, never `srcset` (the `\\s*=` after `src` plus the `\\b` rules out
+    /// `srcset`). Case-insensitive.
+    private static let srcAttrRegex = try! NSRegularExpression(
+        pattern: "\\bsrc\\s*=\\s*(\"|')(.*?)\\1",
+        options: [.caseInsensitive]
+    )
+
+    /// Decode the handful of HTML entities that appear in URL attribute values so
+    /// the client and Worker share one canonical assetURL.
+    private static func decodeEntities(_ s: String) -> String {
+        guard s.contains("&") else { return s }
+        return s
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&#38;", with: "&")
+            .replacingOccurrences(of: "&#x26;", with: "&", options: .caseInsensitive)
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+    }
+
     /// Rewrite every remote `<img src>` in `html` to a signed proxy URL, leaving
-    /// all other markup byte-for-byte unchanged. Stub until T012.
+    /// all other markup byte-for-byte unchanged. Pure and deterministic given `now`.
     static func rewrite(html: String, config: ImageProxyConfig, now: Date) -> String {
-        html
+        let proxyHost = config.baseURL.host?.lowercased()
+        let full = NSRange(html.startIndex..., in: html)
+        var result = ""
+        var lastEnd = html.startIndex
+
+        imgTagRegex.enumerateMatches(in: html, options: [], range: full) { match, _, _ in
+            guard let m = match, let tagRange = Range(m.range, in: html) else { return }
+            // Copy the untouched span before this tag verbatim.
+            result += html[lastEnd..<tagRange.lowerBound]
+            lastEnd = tagRange.upperBound
+
+            let tag = String(html[tagRange])
+            result += rewriteTag(tag, config: config, now: now, proxyHost: proxyHost)
+        }
+        // Trailing remainder.
+        result += html[lastEnd...]
+        return result
+    }
+
+    /// Rewrite the `src` of a single `<img ...>` tag, or return it unchanged if it
+    /// has no remote `src` (or is already proxied / non-http(s) / empty).
+    private static func rewriteTag(_ tag: String, config: ImageProxyConfig,
+                                   now: Date, proxyHost: String?) -> String {
+        let tagRange = NSRange(tag.startIndex..., in: tag)
+        guard let srcMatch = srcAttrRegex.firstMatch(in: tag, options: [], range: tagRange),
+              let valueNSRange = Range(srcMatch.range(at: 2), in: tag) else {
+            return tag
+        }
+        let rawValue = String(tag[valueNSRange])
+        let assetURL = decodeEntities(rawValue).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !assetURL.isEmpty else { return tag }
+
+        let lower = assetURL.lowercased()
+        guard lower.hasPrefix("http://") || lower.hasPrefix("https://") else { return tag }
+
+        // Idempotency: an `<img src>` already pointing at the proxy origin is left
+        // as-is (re-wrapping would double-sign it).
+        if let proxyHost, URL(string: assetURL)?.host?.lowercased() == proxyHost {
+            return tag
+        }
+
+        guard let proxied = proxiedURL(forAsset: assetURL, config: config, now: now) else {
+            return tag
+        }
+
+        // Replace ONLY the attribute value span, preserving the original quote
+        // char and the rest of the tag byte-for-byte.
+        return tag.replacingCharacters(in: valueNSRange, with: proxied.absoluteString)
     }
 }
