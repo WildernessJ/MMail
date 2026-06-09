@@ -1,0 +1,19 @@
+name = "mmail-image-proxy"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# R2 bucket that caches fetched image bodies (keyed by SHA-256 of the decoded
+# asset URL). Create it once with:
+#   wrangler r2 bucket create mmail-img-cache
+[[r2_buckets]]
+binding = "IMG_CACHE"
+bucket_name = "mmail-img-cache"
+
+# Tunable limits (see src/index.js). Strings so wrangler keeps them as env vars.
+[vars]
+MAX_BYTES = "10485760"   # 10 MB size cap on origin fetch
+ORIGIN_TIMEOUT_MS = "10000"  # 10 s origin fetch timeout
+
+# The shared HMAC signing secret is NEVER committed. Set it out-of-band with:
+#   wrangler secret put PROXY_SECRET
+# It must match the secret stored in MMail's macOS Keychain (Settings).
