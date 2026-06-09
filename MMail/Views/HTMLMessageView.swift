@@ -90,6 +90,22 @@ struct HTMLMessageView: NSViewRepresentable {
         [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}}]
         """
 
+        /// Build a content-rule JSON that blocks every remote resource type, then
+        /// `ignore-previous-rules` (allows) ONLY the proxy origin's host. Any
+        /// remote resource that is not a rewritten `<img src>` proxy URL —
+        /// scripts, iframes, fonts, external CSS, CSS `url()`, non-proxy
+        /// `srcset` — therefore stays blocked. Returns nil if the proxy base URL
+        /// has no host.
+        static func proxyAllowRules(for config: ImageProxyConfig) -> String? {
+            guard let host = config.baseURL.host, !host.isEmpty else { return nil }
+            // `if-domain` is host-scoped; match the proxy host and its subdomains.
+            let domains = "[\"\(host)\",\"*\(host)\"]"
+            return """
+            [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}},\
+            {"trigger":{"url-filter":".*","if-domain":\(domains)},"action":{"type":"ignore-previous-rules"}}]
+            """
+        }
+
         func load(_ web: WKWebView, html: String, blockRemote: Bool) {
             lastHTML = html
             lastBlock = blockRemote
