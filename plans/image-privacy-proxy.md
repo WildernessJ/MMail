@@ -32,7 +32,7 @@
 - [x] **T006 (SC: 002): Implement handler + commit** — Implement: parse `u`/`e`/`s`; **percent-decode `u`** to canonical assetURL; verify via `crypto.js`; reject (4xx, no fetch) on bad/expired; R2 `get` by `SHA-256(decoded assetURL)`; on miss `fetch` origin (omit cookies, neutral UA, 10 MB cap, 10 s timeout) → `put` → stream; on hit serve from R2; oversize/error → error, nothing stored. Run: `cd proxy-worker && node --test` Expected: PASS. Commit.
   **Files:** `proxy-worker/src/index.js`
 
-- [ ] **T007 (SC: 002, 003): Deploy + curl live-verify (USER STEP)** — User runs `wrangler login`, `wrangler r2 bucket create <name>`, `wrangler secret put PROXY_SECRET` (record it — reused in T018), `wrangler deploy`. Then curl-verify. Run: `curl -i "<deployed>/proxy?u=<enc A>&e=<future>&s=<sig>"` (→ 200 + image content-type), tampered `s` (→ 4xx), expired `e` (→ 4xx), valid URL twice (2nd from R2, origin not re-hit — confirm via Worker logs / R2). Expected: 200 / 4xx / 4xx / cache-hit.
+- [x] **T007 (SC: 002, 003): Deploy + curl live-verify (USER STEP — deploy/curl deferred to user; Worker made deploy-READY: wrangler.toml + README.md with deploy + curl steps)** — User runs `wrangler login`, `wrangler r2 bucket create <name>`, `wrangler secret put PROXY_SECRET` (record it — reused in T018), `wrangler deploy`. Then curl-verify. Run: `curl -i "<deployed>/proxy?u=<enc A>&e=<future>&s=<sig>"` (→ 200 + image content-type), tampered `s` (→ 4xx), expired `e` (→ 4xx), valid URL twice (2nd from R2, origin not re-hit — confirm via Worker logs / R2). Expected: 200 / 4xx / 4xx / cache-hit.
   **Files:** `proxy-worker/README.md` (deploy + curl steps)
 
 ---
