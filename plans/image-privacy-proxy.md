@@ -23,7 +23,7 @@
 - [x] **T003 (SC: 003): Failing crypto test** — Extract a pure `src/crypto.js` (build payload `"<e>:<assetURL>"`, HMAC-SHA256 via `crypto.subtle` with key = UTF-8 bytes of `K`, base64url no-pad). Add `test/crypto.test.js` asserting `verify(vector)` accepts and any single-byte-flipped `S` is rejected. Run: `cd proxy-worker && node --test` Expected: FAIL ("not implemented").
   **Files:** `proxy-worker/src/crypto.js`, `proxy-worker/test/crypto.test.js`
 
-- [ ] **T004 (SC: 003): Implement crypto + commit** — Implement `sign`/`verify` until the pinned vector passes and bit-flip rejects. Run: `cd proxy-worker && node --test` Expected: PASS. Commit.
+- [x] **T004 (SC: 003): Implement crypto + commit** — Implement `sign`/`verify` until the pinned vector passes and bit-flip rejects. Run: `cd proxy-worker && node --test` Expected: PASS. Commit.
   **Files:** `proxy-worker/src/crypto.js`
 
 - [ ] **T005 (SC: 002): Failing handler test (mocked R2 + fetch)** — Add `test/handler.test.js` that drives the `fetch` handler with an **in-memory mock R2** (`get`/`put`) and a **mock `fetch`**, asserting: (a) valid sig + cache miss → origin fetched exactly once, body+content-type stored, streamed back; (b) valid sig + cache hit → served from R2, mock `fetch` NOT called; (c) bad sig → 4xx, no fetch; (d) expired `e` → 4xx, no fetch; (e) oversize/origin-error → error status, nothing stored. Run: `cd proxy-worker && node --test` Expected: FAIL.
