@@ -128,4 +128,4 @@ MMail/
 
 ## License
 
-Personal project — no license granted yet.
+MMail is released under the [MIT License](LICENSE). © 2026 moerdowo.
