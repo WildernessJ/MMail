@@ -68,7 +68,7 @@
 
 ## Phase D — Settings, config state, secret (gated; tests + build)
 
-- [ ] **T015 (SC: 004): Failing secret-storage test** — Add Keychain store/read function *signatures* (stubs) for the proxy signing secret, and a test asserting: after `storeProxySecret("s")`, `readProxySecret() == "s"` AND `UserDefaults.standard.string(forKey: <secretKey>) == nil` (the "never in UserDefaults" invariant). FAILS against the stub. Run: `xcodebuild test ...` Expected: FAIL.
+- [x] **T015 (SC: 004): Failing secret-storage test** — Add Keychain store/read function *signatures* (stubs) for the proxy signing secret, and a test asserting: after `storeProxySecret("s")`, `readProxySecret() == "s"` AND `UserDefaults.standard.string(forKey: <secretKey>) == nil` (the "never in UserDefaults" invariant). FAILS against the stub. Run: `xcodebuild test ...` Expected: FAIL.
   **Files:** `MMail/Mail/Keychain.swift`, `MMailTests/ImageProxyTests.swift`
 
 - [ ] **T016 (SC: 004): Implement secret storage + commit** — Implement store/read against the existing generic-password `Keychain` wrapper; secret never touches UserDefaults. Run: `xcodebuild test ...` Expected: PASS. Commit.

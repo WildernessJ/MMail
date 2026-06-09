@@ -133,4 +133,21 @@ import Foundation
         let proxied = expectedProxyURL(decodedAsset)
         #expect(out == "<img src=\"\(proxied)\">")
     }
+
+    // MARK: - Keychain secret storage (SC-004)
+
+    /// The signing secret round-trips through the Keychain AND is never written to
+    /// UserDefaults under the Keychain account key (the "never in UserDefaults"
+    /// invariant).
+    @Test func proxySecretRoundTripsAndStaysOutOfUserDefaults() {
+        let key = Keychain.proxySecretAccount
+        // Hermetic: ensure no stale UserDefaults value masks the assertion.
+        UserDefaults.standard.removeObject(forKey: key)
+        defer { Keychain.storeProxySecret("") }   // clear the Keychain after the test
+
+        Keychain.storeProxySecret("super-secret-hmac-key")
+        #expect(Keychain.readProxySecret() == "super-secret-hmac-key")
+        #expect(UserDefaults.standard.string(forKey: key) == nil,
+                "the signing secret must NEVER be written to UserDefaults")
+    }
 }

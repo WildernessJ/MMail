@@ -41,4 +41,22 @@ enum Keychain {
         ]
         SecItemDelete(query as CFDictionary)
     }
+
+    // MARK: - Image proxy signing secret
+
+    /// Keychain account used for the image-proxy HMAC signing secret. NOTE: this
+    /// must never be used as a UserDefaults key — the secret lives only here.
+    static let proxySecretAccount = "mmail.imageProxy.signingSecret"
+
+    /// Store (or clear, when empty) the image-proxy signing secret in the Keychain.
+    /// Stub until T016.
+    static func storeProxySecret(_ secret: String) {
+        // not implemented
+    }
+
+    /// Read the image-proxy signing secret from the Keychain, or nil if unset.
+    /// Stub until T016.
+    static func readProxySecret() -> String? {
+        nil
+    }
 }
