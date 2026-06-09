@@ -101,25 +101,72 @@ enum ImageProxy {
             .replacingOccurrences(of: "&#39;", with: "'")
     }
 
+    /// Matches a span that must be left byte-for-byte untouched: a `<script>...
+    /// </script>` element, a `<style>...</style>` element, or an HTML comment
+    /// `<!-- ... -->`. `<img src>` inside these is NOT markup the browser renders
+    /// as an image (it's a string literal, CSS text, or a comment), so rewriting
+    /// it would violate "MUST NEVER alter anything it does not rewrite". The
+    /// element bodies use `[\\s\\S]*?` (lazy, any char incl. newlines) so a
+    /// `>` inside the body doesn't terminate the match early.
+    private static let skipSpanRegex = try! NSRegularExpression(
+        pattern: "<script\\b[^>]*>[\\s\\S]*?</script\\s*>"
+            + "|<style\\b[^>]*>[\\s\\S]*?</style\\s*>"
+            + "|<!--[\\s\\S]*?-->",
+        options: [.caseInsensitive]
+    )
+
     /// Rewrite every remote `<img src>` in `html` to a signed proxy URL, leaving
     /// all other markup byte-for-byte unchanged. Pure and deterministic given `now`.
+    /// `<img>` tags that appear inside `<script>`, `<style>`, or HTML comments are
+    /// NOT rewritten — those spans are copied verbatim — so a URL that only looks
+    /// like an `<img src>` (e.g. a string inside inline JS) is never touched.
     static func rewrite(html: String, config: ImageProxyConfig, now: Date) -> String {
         let proxyHost = config.baseURL.host?.lowercased()
         let full = NSRange(html.startIndex..., in: html)
         var result = ""
-        var lastEnd = html.startIndex
+        var cursor = html.startIndex
 
-        imgTagRegex.enumerateMatches(in: html, options: [], range: full) { match, _, _ in
-            guard let m = match, let tagRange = Range(m.range, in: html) else { return }
+        // Walk the skip spans (script/style/comment) in order. The text BETWEEN
+        // them is "active" and gets `<img src>` rewriting; each skip span itself
+        // is appended verbatim.
+        skipSpanRegex.enumerateMatches(in: html, options: [], range: full) { match, _, _ in
+            guard let m = match, let skipRange = Range(m.range, in: html) else { return }
+            // Active region before this skip span: rewrite it.
+            if cursor < skipRange.lowerBound {
+                result += rewriteActive(String(html[cursor..<skipRange.lowerBound]),
+                                        config: config, now: now, proxyHost: proxyHost)
+            }
+            // The skip span itself: copy byte-for-byte.
+            result += html[skipRange]
+            cursor = skipRange.upperBound
+        }
+        // Trailing active region after the last skip span.
+        if cursor < html.endIndex {
+            result += rewriteActive(String(html[cursor...]),
+                                    config: config, now: now, proxyHost: proxyHost)
+        }
+        return result
+    }
+
+    /// Rewrite every remote `<img src>` in an "active" span (one already known to
+    /// contain no script/style/comment regions). Other markup is left verbatim.
+    private static func rewriteActive(_ active: String, config: ImageProxyConfig,
+                                      now: Date, proxyHost: String?) -> String {
+        let full = NSRange(active.startIndex..., in: active)
+        var result = ""
+        var lastEnd = active.startIndex
+
+        imgTagRegex.enumerateMatches(in: active, options: [], range: full) { match, _, _ in
+            guard let m = match, let tagRange = Range(m.range, in: active) else { return }
             // Copy the untouched span before this tag verbatim.
-            result += html[lastEnd..<tagRange.lowerBound]
+            result += active[lastEnd..<tagRange.lowerBound]
             lastEnd = tagRange.upperBound
 
-            let tag = String(html[tagRange])
+            let tag = String(active[tagRange])
             result += rewriteTag(tag, config: config, now: now, proxyHost: proxyHost)
         }
         // Trailing remainder.
-        result += html[lastEnd...]
+        result += active[lastEnd...]
         return result
     }
 

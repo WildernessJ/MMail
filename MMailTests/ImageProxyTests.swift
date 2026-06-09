@@ -20,6 +20,17 @@ import Foundation
     /// S — the signature openssl produced for ("<e>:<A>", key=K). Pinned verbatim.
     private let S = "uWhC12gGW0FwsCdVPPxtSTEUlhqu3PPL-z9mFQBPgd0"
 
+    /// A2 — asset URL whose canonical form contains a LITERAL `%XX` sequence
+    /// (`caf%C3%A9`, `q=a%2Fb`) AND a multi-byte UTF-8 char. This is the
+    /// regression guard for "decode u exactly once": the minted `u`, decoded a
+    /// SINGLE time, must recover A2 byte-for-byte. (A double-decode would turn
+    /// `%25C3` back into `%C3` and corrupt the value.)
+    private let A2 = "https://x.test/caf%C3%A9  details.gif?q=a%2Fb"
+    /// e2 — fixed expiry for vector 2.
+    private let e2 = 1_900_000_300
+    /// S2 — the signature openssl produced for ("<e2>:<A2>", key=K). Pinned verbatim.
+    private let S2 = "vsny-_a3X6xftatAQKcbdKNv9mdmNVb_RriwvjfKurA"
+
     private var vectorConfig: ImageProxyConfig {
         ImageProxyConfig(baseURL: URL(string: "https://proxy.test")!, signingSecret: K)
     }
@@ -49,6 +60,40 @@ import Foundation
         let rawQuery = try #require(comps.percentEncodedQuery)
         #expect(rawQuery.contains("a%20b.gif"), "space must be %20-encoded, not form +")
         #expect(!rawQuery.contains("a+b.gif"), "space must not be form-encoded as +")
+    }
+
+    /// Second pinned vector (FIX 2 regression / cross-language single-decode
+    /// contract): the Swift signer emits exactly S2 for an asset URL that already
+    /// contains a literal `%XX`, AND the `u` it mints, decoded EXACTLY ONCE,
+    /// recovers A2 byte-for-byte (proving the Worker must not double-decode).
+    @Test func signerMatchesSecondVectorAndRoundTrips() throws {
+        let clock = Date(timeIntervalSince1970: TimeInterval(e2 - 300))
+        let url = try #require(
+            ImageProxy.proxiedURL(forAsset: A2, config: vectorConfig, now: clock)
+        )
+        let comps = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let items = comps.queryItems ?? []
+        let s = items.first { $0.name == "s" }?.value
+        let eParam = items.first { $0.name == "e" }?.value
+
+        #expect(s == S2, "signature must equal the pinned second vector S2")
+        #expect(eParam == String(e2), "e must equal floor(now)+300")
+
+        // Single-decode round-trip: pull the RAW (still percent-encoded) `u` out of
+        // the query and decode it exactly once. It MUST equal A2 byte-for-byte.
+        let rawQuery = try #require(comps.percentEncodedQuery)
+        let rawU = try #require(
+            rawQuery
+                .split(separator: "&")
+                .first { $0.hasPrefix("u=") }
+                .map { String($0.dropFirst(2)) }
+        )
+        // The literal `%C3` in A2 must appear in `u` as the double-encoded `%25C3`,
+        // so a SINGLE decode recovers it (a double-decode would corrupt it).
+        #expect(rawU.contains("%25C3"), "literal % in A2 must be encoded as %25 in u")
+        let decodedOnce = try #require(rawU.removingPercentEncoding)
+        #expect(decodedOnce == A2,
+                "single decode of u must recover A2 byte-for-byte (no double-decode)")
     }
 
     // MARK: - Rewriter (SC-005)
@@ -120,6 +165,43 @@ import Foundation
     @Test func emptyOrMalformedSrcUntouched() {
         let html = "<img src=\"\"><img>"
         #expect(rewrite(html) == html)
+    }
+
+    /// An `<img src>` that appears only INSIDE a `<script>` body (e.g. a JS string
+    /// literal) is NOT markup the browser renders — it must be left byte-for-byte.
+    @Test func imgInsideScriptIsUntouched() {
+        let html = "<script>var t='<img src=\"https://x.test/t.gif\">'</script>"
+        #expect(rewrite(html) == html, "img inside <script> must not be rewritten")
+    }
+
+    /// Same for an `<img src>` inside a `<style>` body (it's CSS text, not markup).
+    @Test func imgInsideStyleIsUntouched() {
+        let html = "<style>/* <img src=\"https://x.test/t.gif\"> */ body{}</style>"
+        #expect(rewrite(html) == html, "img inside <style> must not be rewritten")
+    }
+
+    /// Same for an `<img src>` inside an HTML comment.
+    @Test func imgInsideCommentIsUntouched() {
+        let html = "<!-- <img src=\"https://x.test/t.gif\"> -->"
+        #expect(rewrite(html) == html, "img inside a comment must not be rewritten")
+    }
+
+    /// A real `<img>` OUTSIDE any script/style/comment is still rewritten, even
+    /// when those skip-spans are present alongside it.
+    @Test func realImgRewrittenAlongsideSkipSpans() {
+        let asset = "https://track.example/real.gif"
+        let html = "<script>var s='<img src=\"https://x.test/in-js.gif\">';</script>"
+            + "<img src=\"\(asset)\">"
+            + "<style>.x{background:url(https://x.test/css.gif)}</style>"
+            + "<!-- <img src=\"https://x.test/in-comment.gif\"> -->"
+        let out = rewrite(html)
+        let proxied = expectedProxyURL(asset)
+        let expected = "<script>var s='<img src=\"https://x.test/in-js.gif\">';</script>"
+            + "<img src=\"\(proxied)\">"
+            + "<style>.x{background:url(https://x.test/css.gif)}</style>"
+            + "<!-- <img src=\"https://x.test/in-comment.gif\"> -->"
+        #expect(out == expected,
+                "the real img is rewritten; script/style/comment spans are verbatim")
     }
 
     /// An HTML-entity-encoded `src` (`&amp;` -> `&`) is decoded to the canonical
