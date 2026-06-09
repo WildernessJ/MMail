@@ -102,19 +102,40 @@ struct HTMLMessageView: NSViewRepresentable {
         [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}}]
         """
 
+        /// Regex-escape a string so it can be embedded literally in a
+        /// `url-filter` (which is a regex). Escapes the regex metacharacters that
+        /// can appear in a host (`.`, plus a defensive set) so e.g. the `.` in
+        /// `proxy.example.com` matches a literal dot, not any character.
+        static func regexEscaped(_ s: String) -> String {
+            var out = ""
+            let meta: Set<Character> = [".", "\\", "+", "*", "?", "(", ")", "[", "]",
+                                        "{", "}", "^", "$", "|", "/"]
+            for ch in s {
+                if meta.contains(ch) { out.append("\\") }
+                out.append(ch)
+            }
+            return out
+        }
+
         /// Build a content-rule JSON that blocks every remote resource type, then
-        /// `ignore-previous-rules` (allows) ONLY the proxy origin's host. Any
-        /// remote resource that is not a rewritten `<img src>` proxy URL —
-        /// scripts, iframes, fonts, external CSS, CSS `url()`, non-proxy
-        /// `srcset` — therefore stays blocked. Returns nil if the proxy base URL
-        /// has no host.
+        /// `ignore-previous-rules` (allows) ONLY requests whose RESOURCE URL is on
+        /// the proxy origin. The allow rule matches via `url-filter` against the
+        /// request URL — NOT `if-domain`, which matches the document/page domain
+        /// (here `about:blank`, since the HTML loads with `baseURL: nil`) and so
+        /// would never fire. Any remote resource that is not a rewritten
+        /// `<img src>` proxy URL — scripts, iframes, fonts, external CSS, CSS
+        /// `url()`, non-proxy `srcset` — therefore stays blocked. Returns nil if
+        /// the proxy base URL has no host.
         static func proxyAllowRules(for config: ImageProxyConfig) -> String? {
             guard let host = config.baseURL.host, !host.isEmpty else { return nil }
-            // `if-domain` is host-scoped; match the proxy host and its subdomains.
-            let domains = "[\"\(host)\",\"*\(host)\"]"
+            // Match the resource URL on the proxy host: `^https://<host>/`.
+            // Escape the host so its dots are literal. JSON-escape the backslashes
+            // the regex needs (`\.` -> `\\.` in the JSON string literal).
+            let hostPattern = regexEscaped(host).replacingOccurrences(of: "\\", with: "\\\\")
+            let urlFilter = "^https://\(hostPattern)/"
             return """
             [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}},\
-            {"trigger":{"url-filter":".*","if-domain":\(domains)},"action":{"type":"ignore-previous-rules"}}]
+            {"trigger":{"url-filter":"\(urlFilter)"},"action":{"type":"ignore-previous-rules"}}]
             """
         }
 
