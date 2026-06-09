@@ -84,7 +84,7 @@
 
 ## Phase E — Wiring + end-to-end live-verify (manual-exploration)
 
-- [ ] **T019 (SC: 001, 002): Wire ReaderView + commit** — Pass `model.imageProxyConfig` (now defined, T017) into `HTMLMessageView(proxyConfig:)`. Keep `showImages = loadImages || trusted` unchanged; trusted/clicked render through the proxy when config is non-nil; banner still only in the blocked state. Run: `xcodebuild ... build ...` Expected: BUILD SUCCEEDED. Commit.
+- [x] **T019 (SC: 001, 002): Wire ReaderView + commit** — Pass `model.imageProxyConfig` (now defined, T017) into `HTMLMessageView(proxyConfig:)`. Keep `showImages = loadImages || trusted` unchanged; trusted/clicked render through the proxy when config is non-nil; banner still only in the blocked state. Run: `xcodebuild ... build ...` Expected: BUILD SUCCEEDED. Commit.
   **Files:** `MMail/Views/ReaderView.swift`
 
 - [ ] **T020 (SC: 001, 002, 003, 006): Live-verify against the deployed Worker (USER STEP)** — Build into the pinned Dock `MMail.app` DerivedData path, ⌘Q + relaunch. In Settings set the proxy URL + matching secret. Verify: (a) trusted sender auto-loads with requests to the proxy origin ONLY (no other origin, no user IP); (b) untrusted, un-clicked sender → ZERO network; (c) re-opening a trusted message hits the origin at most once (R2 cache; Worker logs); (d) toggle OFF → direct load; (e) SC-006: a message with a non-proxy `<script>`/`<iframe>`/`srcset` shows proxy-origin requests only; (f) **race:** toggle proxy / change the URL WHILE a message is rendering → no stale rule or stale HTML is ever installed (the in-flight-compile discard from T014). Run: live app + network capture / Worker logs. Expected: all six hold.
