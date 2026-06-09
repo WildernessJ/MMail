@@ -20,7 +20,7 @@
 - [x] **T002 (SC: 003): Mint the pinned cross-language vector** — Pick `K` = an **ASCII-printable** secret string (so its UTF-8 bytes are unambiguous on every side: CryptoKit `Data(K.utf8)`, Worker `new TextEncoder().encode(K)`, openssl `-hmac "K"`). Pick `A` = an asset URL deliberately containing a space and an `&` (e.g. `https://x.test/a b.gif?u=1&v=2`) and a fixed `e`. Compute `S` via openssl as source-of-truth and write `{K, e, A, S}` to `proxy-worker/test/vector.json`. Run: `printf '%s' "<e>:<A>" | openssl dgst -sha256 -hmac "<K>" -binary | openssl base64 | tr '+/' '-_' | tr -d '='` Expected: prints `S`, committed verbatim.
   **Files:** `proxy-worker/test/vector.json`
 
-- [ ] **T003 (SC: 003): Failing crypto test** — Extract a pure `src/crypto.js` (build payload `"<e>:<assetURL>"`, HMAC-SHA256 via `crypto.subtle` with key = UTF-8 bytes of `K`, base64url no-pad). Add `test/crypto.test.js` asserting `verify(vector)` accepts and any single-byte-flipped `S` is rejected. Run: `cd proxy-worker && node --test` Expected: FAIL ("not implemented").
+- [x] **T003 (SC: 003): Failing crypto test** — Extract a pure `src/crypto.js` (build payload `"<e>:<assetURL>"`, HMAC-SHA256 via `crypto.subtle` with key = UTF-8 bytes of `K`, base64url no-pad). Add `test/crypto.test.js` asserting `verify(vector)` accepts and any single-byte-flipped `S` is rejected. Run: `cd proxy-worker && node --test` Expected: FAIL ("not implemented").
   **Files:** `proxy-worker/src/crypto.js`, `proxy-worker/test/crypto.test.js`
 
 - [ ] **T004 (SC: 003): Implement crypto + commit** — Implement `sign`/`verify` until the pinned vector passes and bit-flip rejects. Run: `cd proxy-worker && node --test` Expected: PASS. Commit.
