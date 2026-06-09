@@ -4,7 +4,7 @@ import CryptoKit
 /// Configuration for the image privacy proxy. Non-nil only when the user has
 /// enabled proxying AND set a base URL AND a signing secret is present in the
 /// Keychain (see `AppModel.imageProxyConfig`).
-struct ImageProxyConfig {
+struct ImageProxyConfig: Equatable {
     /// Base URL of the deployed Cloudflare Worker, e.g.
     /// `https://mmail-image-proxy.you.workers.dev`. Signed URLs are minted as
     /// `<baseURL>/proxy?u=...&e=...&s=...`.

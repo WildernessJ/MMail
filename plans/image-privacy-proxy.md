@@ -61,7 +61,7 @@
 - [x] **T013 (SC: 006): Proxy-origin allow-rule builder** — In `HTMLMessageView.swift`, add a helper building a `WKContentRuleList` JSON that blocks all remote resource types (`url-filter: .*`) then `ignore-previous-rules` for the proxy origin (host derived from `ImageProxyConfig.baseURL`). Run: `xcodebuild ... build ...` Expected: BUILD SUCCEEDED.
   **Files:** `MMail/Views/HTMLMessageView.swift`
 
-- [ ] **T014 (SC: 001, 006): HTMLMessageView proxy mode + commit** — Add `var proxyConfig: ImageProxyConfig?` (nil ⇒ today's behavior). In `Coordinator.load`: when images shown AND `proxyConfig != nil` → rewrite html fresh at display time (never persist), compile the allow-rule, install BEFORE `loadHTMLString` (deferred completion, mirroring the block path at `HTMLMessageView.swift:99-104`); on reconfigure, discard any in-flight compile (a generation counter / token so a stale completion handler installs nothing and loads nothing). Else: existing block/direct paths unchanged. Run: `xcodebuild ... build ...` Expected: BUILD SUCCEEDED. Commit.
+- [x] **T014 (SC: 001, 006): HTMLMessageView proxy mode + commit** — Add `var proxyConfig: ImageProxyConfig?` (nil ⇒ today's behavior). In `Coordinator.load`: when images shown AND `proxyConfig != nil` → rewrite html fresh at display time (never persist), compile the allow-rule, install BEFORE `loadHTMLString` (deferred completion, mirroring the block path at `HTMLMessageView.swift:99-104`); on reconfigure, discard any in-flight compile (a generation counter / token so a stale completion handler installs nothing and loads nothing). Else: existing block/direct paths unchanged. Run: `xcodebuild ... build ...` Expected: BUILD SUCCEEDED. Commit.
   **Files:** `MMail/Views/HTMLMessageView.swift`
 
 ---
