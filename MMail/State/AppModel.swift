@@ -383,6 +383,16 @@ final class AppModel: ObservableObject {
     /// Total unread inbox count across accounts, delegating to the pure seam over `emails`.
     var unreadInboxTotal: Int { Self.unreadInboxCount(emails) }
 
+    /// Pure reconciliation seam: given the loaded window's UIDs, the set of
+    /// UIDs the server still reports (`present`, from the incremental FLAGS
+    /// fetch), and the UID `range` that fetch actually covered, return the
+    /// loaded UIDs that have been expunged/moved out server-side and must be
+    /// dropped locally. UIDs outside `range` (e.g. fresh appends above the
+    /// window) are never dropped — the FLAGS query didn't cover them.
+    static func expungedWindowUIDs(loaded: [UInt32], present: Set<UInt32>, range: ClosedRange<UInt32>) -> Set<UInt32> {
+        return Set(loaded.filter { range.contains($0) && !present.contains($0) })
+    }
+
     /// Recompute the unread-inbox total and push it to the macOS Dock badge.
     /// Reads `emails` only (never mutates it — that would recurse via `didSet`).
     /// `AppModel` is NOT @MainActor and `emails` can be mutated from background
@@ -2281,6 +2291,22 @@ final class AppModel: ObservableObject {
                 emails[i].unread = !fs.seen
                 emails[i].starred = fs.flagged
                 emails[i].labels = fs.keywords.map { $0.lowercased() }
+            }
+        }
+        // Reconcile external expunges: any locally-loaded UID inside the range
+        // the FLAGS fetch actually covered that the server no longer returned
+        // has been deleted or moved out of this folder by another client.
+        // Incremental sync otherwise only adds/updates, so such rows would
+        // linger until a full reload. UIDs above the range (fresh appends) are
+        // untouched. Backlog #11.
+        if let range = sync.flagRange {
+            let loadedUIDs = emails.filter { $0.account == accountId && $0.folder == folderId }.compactMap { $0.uid }
+            let expunged = AppModel.expungedWindowUIDs(loaded: loadedUIDs, present: Set(sync.flags.keys), range: range)
+            if !expunged.isEmpty {
+                emails.removeAll {
+                    $0.account == accountId && $0.folder == folderId
+                        && ($0.uid.map { expunged.contains($0) } ?? false)
+                }
             }
         }
         let existingUIDs = Set(emails.filter { $0.account == accountId && $0.folder == folderId }.compactMap { $0.uid })
