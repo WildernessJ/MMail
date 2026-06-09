@@ -1,0 +1,7 @@
+{
+  "_comment": "Pinned cross-language HMAC vector for the image privacy proxy. Source of truth computed with: printf '%s' \"<e>:<A>\" | openssl dgst -sha256 -hmac \"<K>\" -binary | openssl base64 | tr '+/' '-_' | tr -d '='. Asserted byte-for-byte by BOTH proxy-worker/test/crypto.test.js (Worker, crypto.subtle) and MMailTests/ImageProxyTests.swift (CryptoKit). K is ASCII-printable so its UTF-8 bytes are unambiguous on every side. A deliberately contains a space and an '&' to exercise RFC-3986 percent-encoding (space -> %20, not '+').",
+  "K": "mmail-proxy-test-secret-v1",
+  "e": 1900000300,
+  "A": "https://x.test/a b.gif?u=1&v=2",
+  "S": "uWhC12gGW0FwsCdVPPxtSTEUlhqu3PPL-z9mFQBPgd0"
+}
