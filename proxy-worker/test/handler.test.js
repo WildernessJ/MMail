@@ -147,6 +147,59 @@ test("origin error: error status, nothing stored", async () => {
   assert.equal(env.IMG_CACHE.puts, 0, "failed origin must not be stored");
 });
 
+test("asset URL with a literal %XX is handled (single decode, FIX 2 regression)", async () => {
+  // The client mints `u` with a single strict RFC-3986 encoding pass; the Worker
+  // must decode exactly once. An asset whose canonical form contains a literal
+  // `%XX` would be corrupted by a double-decode (e.g. caf%C3%A9 -> café), breaking
+  // HMAC verification (403) and the origin fetch. Verify the full path: 200,
+  // verified, origin fetched with the EXACT asset URL.
+  const asset = "https://origin.test/caf%C3%A9  details.gif?q=a%2Fb";
+  const expiry = futureExpiry();
+  const sig = await sign(SECRET, expiry, asset);
+  // Strict unreserved-only encoding, matching the Swift client.
+  const unreserved = /[A-Za-z0-9\-._~]/;
+  const u = [...asset]
+    .map((ch) =>
+      unreserved.test(ch)
+        ? ch
+        : [...new TextEncoder().encode(ch)]
+            .map((b) => "%" + b.toString(16).toUpperCase().padStart(2, "0"))
+            .join("")
+    )
+    .join("");
+  const url = `https://proxy.test/proxy?u=${u}&e=${expiry}&s=${sig}`;
+
+  const env = makeEnv();
+  const fetchFn = mockFetch(() => okImageResponse());
+  const res = await handleRequest(new Request(url), env, { fetchImpl: fetchFn });
+
+  assert.equal(res.status, 200, "literal %XX asset must verify and serve, not 403");
+  assert.equal(fetchFn.calls, 1, "origin fetched once");
+  assert.equal(fetchFn.lastURL, asset, "origin fetched with the EXACT asset URL");
+});
+
+test("oversize declared Content-Length: rejected before buffering (FIX 4)", async () => {
+  const env = makeEnv({ MAX_BYTES: "4" });
+  // Declare a length over the cap; the body itself is small. The pre-check must
+  // reject on the header BEFORE arrayBuffer() runs.
+  let bodyRead = false;
+  const fetchFn = mockFetch(() => {
+    const res = new Response(new Uint8Array([1, 2]), {
+      status: 200,
+      headers: { "content-type": "image/gif", "content-length": "999999" },
+    });
+    const origArrayBuffer = res.arrayBuffer.bind(res);
+    res.arrayBuffer = async () => { bodyRead = true; return origArrayBuffer(); };
+    return res;
+  });
+  const res = await handleRequest(new Request(await signedURL(ASSET, futureExpiry())), env, {
+    fetchImpl: fetchFn,
+  });
+  assert.equal(res.status, 413, "oversize declared length must be rejected");
+  assert.equal(bodyRead, false, "body must NOT be buffered when length pre-check fails");
+  assert.equal(env.IMG_CACHE.puts, 0, "nothing stored");
+});
+
 test("distinct asset URLs map to distinct cache keys", async () => {
   const env = makeEnv();
   const a1 = "https://origin.test/a.gif";

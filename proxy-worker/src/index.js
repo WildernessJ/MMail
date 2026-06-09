@@ -4,9 +4,9 @@
 // in-memory mock R2 + mock fetch (see test/handler.test.js). The default export
 // just wires the live Worker bindings into it.
 //
-// Flow: parse u/e/s -> percent-decode u to the canonical assetURL -> HMAC-verify
-// against "<e>:<assetURL>" -> reject (4xx, no fetch) on bad/expired -> R2 get by
-// SHA-256(decoded assetURL) -> on miss fetch origin once (no cookies, neutral UA,
+// Flow: parse u/e/s (searchParams.get decodes u once -> canonical assetURL) ->
+// HMAC-verify against "<e>:<assetURL>" -> reject (4xx, no fetch) on bad/expired
+// -> R2 get by SHA-256(assetURL) -> on miss fetch origin once (no cookies, neutral UA,
 // size cap, timeout) -> store body+content-type in R2 -> stream back. On hit, serve
 // from R2 with no re-fetch. Oversize/origin-error -> error status, nothing stored.
 
@@ -39,23 +39,19 @@ export async function handleRequest(request, env, opts = {}) {
   const url = new URL(request.url);
   if (url.pathname !== "/proxy") return bad(404, "Not Found");
 
-  const u = url.searchParams.get("u");
+  // `searchParams.get` ALREADY percent-decodes once, so `u` IS the canonical
+  // assetURL the client signed — decoding it again would corrupt any asset URL
+  // whose canonical form contains a literal `%XX` (e.g. `caf%C3%A9`), breaking
+  // both HMAC verification and the origin fetch. Use it verbatim for BOTH the
+  // HMAC payload and the cache key (no further normalization), so client and
+  // Worker agree byte-for-byte.
+  const assetURL = url.searchParams.get("u");
   const e = url.searchParams.get("e");
   const s = url.searchParams.get("s");
-  if (!u || !e || !s) return bad(400, "Missing parameters");
+  if (!assetURL || !e || !s) return bad(400, "Missing parameters");
 
   const expiry = Number(e);
   if (!Number.isFinite(expiry)) return bad(400, "Bad expiry");
-
-  // Percent-decode u to recover the exact assetURL the client signed. This same
-  // value is used for BOTH the HMAC payload and the cache key (no further
-  // normalization), so client and Worker agree byte-for-byte.
-  let assetURL;
-  try {
-    assetURL = decodeURIComponent(u);
-  } catch {
-    return bad(400, "Bad u");
-  }
 
   // Verify the signature BEFORE any expiry decision or origin fetch.
   const ok = await verify(env.PROXY_SECRET, expiry, assetURL, s);
@@ -113,14 +109,26 @@ export async function handleRequest(request, env, opts = {}) {
     clearTimeout(timer);
     return bad(502, "Origin fetch failed");
   }
-  clearTimeout(timer);
 
   if (!originRes.ok) {
+    clearTimeout(timer);
     return bad(502, "Origin error");
   }
 
-  // Buffer with a hard size cap; oversize => error, store nothing.
+  // Pre-check the declared length: if the origin advertises a body over the cap,
+  // reject before buffering a single byte. (A missing/lying Content-Length is
+  // caught by the post-read backstop below.)
+  const declaredLength = Number(originRes.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    clearTimeout(timer);
+    return bad(413, "Asset too large");
+  }
+
+  // Buffer with a hard size cap; oversize => error, store nothing. The abort
+  // timer is still armed here so it covers the body read, not just the headers;
+  // clear it only once arrayBuffer() has fully drained the body.
   const buf = await originRes.arrayBuffer();
+  clearTimeout(timer);
   if (buf.byteLength > maxBytes) {
     return bad(413, "Asset too large");
   }
