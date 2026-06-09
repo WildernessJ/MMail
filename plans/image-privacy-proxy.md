@@ -71,7 +71,7 @@
 - [x] **T015 (SC: 004): Failing secret-storage test** — Add Keychain store/read function *signatures* (stubs) for the proxy signing secret, and a test asserting: after `storeProxySecret("s")`, `readProxySecret() == "s"` AND `UserDefaults.standard.string(forKey: <secretKey>) == nil` (the "never in UserDefaults" invariant). FAILS against the stub. Run: `xcodebuild test ...` Expected: FAIL.
   **Files:** `MMail/Mail/Keychain.swift`, `MMailTests/ImageProxyTests.swift`
 
-- [ ] **T016 (SC: 004): Implement secret storage + commit** — Implement store/read against the existing generic-password `Keychain` wrapper; secret never touches UserDefaults. Run: `xcodebuild test ...` Expected: PASS. Commit.
+- [x] **T016 (SC: 004): Implement secret storage + commit** — Implement store/read against the existing generic-password `Keychain` wrapper; secret never touches UserDefaults. Run: `xcodebuild test ...` Expected: PASS. Commit.
   **Files:** `MMail/Mail/Keychain.swift`
 
 - [ ] **T017 (SC: 004): AppModel proxy config + commit** — Add `@Published proxyEnabled` (default `true`, persisted) and `proxyBaseURL` (persisted UserDefaults). Computed `var imageProxyConfig: ImageProxyConfig?` returns a config ONLY when `proxyEnabled && !baseURL.isEmpty && secret present`, else nil (active-condition invariant; clearing the URL never flips the toggle). Run: `xcodebuild ... build ...` Expected: BUILD SUCCEEDED. Commit.

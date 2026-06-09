@@ -49,14 +49,18 @@ enum Keychain {
     static let proxySecretAccount = "mmail.imageProxy.signingSecret"
 
     /// Store (or clear, when empty) the image-proxy signing secret in the Keychain.
-    /// Stub until T016.
+    /// Reuses the generic-password wrapper; the secret never touches UserDefaults.
     static func storeProxySecret(_ secret: String) {
-        // not implemented
+        let trimmed = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            deletePassword(account: proxySecretAccount)
+        } else {
+            setPassword(trimmed, account: proxySecretAccount)
+        }
     }
 
     /// Read the image-proxy signing secret from the Keychain, or nil if unset.
-    /// Stub until T016.
     static func readProxySecret() -> String? {
-        nil
+        password(account: proxySecretAccount)
     }
 }
