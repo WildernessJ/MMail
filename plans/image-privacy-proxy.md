@@ -45,7 +45,7 @@
 - [x] **T009 (SC: 003): Failing signer test (pinned vector)** — Add assertions using the SAME `(K, A, e)` from `proxy-worker/test/vector.json`: `proxiedURL` emits exactly `S`; `e == floor(now)+300`; the space in `A` is `%20` (not `+`) in `u`. The test FAILS because `proxiedURL` is still a stub returning nil. Run: `xcodebuild test -project MMail.xcodeproj -scheme MMail -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO` Expected: FAIL (assertion mismatch).
   **Files:** `MMailTests/ImageProxyTests.swift`
 
-- [ ] **T010 (SC: 003): Implement signer + commit** — CryptoKit `HMAC<SHA256>`, key = `Data(signingSecret.utf8)` (UTF-8 bytes, matching T002's ASCII `K`), UTF-8 message, base64url (`+`→`-`, `/`→`_`, strip `=`), RFC-3986 percent-encoding (space→`%20`), `e = floor(now)+300`. Run: same `xcodebuild test` Expected: PASS. Commit.
+- [x] **T010 (SC: 003): Implement signer + commit** — CryptoKit `HMAC<SHA256>`, key = `Data(signingSecret.utf8)` (UTF-8 bytes, matching T002's ASCII `K`), UTF-8 message, base64url (`+`→`-`, `/`→`_`, strip `=`), RFC-3986 percent-encoding (space→`%20`), `e = floor(now)+300`. Run: same `xcodebuild test` Expected: PASS. Commit.
   **Files:** `MMail/Mail/ImageProxy.swift`
 
 - [ ] **T011 (SC: 005): Failing rewriter tests** — Add tests: single remote `<img src>` → signed proxy URL; `<script>`/`<iframe>`/`<link>`/`cid:`/`data:`/relative/`srcset`/CSS `url()` untouched; already-proxied URL idempotent; image-free HTML unchanged; `<img src="">` & `<img>` not rewritten; HTML-entity-decoded `src` (`&amp;`→`&`) is the signed value. FAILS because `rewrite` is a stub. Run: `xcodebuild test ...` Expected: FAIL.
