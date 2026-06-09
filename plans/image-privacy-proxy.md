@@ -77,7 +77,7 @@
 - [x] **T017 (SC: 004): AppModel proxy config + commit** — Add `@Published proxyEnabled` (default `true`, persisted) and `proxyBaseURL` (persisted UserDefaults). Computed `var imageProxyConfig: ImageProxyConfig?` returns a config ONLY when `proxyEnabled && !baseURL.isEmpty && secret present`, else nil (active-condition invariant; clearing the URL never flips the toggle). Run: `xcodebuild ... build ...` Expected: BUILD SUCCEEDED. Commit.
   **Files:** `MMail/State/AppModel.swift`
 
-- [ ] **T018 (SC: 004): SettingsView controls + commit** — Add a "Route remote images through privacy proxy" toggle (default ON), a proxy base URL field, and a secure secret field writing to the Keychain (the same string set via `wrangler secret put` in T007). Run: `xcodebuild ... build ...` Expected: BUILD SUCCEEDED. Commit.
+- [x] **T018 (SC: 004): SettingsView controls + commit** — Add a "Route remote images through privacy proxy" toggle (default ON), a proxy base URL field, and a secure secret field writing to the Keychain (the same string set via `wrangler secret put` in T007). Run: `xcodebuild ... build ...` Expected: BUILD SUCCEEDED. Commit.
   **Files:** `MMail/Views/SettingsView.swift`
 
 ---
