@@ -1,0 +1,10 @@
+# Dependencies (none required, but never commit if added)
+node_modules/
+
+# Wrangler / Cloudflare local state
+.wrangler/
+.dev.vars
+dist/
+
+# The signing secret is set via `wrangler secret put`, never a file.
+*.secret

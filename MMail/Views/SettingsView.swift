@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var ruleValue = ""
     @State private var ruleAction: MailRule.Action = .trash
     @State private var ruleLabelId = ""
+    @State private var proxySecretDraft = ""
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -36,6 +37,46 @@ struct SettingsView: View {
                                   on: Binding(get: { model.sidebarVisible }, set: { model.setSidebar($0) }))
                         toggleRow("Reading pane", "Read messages alongside the list (off goes full-width).",
                                   on: Binding(get: { model.readingPane }, set: { model.setReadingPane($0) }), last: true)
+                    }
+                    section("Image privacy proxy") {
+                        toggleRow("Route remote images through privacy proxy",
+                                  "Load images for trusted senders via a caching proxy so the sender sees the proxy's IP, not yours. Off falls back to direct loading.",
+                                  on: Binding(get: { model.proxyEnabled }, set: { model.setProxyEnabled($0) }))
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Proxy base URL").font(.system(size: 12, weight: .medium)).foregroundStyle(p.fg2)
+                            TextField("https://your-worker.workers.dev", text: Binding(
+                                get: { model.proxyBaseURL },
+                                set: { model.setProxyBaseURL($0) }))
+                                .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(p.fg1)
+                                .padding(.horizontal, 8).padding(.vertical, 7)
+                                .background(p.bg2)
+                                .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
+                        }
+                        .padding(.vertical, 10)
+                        Rectangle().fill(p.border).frame(height: 1)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Signing secret").font(.system(size: 12, weight: .medium)).foregroundStyle(p.fg2)
+                            Text("The same secret you set with `wrangler secret put PROXY_SECRET`. Stored only in the macOS Keychain.")
+                                .font(.system(size: 11.5)).foregroundStyle(p.fg3)
+                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(spacing: 8) {
+                                SecureField(model.hasProxySecret ? "•••••••• (set)" : "Paste the signing secret",
+                                            text: $proxySecretDraft)
+                                    .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(p.fg1)
+                                    .padding(.horizontal, 8).padding(.vertical, 7)
+                                    .background(p.bg2)
+                                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
+                                Button {
+                                    model.setProxySecret(proxySecretDraft)
+                                    proxySecretDraft = ""
+                                } label: {
+                                    Text("Save").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.brandBlue)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(proxySecretDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                            }
+                        }
+                        .padding(.vertical, 10)
                     }
                     section("Accounts") {
                         if model.realConfigs.isEmpty {

@@ -313,7 +313,8 @@ private struct ReaderContent: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .padding(.top, 16)
                 }
-                HTMLMessageView(html: html, blockRemote: !showImages, height: $htmlHeight)
+                HTMLMessageView(html: html, blockRemote: !showImages,
+                                proxyConfig: model.imageProxyConfig, height: $htmlHeight)
                     .frame(height: max(htmlHeight, 80))
                     .padding(.top, 16)
             } else {

@@ -1,0 +1,10 @@
+{
+  "name": "mmail-image-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Single-tenant Cloudflare Worker that verifies HMAC-signed image URLs and caches origin fetches in R2 for MMail's image privacy proxy.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

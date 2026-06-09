@@ -47,6 +47,11 @@ enum Privacy {
 struct HTMLMessageView: NSViewRepresentable {
     let html: String
     var blockRemote: Bool
+    /// When non-nil AND images are shown (blockRemote == false), remote `<img src>`
+    /// is rewritten to signed proxy URLs and the message renders behind a
+    /// block-all-except-proxy-origin content rule. Nil ⇒ today's behavior
+    /// (direct load when shown, block-all when blocked).
+    var proxyConfig: ImageProxyConfig? = nil
     @Binding var height: CGFloat
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -56,13 +61,14 @@ struct HTMLMessageView: NSViewRepresentable {
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
         web.setValue(false, forKey: "drawsBackground")
-        context.coordinator.load(web, html: html, blockRemote: blockRemote)
+        context.coordinator.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig)
         return web
     }
 
     func updateNSView(_ web: WKWebView, context: Context) {
-        if context.coordinator.lastHTML != html || context.coordinator.lastBlock != blockRemote {
-            context.coordinator.load(web, html: html, blockRemote: blockRemote)
+        let c = context.coordinator
+        if c.lastHTML != html || c.lastBlock != blockRemote || c.lastProxyConfig != proxyConfig {
+            c.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig)
         }
     }
 
@@ -84,21 +90,94 @@ struct HTMLMessageView: NSViewRepresentable {
         let parent: HTMLMessageView
         var lastHTML = ""
         var lastBlock = true
+        var lastProxyConfig: ImageProxyConfig?
+        /// Monotonic token bumped on every `load`. A content-rule compile is async;
+        /// when it completes we install/load ONLY if the token still matches, so a
+        /// reconfigure (toggle/URL change) that started a newer load can never have
+        /// a stale completion install a stale rule or load stale HTML.
+        private var generation = 0
         init(_ parent: HTMLMessageView) { self.parent = parent }
 
         private static let blockRules = """
         [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}}]
         """
 
-        func load(_ web: WKWebView, html: String, blockRemote: Bool) {
+        /// Regex-escape a string so it can be embedded literally in a
+        /// `url-filter` (which is a regex). Escapes the regex metacharacters that
+        /// can appear in a host (`.`, plus a defensive set) so e.g. the `.` in
+        /// `proxy.example.com` matches a literal dot, not any character.
+        static func regexEscaped(_ s: String) -> String {
+            var out = ""
+            let meta: Set<Character> = [".", "\\", "+", "*", "?", "(", ")", "[", "]",
+                                        "{", "}", "^", "$", "|", "/"]
+            for ch in s {
+                if meta.contains(ch) { out.append("\\") }
+                out.append(ch)
+            }
+            return out
+        }
+
+        /// Build a content-rule JSON that blocks every remote resource type, then
+        /// `ignore-previous-rules` (allows) ONLY requests whose RESOURCE URL is on
+        /// the proxy origin. The allow rule matches via `url-filter` against the
+        /// request URL — NOT `if-domain`, which matches the document/page domain
+        /// (here `about:blank`, since the HTML loads with `baseURL: nil`) and so
+        /// would never fire. Any remote resource that is not a rewritten
+        /// `<img src>` proxy URL — scripts, iframes, fonts, external CSS, CSS
+        /// `url()`, non-proxy `srcset` — therefore stays blocked. Returns nil if
+        /// the proxy base URL has no host.
+        static func proxyAllowRules(for config: ImageProxyConfig) -> String? {
+            guard let host = config.baseURL.host, !host.isEmpty else { return nil }
+            // Match the resource URL on the proxy host: `^https://<host>/`.
+            // Escape the host so its dots are literal. JSON-escape the backslashes
+            // the regex needs (`\.` -> `\\.` in the JSON string literal).
+            let hostPattern = regexEscaped(host).replacingOccurrences(of: "\\", with: "\\\\")
+            let urlFilter = "^https://\(hostPattern)/"
+            return """
+            [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}},\
+            {"trigger":{"url-filter":"\(urlFilter)"},"action":{"type":"ignore-previous-rules"}}]
+            """
+        }
+
+        func load(_ web: WKWebView, html: String, blockRemote: Bool, proxyConfig: ImageProxyConfig?) {
             lastHTML = html
             lastBlock = blockRemote
-            let body = HTMLMessageView.wrapped(html)
+            lastProxyConfig = proxyConfig
+
+            // Bump the generation so any in-flight compile from a prior load is
+            // discarded when it completes (it will not match `myGen`).
+            generation += 1
+            let myGen = generation
+
             web.configuration.userContentController.removeAllContentRuleLists()
+
+            // Proxy mode: images shown AND a proxy is configured. Rewrite the HTML
+            // FRESH here (never persisted) and render behind the proxy-origin
+            // allow-rule, installed BEFORE load.
+            if !blockRemote,
+               let config = proxyConfig,
+               let rules = Self.proxyAllowRules(for: config) {
+                let rewritten = ImageProxy.rewrite(html: html, config: config, now: Date())
+                let body = HTMLMessageView.wrapped(rewritten)
+                WKContentRuleListStore.default().compileContentRuleList(
+                    forIdentifier: "mmail-proxy-allow",
+                    encodedContentRuleList: rules) { [weak self] list, _ in
+                        // Stale compile (a newer load started): install nothing, load nothing.
+                        guard let self, self.generation == myGen else { return }
+                        if let list { web.configuration.userContentController.add(list) }
+                        web.loadHTMLString(body, baseURL: nil)
+                    }
+                return
+            }
+
+            // Non-proxy paths (today's behavior): direct load when shown, block-all
+            // when blocked.
+            let body = HTMLMessageView.wrapped(html)
             guard blockRemote else { web.loadHTMLString(body, baseURL: nil); return }
             WKContentRuleListStore.default().compileContentRuleList(
                 forIdentifier: "mmail-block-remote",
-                encodedContentRuleList: Self.blockRules) { list, _ in
+                encodedContentRuleList: Self.blockRules) { [weak self] list, _ in
+                    guard let self, self.generation == myGen else { return }
                     if let list { web.configuration.userContentController.add(list) }
                     web.loadHTMLString(body, baseURL: nil)
                 }
