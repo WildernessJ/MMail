@@ -67,6 +67,12 @@ struct Email: Identifiable, Codable {
     var fromEmail: String?
     var uid: UInt32?
     var bodyLoaded: Bool
+    /// Whether the loaded body is the WHOLE message (vs. a capped-prefetch
+    /// preview that may be truncated). Optional so it is additively decodable:
+    /// a cache written before this feature has no key → decodes as `nil` →
+    /// treated as not-complete (the body, if any, may be a 64 KB preview), NOT a
+    /// decode failure that would discard the whole cached folder.
+    var bodyComplete: Bool?
     var attachments: [AttachmentMeta] = []
     var messageID: String?
     var inReplyTo: String?
@@ -89,6 +95,10 @@ struct Email: Identifiable, Codable {
         self.fromName = fromName; self.fromEmail = fromEmail; self.uid = uid
         self.bodyLoaded = bodyLoaded
     }
+
+    /// True only when a complete (uncapped) body is loaded. A loaded-but-capped
+    /// preview, or a legacy cache with no completeness key, is NOT complete.
+    var hasCompleteBody: Bool { bodyLoaded && (bodyComplete ?? false) }
 
     /// Resolves a displayable sender: demo emails key into SampleData; real
     /// emails synthesize one from the stored name/address.
