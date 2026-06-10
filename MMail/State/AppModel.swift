@@ -2472,8 +2472,14 @@ final class AppModel: ObservableObject {
             }
             await MainActor.run {
                 for (uid, p) in parsedByUID {
+                    // Skip any message already fully loaded: if the user opened a
+                    // >64 KB message during this prefetch's network window, the
+                    // open path set the complete body + bodyComplete=true. Writing
+                    // this (possibly truncated) 64 KB preview over it would demote
+                    // a complete body and reintroduce the truncation bug.
                     guard let id = uidToId[uid],
-                          let i = self.emails.firstIndex(where: { $0.id == id }) else { continue }
+                          let i = self.emails.firstIndex(where: { $0.id == id }),
+                          self.emails[i].bodyComplete != true else { continue }
                     self.emails[i].body = p.text
                     self.emails[i].preview = String(p.text.replacingOccurrences(of: "\n", with: " ").prefix(140))
                     self.emails[i].bodyLoaded = true

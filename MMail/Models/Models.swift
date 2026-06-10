@@ -96,10 +96,6 @@ struct Email: Identifiable, Codable {
         self.bodyLoaded = bodyLoaded
     }
 
-    /// True only when a complete (uncapped) body is loaded. A loaded-but-capped
-    /// preview, or a legacy cache with no completeness key, is NOT complete.
-    var hasCompleteBody: Bool { bodyLoaded && (bodyComplete ?? false) }
-
     /// Resolves a displayable sender: demo emails key into SampleData; real
     /// emails synthesize one from the stored name/address.
     var resolvedSender: Sender {
