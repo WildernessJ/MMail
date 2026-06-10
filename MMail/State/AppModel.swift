@@ -1483,6 +1483,13 @@ final class AppModel: ObservableObject {
         return cmds
     }
 
+    /// Run a command by id by looking it up in `buildCommands()` (the single source of
+    /// truth) and invoking its `run`. The menu bar routes clicks here so it never holds a
+    /// second copy of the action. No-ops if the id is unknown (e.g. a since-removed account).
+    func run(_ id: String) {
+        buildCommands().first { $0.id == id }?.run()
+    }
+
     // MARK: - Tweak setters (persist)
 
     func setDark(_ v: Bool) { dark = v; persistTweaks() }
