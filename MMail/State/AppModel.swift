@@ -1469,10 +1469,11 @@ final class AppModel: ObservableObject {
             Command(id: "go-drafts", group: "Go to", label: "Go to Drafts", icon: "draft", shortcut: "G D") { [weak self] in self?.setFolder("drafts") },
             Command(id: "search", group: "App", label: "Search mail", icon: "search", shortcut: "/") { [weak self] in self?.activateSearch() },
             Command(id: "help", group: "App", label: "Show keyboard shortcuts", icon: "command", shortcut: "?") { [weak self] in self?.help = true },
-            Command(id: "settings", group: "App", label: "Open settings", icon: "settings") { [weak self] in self?.settings = true },
+            Command(id: "settings", group: "App", label: "Open settings", icon: "settings", shortcut: "⌘,") { [weak self] in self?.settings = true },
             Command(id: "dark", group: "App", label: "Toggle dark mode (now \(dark ? "on" : "off"))", icon: "zap", shortcut: "⌘⇧D") { [weak self] in self?.setDark(!(self?.dark ?? false)) },
             Command(id: "sidebar", group: "App", label: "Toggle sidebar (now \(sidebarVisible ? "shown" : "hidden"))", icon: "sidebar", shortcut: "⌘⇧S") { [weak self] in self?.setSidebar(!(self?.sidebarVisible ?? true)) },
             Command(id: "reading", group: "App", label: "Toggle reading pane (now \(readingPane ? "on" : "off"))", icon: "panel", shortcut: "⌘⇧R") { [weak self] in self?.setReadingPane(!(self?.readingPane ?? true)) },
+            Command(id: "palette", group: "App", label: "Command palette", icon: "command", shortcut: "⌘K") { [weak self] in self?.palette.toggle() },
             Command(id: "acct-all", group: "Accounts", label: "All inboxes (unified)", icon: "inbox", shortcut: "⌘0") { [weak self] in self?.currentAccount = "all" }
         ]
         for (i, a) in accounts.enumerated() {
@@ -1480,6 +1481,13 @@ final class AppModel: ObservableObject {
         }
         cmds.append(Command(id: "acct-add", group: "Accounts", label: "Add account…", icon: "user") { [weak self] in self?.addingAccount = true })
         return cmds
+    }
+
+    /// Run a command by id by looking it up in `buildCommands()` (the single source of
+    /// truth) and invoking its `run`. The menu bar routes clicks here so it never holds a
+    /// second copy of the action. No-ops if the id is unknown (e.g. a since-removed account).
+    func run(_ id: String) {
+        buildCommands().first { $0.id == id }?.run()
     }
 
     // MARK: - Tweak setters (persist)
