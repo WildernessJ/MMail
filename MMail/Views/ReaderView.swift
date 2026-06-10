@@ -313,6 +313,15 @@ private struct ReaderContent: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .padding(.top, 16)
                 }
+                // Read-only privacy posture for the realized image-load path. Keys
+                // off the SAME `showImages` local and `model.imageProxyConfig != nil`
+                // the render path uses below, so it can never disagree with what
+                // `HTMLMessageView` actually rendered. Display-only — no fetch, no URL.
+                let imageState = ReaderImageLoadState.classify(
+                    hasRemoteImages: ReaderImageLoadState.hasRemoteImages(in: html),
+                    showImages: showImages,
+                    proxyActive: model.imageProxyConfig != nil)
+                imageLoadIndicator(imageState)
                 HTMLMessageView(html: html, blockRemote: !showImages,
                                 proxyConfig: model.imageProxyConfig, height: $htmlHeight)
                     .frame(height: max(htmlHeight, 80))
@@ -340,6 +349,45 @@ private struct ReaderContent: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(p.border, lineWidth: 1))
         .shadow(color: .black.opacity(p.isDark ? 0.4 : 0.08), radius: 12, y: 6)
         .zIndex(10)
+    }
+
+    /// Read-only per-message indicator for the realized image-load path. Renders
+    /// nothing for `.blocked` (the block banner already conveys it) and
+    /// `.noRemoteImages` (nothing to report — never claims proxied/direct). The
+    /// `.loadedDirect` warning presentation is deliberately distinct from `.proxied`.
+    /// MUST NOT render any asset URL, the `s=` HMAC param, or the signing secret —
+    /// the proxy host (already user-configured, non-sensitive) is the most it names.
+    @ViewBuilder
+    private func imageLoadIndicator(_ state: ReaderImageLoadState) -> some View {
+        switch state {
+        case .proxied:
+            HStack(spacing: 8) {
+                Icon(name: "shield", size: 12).foregroundStyle(p.brandBlue)
+                Text(proxiedLabel)
+                    .font(.system(size: 12)).foregroundStyle(p.fg3)
+                Spacer()
+            }
+            .padding(.top, 16)
+        case .loadedDirect:
+            HStack(spacing: 8) {
+                Icon(name: "alert", size: 12).foregroundStyle(p.warning)
+                Text("Images loaded directly from sender")
+                    .font(.system(size: 12)).foregroundStyle(p.warning)
+                Spacer()
+            }
+            .padding(.top, 16)
+        case .blocked, .noRemoteImages:
+            EmptyView()
+        }
+    }
+
+    /// "Images loaded via privacy proxy", naming the proxy host when known. Reads
+    /// only the host (non-sensitive, user-configured) — never the secret or `s=`.
+    private var proxiedLabel: String {
+        if let host = model.imageProxyConfig?.baseURL.host, !host.isEmpty {
+            return "Images loaded via privacy proxy (\(host))"
+        }
+        return "Images loaded via privacy proxy"
     }
 
     private func inviteCard(_ ev: CalendarEvent) -> some View {

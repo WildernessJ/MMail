@@ -17,6 +17,7 @@
 		1DFC3F2DAF0EC366C0C09CA0 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = F42875495E2357EB4CCAA6AE /* NIOCore */; };
 		249EC9BE7F8321C47676CAA9 /* IMAPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314CDDF0121DFE61BA2FDF2E /* IMAPService.swift */; };
 		27B06ECDFD164C61AE683DEB /* HTMLMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C9AFA5D71E9151A6E887F5 /* HTMLMessageView.swift */; };
+		2A1BAE094E6ACE80840E56C8 /* ReaderImageLoadStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC94B4B5F477D3AAE2C700E5 /* ReaderImageLoadStateTests.swift */; };
 		2A1D47A6E753328E3CEA1704 /* Generators.swift in Sources */ = {isa = PBXBuildFile; fileRef = 780066BE547CD3FF8C4BAAEA /* Generators.swift */; };
 		2EC4C2A3713E9ACB9F8D429B /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = 754158880378BA0D8626FFB3 /* NIO */; };
 		325BAB283BD9B30C7B1C57A7 /* NIOPosix in Frameworks */ = {isa = PBXBuildFile; productRef = 27C0C790440FEB4DA4927CA2 /* NIOPosix */; };
@@ -46,6 +47,7 @@
 		82FD7DC1B326B431F597D040 /* MailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0FD3634640269304B4DE33 /* MailProvider.swift */; };
 		839C08C0B268C946970A9C32 /* QuickLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC4277C859DBC1033E01D12 /* QuickLook.swift */; };
 		83C3867C5B28CAD37E66AEB8 /* ProxySecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE3F1CD7EC6E7E41F63893D /* ProxySecretStore.swift */; };
+		871F1CBE41DC465E669B1E5F /* ReaderImageLoadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20C54BAB91AF76439EE6B9EC /* ReaderImageLoadState.swift */; };
 		99D3EA2AB149562DAF3C6362 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AEEC3FA80A90CA8EAC08ECD /* SearchResultsView.swift */; };
 		9A64757C7E1C42D9943F9967 /* MIMEProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04043577BAF81A16B42607E5 /* MIMEProperties.swift */; };
 		A0E4189C6C630B35D26E29B2 /* ForAllSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A5E7C83395FC5B1CB3CE04 /* ForAllSmokeTests.swift */; };
@@ -98,6 +100,7 @@
 		1B99833A4A34A3B059F965D2 /* JournalArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalArchiveView.swift; sourceTree = "<group>"; };
 		1EABA6D5E51F2CB475040F67 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		1F3F5D5252E77C20D4411AAA /* ImageProxyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageProxyTests.swift; sourceTree = "<group>"; };
+		20C54BAB91AF76439EE6B9EC /* ReaderImageLoadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderImageLoadState.swift; sourceTree = "<group>"; };
 		2217A8D681EDC9DC08448B20 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		25E2E797661314505349C42D /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
 		2603E4A689D84FECFCD69D12 /* SeededRNG.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeededRNG.swift; sourceTree = "<group>"; };
@@ -134,6 +137,7 @@
 		B7E054A4FFB969B6585FDC7C /* OutboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxView.swift; sourceTree = "<group>"; };
 		BCF837DA11612E96523D7324 /* AdvancedSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSearchView.swift; sourceTree = "<group>"; };
 		D55AA6D4C8349A644BFB08F5 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
+		DC94B4B5F477D3AAE2C700E5 /* ReaderImageLoadStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderImageLoadStateTests.swift; sourceTree = "<group>"; };
 		DCE3F1CD7EC6E7E41F63893D /* ProxySecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxySecretStore.swift; sourceTree = "<group>"; };
 		E2CF45DFB8B78E1224BD9514 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		E4B1166FDCCB29E8F5298BAA /* ImageProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageProxy.swift; sourceTree = "<group>"; };
@@ -284,6 +288,7 @@
 				1F3F5D5252E77C20D4411AAA /* ImageProxyTests.swift */,
 				00731FF03A6C03F55F73C3BA /* MoveStrategyTests.swift */,
 				9BF51D01F34777AB4792E72F /* ProxySecretStoreTests.swift */,
+				DC94B4B5F477D3AAE2C700E5 /* ReaderImageLoadStateTests.swift */,
 				9FF62F5D25A3B7EBCF065FB8 /* SmokeTests.swift */,
 			);
 			path = MMailTests;
@@ -303,6 +308,7 @@
 				25E2E797661314505349C42D /* Notifier.swift */,
 				DCE3F1CD7EC6E7E41F63893D /* ProxySecretStore.swift */,
 				6EC4277C859DBC1033E01D12 /* QuickLook.swift */,
+				20C54BAB91AF76439EE6B9EC /* ReaderImageLoadState.swift */,
 				274298C9FD13E7C8D90BB22E /* SMTPService.swift */,
 				D55AA6D4C8349A644BFB08F5 /* WeatherService.swift */,
 			);
@@ -438,6 +444,7 @@
 				76B2A0A2CDF524DBCB4EE5E6 /* MoveStrategyTests.swift in Sources */,
 				683D803BA3BF1064B65743A0 /* ParseRecipientsProperties.swift in Sources */,
 				C1D940DE4037688B2084641F /* ProxySecretStoreTests.swift in Sources */,
+				2A1BAE094E6ACE80840E56C8 /* ReaderImageLoadStateTests.swift in Sources */,
 				0C3D2D6DF305A9065ABEB1EF /* SeededRNG.swift in Sources */,
 				19285F804F6884A30716E15E /* SeededRNGTests.swift in Sources */,
 				F9D622A3054E831F4DE20D1E /* SmokeTests.swift in Sources */,
@@ -478,6 +485,7 @@
 				CC5ED000189ABA9C357BED33 /* PeopleView.swift in Sources */,
 				83C3867C5B28CAD37E66AEB8 /* ProxySecretStore.swift in Sources */,
 				839C08C0B268C946970A9C32 /* QuickLook.swift in Sources */,
+				871F1CBE41DC465E669B1E5F /* ReaderImageLoadState.swift in Sources */,
 				EDF6BA1F4277388005EA5BDA /* ReaderView.swift in Sources */,
 				595D32D0D26325C50DC138BE /* RichTextEditor.swift in Sources */,
 				4981A459A999FC4B8E9F5803 /* RootView.swift in Sources */,
