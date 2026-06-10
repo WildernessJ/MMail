@@ -799,11 +799,7 @@ final class AppModel: ObservableObject {
     /// IMAP envelope can arrive with subtly different casing or wrapping than
     /// what the block UI captured, so every block/match path runs through this.
     static func normalizeAddress(_ s: String?) -> String? {
-        guard var t = s?.lowercased() else { return nil }
-        t = t.trimmingCharacters(in: .whitespacesAndNewlines)
-        t = t.trimmingCharacters(in: CharacterSet(charactersIn: "<>"))
-        t = t.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? nil : t
+        TrustedSenders.normalize(s)
     }
 
     func isBlocked(_ email: String?) -> Bool {
@@ -866,19 +862,17 @@ final class AppModel: ObservableObject {
     // MARK: - Trusted image senders
 
     func isImageTrusted(_ email: String?) -> Bool {
-        guard let e = email?.lowercased(), !e.isEmpty else { return false }
-        return trustedImageSenders.contains(e)
+        guard let e = email else { return false }
+        return TrustedSenders.contains(trustedImageSenders, e)
     }
 
     func trustImages(_ email: String) {
-        let e = email.lowercased().trimmingCharacters(in: .whitespaces)
-        guard e.contains("@") else { return }
-        trustedImageSenders.insert(e)
+        trustedImageSenders = TrustedSenders.add(trustedImageSenders, email)
         UserDefaults.standard.set(Array(trustedImageSenders), forKey: kTrustedImages)
     }
 
     func untrustImages(_ email: String) {
-        trustedImageSenders.remove(email.lowercased())
+        trustedImageSenders = TrustedSenders.remove(trustedImageSenders, email)
         UserDefaults.standard.set(Array(trustedImageSenders), forKey: kTrustedImages)
     }
 

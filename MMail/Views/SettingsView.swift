@@ -230,9 +230,13 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    if !model.trustedImageSenders.isEmpty {
-                        section("Remote images") {
-                            let trusted = model.trustedImageSenders.sorted()
+                    section("Remote images") {
+                        if model.trustedImageSenders.isEmpty {
+                            Text("No trusted senders. Trust a sender from a blocked-image message's \"Always\" button to auto-load their remote images.")
+                                .font(.system(size: 13)).foregroundStyle(p.fg3)
+                                .fixedSize(horizontal: false, vertical: true).padding(.vertical, 12)
+                        } else {
+                            let trusted = TrustedSenders.list(model.trustedImageSenders)
                             ForEach(Array(trusted.enumerated()), id: \.element) { idx, addr in
                                 HStack {
                                     Icon(name: "photo", size: 13).foregroundStyle(p.fg3)
