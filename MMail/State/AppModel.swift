@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import OSLog
 
 enum InboxFilter: String, CaseIterable {
     case all, unread, people, updates
@@ -85,6 +86,8 @@ struct Command: Identifiable {
 }
 
 final class AppModel: ObservableObject {
+    private static let proxyLog = Logger(subsystem: "studio.cobalt.MMail", category: "ImageProxy")
+
     // Persistence keys
     private let kOnboarded = "mmail.onboarded"
     private let kTodos = "mmail.todos"
@@ -175,7 +178,8 @@ final class AppModel: ObservableObject {
 
     // Image privacy proxy: when enabled with a base URL (+ a Keychain secret),
     // remote <img src> for shown-with-images messages is routed through the
-    // Cloudflare Worker. The HMAC signing secret lives ONLY in the Keychain.
+    // Cloudflare Worker. The HMAC signing secret is stored in the Keychain
+    // (primary), mirrored to a local 0600 fallback file so it survives unsigned rebuilds.
     @Published var proxyEnabled: Bool = true
     @Published var proxyBaseURL: String = ""
     private let kProxyEnabled = "mmail.imageProxy.enabled"
@@ -892,28 +896,46 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.set(proxyBaseURL, forKey: kProxyBaseURL)
     }
 
-    /// Store (or clear) the HMAC signing secret in the Keychain. `objectWillChange`
-    /// fires so dependent views (and `imageProxyConfig`) re-evaluate.
-    func setProxySecret(_ secret: String) {
-        objectWillChange.send()
-        Keychain.storeProxySecret(secret)
+    /// Latest proxy-secret save error to surface in Settings, or nil when the last
+    /// save succeeded in both stores. Set by `setProxySecret`.
+    @Published var proxySecretSaveError: String?
+
+    /// Resolve the effective image-proxy signing secret from the Keychain (primary)
+    /// and the `0600` fallback file, migrating/correcting the file as a side effect.
+    /// Returns nil when neither store holds a non-blank secret.
+    func loadProxySecret() -> String? {
+        ProxySecretStore.default.loadAndSync(keychainSecret: Keychain.readProxySecret())
     }
 
-    /// True when a secret is present in the Keychain.
+    /// Store the HMAC signing secret in BOTH the Keychain and the fallback file,
+    /// attempting each independently and surfacing any failure to the UI + log.
+    /// `objectWillChange` fires AFTER the writes + error assignment so dependent
+    /// views (and `imageProxyConfig`) re-evaluate against the final state.
+    func setProxySecret(_ secret: String) {
+        let kOK = Keychain.storeProxySecret(secret)
+        let fOK = ProxySecretStore.default.write(secret)
+        proxySecretSaveError = ProxySecretStore.saveErrorMessage(keychainOK: kOK, fileOK: fOK)
+        if !kOK || !fOK {
+            Self.proxyLog.error("setProxySecret: keychainOK=\(kOK, privacy: .public) fileOK=\(fOK, privacy: .public)")
+        }
+        objectWillChange.send()
+    }
+
+    /// True when a secret is present in either store (Keychain or fallback file).
     var hasProxySecret: Bool {
-        !(Keychain.readProxySecret()?.isEmpty ?? true)
+        loadProxySecret() != nil
     }
 
     /// The active proxy configuration, or nil when proxying is inert. Active ONLY
     /// when the toggle is on AND the base URL is non-empty (and a valid URL) AND a
-    /// signing secret is present in the Keychain. Otherwise behavior falls back to
-    /// the pre-feature build.
+    /// signing secret is resolvable from either store. Otherwise behavior falls back
+    /// to the pre-feature build.
     var imageProxyConfig: ImageProxyConfig? {
         guard proxyEnabled else { return nil }
         let trimmed = proxyBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let url = URL(string: trimmed), url.host != nil,
-              let secret = Keychain.readProxySecret(), !secret.isEmpty else { return nil }
+              let secret = loadProxySecret(), !secret.isEmpty else { return nil }
         return ImageProxyConfig(baseURL: url, signingSecret: secret)
     }
 

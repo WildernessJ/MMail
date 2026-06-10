@@ -45,6 +45,7 @@
 		8240DB9802A6B1CF6F49FCD3 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1839AA4256AD539B7E201FD /* OnboardingView.swift */; };
 		82FD7DC1B326B431F597D040 /* MailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0FD3634640269304B4DE33 /* MailProvider.swift */; };
 		839C08C0B268C946970A9C32 /* QuickLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC4277C859DBC1033E01D12 /* QuickLook.swift */; };
+		83C3867C5B28CAD37E66AEB8 /* ProxySecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE3F1CD7EC6E7E41F63893D /* ProxySecretStore.swift */; };
 		99D3EA2AB149562DAF3C6362 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AEEC3FA80A90CA8EAC08ECD /* SearchResultsView.swift */; };
 		9A64757C7E1C42D9943F9967 /* MIMEProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04043577BAF81A16B42607E5 /* MIMEProperties.swift */; };
 		A0E4189C6C630B35D26E29B2 /* ForAllSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A5E7C83395FC5B1CB3CE04 /* ForAllSmokeTests.swift */; };
@@ -55,6 +56,7 @@
 		B7A899BAA4C3DD629951E464 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4AF498A0E6F2A7C049FDFD /* SidebarView.swift */; };
 		B895E35C6C37202A764D5638 /* CleanLinkProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E60C955FE0B61EFC788EF9 /* CleanLinkProperties.swift */; };
 		BE505C010C09F6AFB384E8C9 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E339A5381F119E119D179F2 /* AppModel.swift */; };
+		C1D940DE4037688B2084641F /* ProxySecretStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BF51D01F34777AB4792E72F /* ProxySecretStoreTests.swift */; };
 		C2E07547425A80AD42EAD413 /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9FE22A6CEE48BF1C394B2A /* CommandPaletteView.swift */; };
 		CC5ED000189ABA9C357BED33 /* PeopleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9E1FBE4FCEF6BB8A40762A /* PeopleView.swift */; };
 		CC7DF28D10C2AA0AD23C18C8 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68E9DF829AD4EBED12B2F2E /* Theme.swift */; };
@@ -121,6 +123,7 @@
 		84C9AFA5D71E9151A6E887F5 /* HTMLMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLMessageView.swift; sourceTree = "<group>"; };
 		903AD651E0AA8087A7D60DFF /* MiscViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiscViews.swift; sourceTree = "<group>"; };
 		98D419268CA68F3EEBD01D83 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		9BF51D01F34777AB4792E72F /* ProxySecretStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxySecretStoreTests.swift; sourceTree = "<group>"; };
 		9C44FF3EE733F7A86D87AE28 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		9FF62F5D25A3B7EBCF065FB8 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		A473B68689B03F79C3F1B514 /* DisplayFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayFormattingTests.swift; sourceTree = "<group>"; };
@@ -131,6 +134,7 @@
 		B7E054A4FFB969B6585FDC7C /* OutboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxView.swift; sourceTree = "<group>"; };
 		BCF837DA11612E96523D7324 /* AdvancedSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSearchView.swift; sourceTree = "<group>"; };
 		D55AA6D4C8349A644BFB08F5 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
+		DCE3F1CD7EC6E7E41F63893D /* ProxySecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxySecretStore.swift; sourceTree = "<group>"; };
 		E2CF45DFB8B78E1224BD9514 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		E4B1166FDCCB29E8F5298BAA /* ImageProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageProxy.swift; sourceTree = "<group>"; };
 		E68E9DF829AD4EBED12B2F2E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -279,6 +283,7 @@
 				A6A4163DC7A8992EBF0012B9 /* DockBadgeTests.swift */,
 				1F3F5D5252E77C20D4411AAA /* ImageProxyTests.swift */,
 				00731FF03A6C03F55F73C3BA /* MoveStrategyTests.swift */,
+				9BF51D01F34777AB4792E72F /* ProxySecretStoreTests.swift */,
 				9FF62F5D25A3B7EBCF065FB8 /* SmokeTests.swift */,
 			);
 			path = MMailTests;
@@ -296,6 +301,7 @@
 				EF0FD3634640269304B4DE33 /* MailProvider.swift */,
 				496FBFE1599ECF1854FA4243 /* MIME.swift */,
 				25E2E797661314505349C42D /* Notifier.swift */,
+				DCE3F1CD7EC6E7E41F63893D /* ProxySecretStore.swift */,
 				6EC4277C859DBC1033E01D12 /* QuickLook.swift */,
 				274298C9FD13E7C8D90BB22E /* SMTPService.swift */,
 				D55AA6D4C8349A644BFB08F5 /* WeatherService.swift */,
@@ -431,6 +437,7 @@
 				9A64757C7E1C42D9943F9967 /* MIMEProperties.swift in Sources */,
 				76B2A0A2CDF524DBCB4EE5E6 /* MoveStrategyTests.swift in Sources */,
 				683D803BA3BF1064B65743A0 /* ParseRecipientsProperties.swift in Sources */,
+				C1D940DE4037688B2084641F /* ProxySecretStoreTests.swift in Sources */,
 				0C3D2D6DF305A9065ABEB1EF /* SeededRNG.swift in Sources */,
 				19285F804F6884A30716E15E /* SeededRNGTests.swift in Sources */,
 				F9D622A3054E831F4DE20D1E /* SmokeTests.swift in Sources */,
@@ -469,6 +476,7 @@
 				8240DB9802A6B1CF6F49FCD3 /* OnboardingView.swift in Sources */,
 				D15A8EBFB7A1D4BEDCD62E47 /* OutboxView.swift in Sources */,
 				CC5ED000189ABA9C357BED33 /* PeopleView.swift in Sources */,
+				83C3867C5B28CAD37E66AEB8 /* ProxySecretStore.swift in Sources */,
 				839C08C0B268C946970A9C32 /* QuickLook.swift in Sources */,
 				EDF6BA1F4277388005EA5BDA /* ReaderView.swift in Sources */,
 				595D32D0D26325C50DC138BE /* RichTextEditor.swift in Sources */,

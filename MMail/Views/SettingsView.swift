@@ -56,7 +56,7 @@ struct SettingsView: View {
                         Rectangle().fill(p.border).frame(height: 1)
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Signing secret").font(.system(size: 12, weight: .medium)).foregroundStyle(p.fg2)
-                            Text("The same secret you set with `wrangler secret put PROXY_SECRET`. Stored only in the macOS Keychain.")
+                            Text("The same secret you set with `wrangler secret put PROXY_SECRET`. Stored in the macOS Keychain and a local file (`~/Library/Application Support/MMail/`) so it survives rebuilds.")
                                 .font(.system(size: 11.5)).foregroundStyle(p.fg3)
                                 .fixedSize(horizontal: false, vertical: true)
                             HStack(spacing: 8) {
@@ -73,7 +73,12 @@ struct SettingsView: View {
                                     Text("Save").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.brandBlue)
                                 }
                                 .buttonStyle(.plain)
-                                .disabled(proxySecretDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                                .disabled(proxySecretDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                            if let saveError = model.proxySecretSaveError {
+                                Text(saveError)
+                                    .font(.system(size: 11.5)).foregroundStyle(p.danger)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                         .padding(.vertical, 10)
