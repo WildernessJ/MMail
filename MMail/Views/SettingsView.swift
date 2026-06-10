@@ -80,6 +80,7 @@ struct SettingsView: View {
                                     .font(.system(size: 11.5)).foregroundStyle(p.danger)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
+                            proxyMisconfigWarning
                         }
                         .padding(.vertical, 10)
                     }
@@ -309,6 +310,40 @@ struct SettingsView: View {
         guard !name.isEmpty else { return }
         model.addLabel(name)
         newLabelDraft = ""
+    }
+
+    /// Display-only advisory: when the proxy toggle is ON but `imageProxyConfig` is
+    /// inert, name which sub-condition is failing. Derived from the SAME pure
+    /// `ProxyConfigState.classify(...)` result that `imageProxyConfig` consumes
+    /// (single source of truth) — `model.hasProxySecret` (= `loadProxySecret() != nil`)
+    /// is the same resolved secret state, so this never disagrees with the load path.
+    /// Re-derives on `model` changes as the user edits fields. Renders NOTHING in
+    /// `.disabled` / `.ok`; calls no setter and triggers no fetch.
+    @ViewBuilder
+    private var proxyMisconfigWarning: some View {
+        let proxyState = ProxyConfigState.classify(
+            proxyEnabled: model.proxyEnabled,
+            proxyBaseURL: model.proxyBaseURL,
+            secretPresent: model.hasProxySecret)
+        if proxyState.isWarning {
+            HStack(alignment: .top, spacing: 6) {
+                Icon(name: "alert", size: 12).foregroundStyle(p.danger).padding(.top, 1)
+                Text(proxyWarningMessage(for: proxyState))
+                    .font(.system(size: 11.5)).foregroundStyle(p.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func proxyWarningMessage(for state: ProxyConfigState) -> String {
+        switch state {
+        case .missingURL, .invalidURL, .urlMissingHost:
+            return "Proxy is on but the base URL is missing or invalid — remote images will load directly (leaking your IP) until you set a valid https://… URL."
+        case .missingSecret:
+            return "Proxy is on but the signing secret is missing — remote images will load directly (leaking your IP) until you paste the secret and Save."
+        case .disabled, .ok:
+            return ""
+        }
     }
 
     private func section<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {

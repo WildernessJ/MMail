@@ -931,12 +931,19 @@ final class AppModel: ObservableObject {
     /// signing secret is resolvable from either store. Otherwise behavior falls back
     /// to the pre-feature build.
     var imageProxyConfig: ImageProxyConfig? {
-        guard proxyEnabled else { return nil }
+        let secret = loadProxySecret()                              // impure resolve at the call site
         let trimmed = proxyBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              let url = URL(string: trimmed), url.host != nil,
-              let secret = loadProxySecret(), !secret.isEmpty else { return nil }
-        return ImageProxyConfig(baseURL: url, signingSecret: secret)
+        // Single source of truth: the nil-vs-non-nil decision lives ONLY in `classify`.
+        // `secret != nil` is exactly the old `!secret.isEmpty` guard — `loadProxySecret`
+        // already returns nil for a blank/whitespace-only secret (ProxySecretStore.swift:22-30).
+        guard ProxyConfigState.classify(
+            proxyEnabled: proxyEnabled,
+            proxyBaseURL: proxyBaseURL,
+            secretPresent: secret != nil
+        ) == .ok else { return nil }
+        // .ok guarantees: proxyEnabled, trimmed non-empty, URL parses, host present, secret
+        // non-nil. Force-unwraps are safe BY the .ok contract (no second guard copy).
+        return ImageProxyConfig(baseURL: URL(string: trimmed)!, signingSecret: secret!)
     }
 
     // MARK: - Rules
