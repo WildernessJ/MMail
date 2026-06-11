@@ -98,6 +98,9 @@ final class AppModel: ObservableObject {
     private let kJournalRecent = "mmail.journal.recent"
     private let kTemplates = "mmail.templates"
     private let kRealAccounts = "mmail.realAccounts"
+    private let kAllInboxName = "allInboxName"
+    private let kAllInboxColorHex = "allInboxColorHex"
+    private let kAllInboxHasImage = "allInboxHasImage"
     private let kVimNav = "mmail.vimNav"
     private let kConfirmDiscard = "mmail.confirmDiscard"
     private let kNotifications = "mmail.notifications"
@@ -187,6 +190,10 @@ final class AppModel: ObservableObject {
 
     // Real (IMAP/SMTP) accounts
     @Published var realConfigs: [MailAccountConfig] = []
+    // Unified "All" inbox customization (no MailAccountConfig — standalone prefs).
+    @Published var allInboxName: String = ""
+    @Published var allInboxColorHex: String? = nil
+    @Published var allInboxHasImage: Bool = false
     @Published var loadingAccounts: Set<String> = []
     @Published var accountErrors: [String: String] = [:]
     // accountId -> canonical folder id ("sent"/"drafts"/"trash"/"spam"/"archive") -> server mailbox name
@@ -276,6 +283,9 @@ final class AppModel: ObservableObject {
             realConfigs = decoded
             for cfg in decoded { accounts.append(AppModel.uiAccount(for: cfg)) }
         }
+        allInboxName = d.string(forKey: kAllInboxName) ?? ""
+        allInboxColorHex = d.string(forKey: kAllInboxColorHex)
+        allInboxHasImage = d.bool(forKey: kAllInboxHasImage)
         weatherCity = d.string(forKey: kWeatherCity) ?? ""
         if let data = d.data(forKey: kScheduled),
            let decoded = try? JSONDecoder().decode([ScheduledSend].self, from: data) { scheduled = decoded }
@@ -1608,6 +1618,41 @@ final class AppModel: ObservableObject {
         realConfigs[i].hasCustomAvatar = false
         rebuildAccount(id)
         persistRealAccounts()
+    }
+
+    // MARK: - Unified "All" inbox identity editing
+    // The unified inbox has NO MailAccountConfig; its customization persists in
+    // standalone UserDefaults keys and its image reuses AvatarStore under id "all".
+    // All mutations run synchronously on the main thread (called from SwiftUI
+    // actions); NSImage never crosses a Task/actor boundary.
+
+    var allInboxSpec: AllInboxSpec { AllInboxSpec.resolve(name: allInboxName, hasImage: allInboxHasImage) }
+    var allInboxImage: NSImage? { allInboxHasImage ? AvatarStore.default.load(for: "all") : nil }
+
+    func setAllInboxName(_ name: String) {
+        allInboxName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        UserDefaults.standard.set(allInboxName, forKey: kAllInboxName)
+    }
+
+    func setAllInboxColor(_ hex: String) {
+        allInboxColorHex = hex
+        UserDefaults.standard.set(hex, forKey: kAllInboxColorHex)
+    }
+
+    func setAllInboxImage(_ image: NSImage) {
+        // Only mark the unified inbox as image-backed if the file actually landed.
+        guard AvatarStore.default.save(image, for: "all") else {
+            showToast("Couldn't save that image.")
+            return
+        }
+        allInboxHasImage = true
+        UserDefaults.standard.set(true, forKey: kAllInboxHasImage)
+    }
+
+    func removeAllInboxImage() {
+        AvatarStore.default.remove(for: "all")
+        allInboxHasImage = false
+        UserDefaults.standard.set(false, forKey: kAllInboxHasImage)
     }
 
     func addRealAccount(config: MailAccountConfig, imapPassword: String, smtpPassword: String) {
