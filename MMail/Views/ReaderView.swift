@@ -330,7 +330,8 @@ private struct ReaderContent: View {
                 let rendered = ReaderHTML.inlineCIDImages(inHTML: html, parts: model.inlineParts(for: email.id))
                 HTMLMessageView(html: rendered, blockRemote: !showImages,
                                 proxyConfig: model.imageProxyConfig,
-                                spikeApplyDark: model.dark, height: $htmlHeight)
+                                applyDark: ReaderHTML.shouldApplyDark(dark: model.dark, showOriginal: false),
+                                height: $htmlHeight)
                     .frame(height: max(htmlHeight, 80))
                     .padding(.top, 16)
             } else {
