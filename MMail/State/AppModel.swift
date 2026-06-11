@@ -407,6 +407,28 @@ final class AppModel: ObservableObject {
         return Set(loaded.filter { range.contains($0) && !present.contains($0) })
     }
 
+    /// Maximum number of historical envelopes a single incremental sync cycle
+    /// will backfill, so a large hole cannot exceed the sync timeout. The hole
+    /// converges over successive polls. Steady-state new-hole creation on a
+    /// personal inbox is effectively zero, so this cap guarantees convergence.
+    private static let backfillCap = 200
+
+    /// Pure backfill seam: the inverse of `expungedWindowUIDs`. Given the
+    /// loaded window's UIDs, the set of UIDs the server reports present
+    /// (`present`, from the incremental FLAGS fetch), the UID `range` that
+    /// fetch covered, and a per-cycle `limit`, return the UIDs that are present
+    /// on the server inside the range but missing locally — the holes to fill —
+    /// ordered newest-first (descending UID) and truncated to `limit`. UIDs
+    /// above the range (fresh appends) are handled by the new-message path, not
+    /// here; UIDs below `oldestLoaded` are out of scope (load-older paging).
+    static func backfillWindowUIDs(loaded: [UInt32], present: Set<UInt32>, range: ClosedRange<UInt32>, limit: Int) -> [UInt32] {
+        let loadedSet = Set(loaded)
+        return present.filter { range.contains($0) && !loadedSet.contains($0) }
+            .sorted(by: >)
+            .prefix(limit)
+            .map { $0 }
+    }
+
     /// Recompute the unread-inbox total and push it to the macOS Dock badge.
     /// Reads `emails` only (never mutates it — that would recurse via `didSet`).
     /// `AppModel` is NOT @MainActor and `emails` can be mutated from background
