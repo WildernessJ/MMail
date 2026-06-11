@@ -52,6 +52,12 @@ struct HTMLMessageView: NSViewRepresentable {
     /// block-all-except-proxy-origin content rule. Nil ⇒ today's behavior
     /// (direct load when shown, block-all when blocked).
     var proxyConfig: ImageProxyConfig? = nil
+    /// SPIKE INPUT (Phase A, temporary): when true, after a body loads the
+    /// vendored DarkReader engine is injected and `DarkReader.enable(theme)` is
+    /// called to darken the page in-place. Replaced by the real `applyDark`
+    /// reactive input + in-place toggle in Phase C (T008). Threaded from
+    /// `model.dark` at the call site for the spike only.
+    var spikeApplyDark: Bool = false
     @Binding var height: CGFloat
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -80,6 +86,21 @@ struct HTMLMessageView: NSViewRepresentable {
     private static func wrapped(_ html: String) -> String {
         ReaderHTML.wrappedDocument(html)
     }
+
+    /// Load the vendored DarkReader UMD engine (MMail/Resources/darkreader.js,
+    /// MIT — see darkreader.LICENSE) from the app bundle, once. Returns the JS
+    /// source as a String that, when evaluated in a page, defines the global
+    /// `window.DarkReader` (confirmed UMD global name; API: `DarkReader.enable` /
+    /// `DarkReader.disable`). A nil URL means the resource did not ship in the
+    /// built bundle (XcodeGen auto-classification failed) — that MUST be loud, so
+    /// we log it; an unbundled engine is the first failure to surface in the spike.
+    private static let darkReaderScript: String? = {
+        guard let url = Bundle.main.url(forResource: "darkreader", withExtension: "js") else {
+            print("⚠️ MMail: darkreader.js NOT FOUND in Bundle.main — the dark engine resource did not ship in the build.")
+            return nil
+        }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }()
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         let parent: HTMLMessageView
@@ -194,12 +215,52 @@ struct HTMLMessageView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            // SPIKE (Phase A, T003): when dark is on, inject the vendored DarkReader
+            // engine to define `window.DarkReader`, THEN — only after that define
+            // resolves — call `DarkReader.enable(theme)` with a fixed dark palette.
+            // The two evaluations are sequenced (enable runs in the define's
+            // completion) so `enable()` never fires before the global exists.
+            // wrappedDocument's `color-scheme: only light` is left untouched. Height
+            // re-measure after the transform is deferred to Phase C (T008); this
+            // spike only proves the visual transform, so the existing immediate
+            // height measure stays as-is below.
+            if parent.spikeApplyDark, let engine = HTMLMessageView.darkReaderScript {
+                webView.evaluateJavaScript(engine) { [weak webView] _, defineErr in
+                    if let defineErr {
+                        print("⚠️ MMail spike: DarkReader define failed: \(defineErr)")
+                        return
+                    }
+                    webView?.evaluateJavaScript(Self.spikeEnableScript) { _, enableErr in
+                        if let enableErr {
+                            print("⚠️ MMail spike: DarkReader.enable failed: \(enableErr)")
+                        }
+                    }
+                }
+            }
+
             webView.evaluateJavaScript("document.body.scrollHeight") { result, _ in
                 if let h = result as? CGFloat, h > 0 {
                     DispatchQueue.main.async { self.parent.height = ceil(h) }
                 }
             }
         }
+
+        /// SPIKE (Phase A, T003): a fixed dark-palette `DarkReader.enable(...)` call.
+        /// Background near `#1A1A1A` with light text. Guards on `window.DarkReader`
+        /// so it is a harmless no-op if the define did not land. Replaced by the
+        /// tested `ReaderHTML.darkEnableScript()` seam in Phase C (T007).
+        static let spikeEnableScript = """
+        if (window.DarkReader) {
+          window.DarkReader.enable({
+            mode: 1,
+            brightness: 100,
+            contrast: 100,
+            sepia: 0,
+            darkSchemeBackgroundColor: '#1a1a1a',
+            darkSchemeTextColor: '#e8e8e8'
+          });
+        }
+        """
 
         // Open links in the user's browser instead of navigating inside the message.
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,

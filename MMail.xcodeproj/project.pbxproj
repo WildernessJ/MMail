@@ -32,6 +32,7 @@
 		4DF7C8F96D531DF9CB1FF890 /* DockBadgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6A4163DC7A8992EBF0012B9 /* DockBadgeTests.swift */; };
 		5354C7D4409165444226CE30 /* ClassifyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCED4891A853A78BC84FFCA /* ClassifyTests.swift */; };
 		536D999CA2DB6B43B547F476 /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55AA6D4C8349A644BFB08F5 /* WeatherService.swift */; };
+		57108C2E27377BD076B44C3E /* darkreader.js in Resources */ = {isa = PBXBuildFile; fileRef = 345EF07F907FF858F30B66F1 /* darkreader.js */; };
 		5844B178DDB4EA9D3ADAFEB9 /* ProxyConfigState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 475A93C4AC76E56847218E1F /* ProxyConfigState.swift */; };
 		595D32D0D26325C50DC138BE /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 027847810F2667C4489873BC /* RichTextEditor.swift */; };
 		5B362B36FF020226FF9BBBFB /* DedupByIdProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1214F2376A565FBA125FD04D /* DedupByIdProperties.swift */; };
@@ -59,11 +60,13 @@
 		8AF18DAF53BE297222F01B80 /* AvatarSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48CE510C48B4FC0A7A9CA8AB /* AvatarSpec.swift */; };
 		99D3EA2AB149562DAF3C6362 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AEEC3FA80A90CA8EAC08ECD /* SearchResultsView.swift */; };
 		9A64757C7E1C42D9943F9967 /* MIMEProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04043577BAF81A16B42607E5 /* MIMEProperties.swift */; };
+		A02C2B60C8C14F2837DC3BCB /* DarkEngineFeasibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F0CD529C7CA55767A36A0A /* DarkEngineFeasibilityTests.swift */; };
 		A0E4189C6C630B35D26E29B2 /* ForAllSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A5E7C83395FC5B1CB3CE04 /* ForAllSmokeTests.swift */; };
 		A531BB607FF979E32825D772 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2E797661314505349C42D /* Notifier.swift */; };
 		A727446EFD2A65F7EA7A2646 /* ImageProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B1166FDCCB29E8F5298BAA /* ImageProxy.swift */; };
 		B0BA08AB466E59C9742A188D /* SMTPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 274298C9FD13E7C8D90BB22E /* SMTPService.swift */; };
 		B7635E5A653911A58EC8EC63 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE36DEB176137963E3CA7FE9 /* SampleData.swift */; };
+		B76E5A7CF5E969E77F93542A /* darkreader.LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 6FD91A417D68E73D7BF37101 /* darkreader.LICENSE */; };
 		B7A899BAA4C3DD629951E464 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4AF498A0E6F2A7C049FDFD /* SidebarView.swift */; };
 		B895E35C6C37202A764D5638 /* CleanLinkProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E60C955FE0B61EFC788EF9 /* CleanLinkProperties.swift */; };
 		BE505C010C09F6AFB384E8C9 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E339A5381F119E119D179F2 /* AppModel.swift */; };
@@ -124,6 +127,7 @@
 		2B21F390F3D03054C125A880 /* MenuModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuModel.swift; sourceTree = "<group>"; };
 		314CDDF0121DFE61BA2FDF2E /* IMAPService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPService.swift; sourceTree = "<group>"; };
 		3415F5DC40ADAD49F09977A1 /* AddAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountView.swift; sourceTree = "<group>"; };
+		345EF07F907FF858F30B66F1 /* darkreader.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = darkreader.js; sourceTree = "<group>"; };
 		3556BDB70B56741A0277850B /* AvatarSpecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarSpecTests.swift; sourceTree = "<group>"; };
 		3717DE86372DA2EB6CD1D04A /* MMail.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MMail.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B303764555CA0F1AA5D6431 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
@@ -136,10 +140,12 @@
 		534F92077C89DFAEE2DBE839 /* ParseRecipientsProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParseRecipientsProperties.swift; sourceTree = "<group>"; };
 		543FB0E1666E91A2FAFB1259 /* BodyCompletenessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyCompletenessTests.swift; sourceTree = "<group>"; };
 		56B9453C38CC079125745AC8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		66F0CD529C7CA55767A36A0A /* DarkEngineFeasibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DarkEngineFeasibilityTests.swift; sourceTree = "<group>"; };
 		6AA1B25C3AD475F5E76149ED /* ForAll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForAll.swift; sourceTree = "<group>"; };
 		6AEEC3FA80A90CA8EAC08ECD /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		6E1C2A6396539CA03A1C5FDF /* AvatarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStore.swift; sourceTree = "<group>"; };
 		6EC4277C859DBC1033E01D12 /* QuickLook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLook.swift; sourceTree = "<group>"; };
+		6FD91A417D68E73D7BF37101 /* darkreader.LICENSE */ = {isa = PBXFileReference; path = darkreader.LICENSE; sourceTree = "<group>"; };
 		71E60C955FE0B61EFC788EF9 /* CleanLinkProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanLinkProperties.swift; sourceTree = "<group>"; };
 		7605E1D3B63AA900A3661F9C /* MailAccountConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailAccountConfig.swift; sourceTree = "<group>"; };
 		780066BE547CD3FF8C4BAAEA /* Generators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Generators.swift; sourceTree = "<group>"; };
@@ -255,12 +261,22 @@
 			path = Properties;
 			sourceTree = "<group>";
 		};
+		767C58A32921D8905FE1C564 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				345EF07F907FF858F30B66F1 /* darkreader.js */,
+				6FD91A417D68E73D7BF37101 /* darkreader.LICENSE */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		89BC115E030851168966F292 /* MMail */ = {
 			isa = PBXGroup;
 			children = (
 				FFA451DEF86DBE796013DCE8 /* Components */,
 				EE29428FC16FA34B0AD24A66 /* Mail */,
 				1B6D7051DE94829C05B1057E /* Models */,
+				767C58A32921D8905FE1C564 /* Resources */,
 				00C7D008849F7386CC957B8A /* State */,
 				BBB7813289CF9AAB1A4610BA /* Theme */,
 				A62B340AB6D22DC678C64DE6 /* Views */,
@@ -314,6 +330,7 @@
 				543FB0E1666E91A2FAFB1259 /* BodyCompletenessTests.swift */,
 				E69C843AF3C2249C405EF07D /* CIDInliningTests.swift */,
 				7DCED4891A853A78BC84FFCA /* ClassifyTests.swift */,
+				66F0CD529C7CA55767A36A0A /* DarkEngineFeasibilityTests.swift */,
 				A473B68689B03F79C3F1B514 /* DisplayFormattingTests.swift */,
 				A6A4163DC7A8992EBF0012B9 /* DockBadgeTests.swift */,
 				1F3F5D5252E77C20D4411AAA /* ImageProxyTests.swift */,
@@ -458,6 +475,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				146126565746E851913100B2 /* Assets.xcassets in Resources */,
+				B76E5A7CF5E969E77F93542A /* darkreader.LICENSE in Resources */,
+				57108C2E27377BD076B44C3E /* darkreader.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -473,6 +492,7 @@
 				CC65D37A489EE01B6F692FCB /* CIDInliningTests.swift in Sources */,
 				5354C7D4409165444226CE30 /* ClassifyTests.swift in Sources */,
 				B895E35C6C37202A764D5638 /* CleanLinkProperties.swift in Sources */,
+				A02C2B60C8C14F2837DC3BCB /* DarkEngineFeasibilityTests.swift in Sources */,
 				5B362B36FF020226FF9BBBFB /* DedupByIdProperties.swift in Sources */,
 				EC92A56103B0763DEEB778F6 /* DisplayFormattingTests.swift in Sources */,
 				4DF7C8F96D531DF9CB1FF890 /* DockBadgeTests.swift in Sources */,

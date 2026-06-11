@@ -329,7 +329,8 @@ private struct ReaderContent: View {
                 // the WebView, so inline images render even with remote blocking on.
                 let rendered = ReaderHTML.inlineCIDImages(inHTML: html, parts: model.inlineParts(for: email.id))
                 HTMLMessageView(html: rendered, blockRemote: !showImages,
-                                proxyConfig: model.imageProxyConfig, height: $htmlHeight)
+                                proxyConfig: model.imageProxyConfig,
+                                spikeApplyDark: model.dark, height: $htmlHeight)
                     .frame(height: max(htmlHeight, 80))
                     .padding(.top, 16)
             } else {

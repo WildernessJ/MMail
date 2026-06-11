@@ -1,0 +1,13 @@
+Vendored third-party engine: DarkReader
+
+Source URL: https://cdn.jsdelivr.net/npm/darkreader@4/darkreader.min.js
+            (jsDelivr-minified mirror of /npm/darkreader@4.9.125/darkreader.js)
+Version:    4.9.125
+Acquired:   2026-06-11
+Global:     window.DarkReader  (UMD; API used: DarkReader.enable(theme) / DarkReader.disable())
+
+License:    MIT — see https://github.com/darkreader/darkreader/blob/main/LICENSE
+
+This file (MMail/Resources/darkreader.js) is bundled as a local app resource and
+loaded from Bundle.main at runtime. It is NEVER fetched remotely, and DarkReader's
+dynamic theme runs local-only (no network requests). See specs/dark-engine.md SC-009.
