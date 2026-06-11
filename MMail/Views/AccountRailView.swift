@@ -11,7 +11,7 @@ struct AccountRailView: View {
             // Unified "All"
             railButton(active: model.currentAccount == "all",
                        badge: model.currentAccount != "all" ? totalUnread : 0,
-                       tooltip: "All inboxes  ⌘0") {
+                       tooltip: "\(model.allInboxSpec.label)  ⌘0") {
                 model.currentAccount = "all"
             } label: {
                 allTile
@@ -50,17 +50,8 @@ struct AccountRailView: View {
     }
 
     private var allTile: some View {
-        Text("All")
-            .font(.system(size: 11, weight: .heavy))
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.4), radius: 1, y: 1)
-            .frame(width: 38, height: 38)
-            .background(p.magenta)
-            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .strokeBorder(p.borderStrong, lineWidth: 1)
-            )
+        GradientTile(colors: model.allInboxColorHex.map { [Color(hex: $0)] } ?? [p.magenta],
+                     text: model.allInboxSpec.tileText, size: 38, image: model.allInboxImage)
     }
 
     @ViewBuilder
