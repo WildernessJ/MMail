@@ -109,23 +109,26 @@ struct SynthwaveBackground: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             Canvas { ctx, size in
-                let t = timeline.date.timeIntervalSinceReferenceDate
-                let w = size.width, h = size.height
-                let strong = p.isDark ? 1.4 : 1.0
+                let t: Double = timeline.date.timeIntervalSinceReferenceDate
+                let w: CGFloat = size.width
+                let h: CGFloat = size.height
+                let strong: Double = p.isDark ? 1.4 : 1.0
 
                 // Drifting corner glows.
-                glow(ctx, center: CGPoint(x: 0.18 * w + sin(t * 0.25) * 0.05 * w,
-                                          y: 0.14 * h + cos(t * 0.20) * 0.05 * h),
-                     color: color(blue), radius: w * 0.55, intensity: 0.20 * strong)
-                glow(ctx, center: CGPoint(x: 0.84 * w + sin(t * 0.22 + 2) * 0.05 * w,
-                                          y: 0.18 * h + cos(t * 0.27 + 1) * 0.04 * h),
-                     color: color(pink), radius: w * 0.5, intensity: 0.20 * strong)
+                let blueCenter = CGPoint(x: w * (0.18 + CGFloat(sin(t * 0.25)) * 0.05),
+                                         y: h * (0.14 + CGFloat(cos(t * 0.20)) * 0.05))
+                glow(ctx, center: blueCenter, color: color(blue),
+                     radius: w * 0.55, intensity: 0.20 * strong)
+                let pinkCenter = CGPoint(x: w * (0.84 + CGFloat(sin(t * 0.22 + 2)) * 0.05),
+                                         y: h * (0.18 + CGFloat(cos(t * 0.27 + 1)) * 0.04))
+                glow(ctx, center: pinkCenter, color: color(pink),
+                     radius: w * 0.5, intensity: 0.20 * strong)
 
                 // Horizon "sun" glow + grid.
-                let horizon = h * 0.52
-                let pulse = 0.14 + 0.03 * sin(t * 0.8)
-                glow(ctx, center: CGPoint(x: w * 0.5, y: horizon),
-                     color: color(pink), radius: w * 0.32, intensity: pulse * strong)
+                let horizon: CGFloat = h * 0.52
+                let pulse: Double = 0.14 + 0.03 * sin(t * 0.8)
+                glow(ctx, center: CGPoint(x: w * 0.5, y: horizon), color: color(pink),
+                     radius: w * 0.32, intensity: pulse * strong)
 
                 drawGrid(ctx, size: size, horizon: horizon, time: t, strong: strong)
             }
