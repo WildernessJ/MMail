@@ -46,6 +46,10 @@ private struct ReaderContent: View {
     @State private var newLabelName = ""
     @State private var htmlHeight: CGFloat = 0
     @State private var loadImages = false
+    // Per-message, session-scoped "Show original" (T011, SC-006): mirrors `loadImages`.
+    // Reset to false per message via the parent's `.id(email.id)` (ReaderView:12) — a
+    // fresh ReaderContent per message. Feeds the dark-apply decision; never persisted.
+    @State private var showOriginal = false
     @State private var snoozePickerOpen = false
     @State private var snoozeDate = Date()
 
@@ -328,9 +332,31 @@ private struct ReaderContent: View {
                 // referenced inline part becomes a self-contained `data:` URI — is fed to
                 // the WebView, so inline images render even with remote blocking on.
                 let rendered = ReaderHTML.inlineCIDImages(inHTML: html, parts: model.inlineParts(for: email.id))
+                // Per-message "Show original" control (T012, SC-006). Only shown in dark
+                // mode — in light mode the dark-apply predicate is already false, so the
+                // control would be a visual no-op and is omitted to avoid chrome clutter.
+                // Mirrors the privacy-strip affordance (the "Load images" button above).
+                if model.dark {
+                    HStack(spacing: 8) {
+                        Icon(name: "sun", size: 12).foregroundStyle(p.brandBlue)
+                        Text(showOriginal ? "Showing the original (light) message."
+                                          : "This message is rendered in dark mode.")
+                            .font(.system(size: 12)).foregroundStyle(p.fg3)
+                        Spacer()
+                        Button { showOriginal.toggle() } label: {
+                            Text(showOriginal ? "Show dark" : "Show original")
+                                .font(.system(size: 12, weight: .semibold)).foregroundStyle(p.brandBlue)
+                        }.buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(p.bg2)
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(p.border, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(.top, 16)
+                }
                 HTMLMessageView(html: rendered, blockRemote: !showImages,
                                 proxyConfig: model.imageProxyConfig,
-                                applyDark: ReaderHTML.shouldApplyDark(dark: model.dark, showOriginal: false),
+                                applyDark: ReaderHTML.shouldApplyDark(dark: model.dark, showOriginal: showOriginal),
                                 height: $htmlHeight)
                     .frame(height: max(htmlHeight, 80))
                     .padding(.top, 16)
