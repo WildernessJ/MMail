@@ -58,4 +58,49 @@ import Foundation
         let js = ReaderHTML.darkEnableScript()
         #expect(js.contains("window.DarkReader"))
     }
+
+    // MARK: - No cache-schema change (SC-010, T014)
+
+    /// The dark transform is render-time only: it added ZERO stored properties to any
+    /// cache-serialized `Codable` type (`Email`, `AttachmentMeta`). The dark seams live
+    /// on the stateless `enum ReaderHTML` namespace (pure funcs + `Color` statics), which
+    /// is not serialized. This proves the contract DIRECTLY for the dark feature: a
+    /// pre-feature `[Email]` cache decodes cleanly via the bare `JSONDecoder().decode(
+    /// [Email].self, …)` that `MailCache` uses — a new REQUIRED key would have failed the
+    /// whole-array decode and discarded the cached folder. (The shipped
+    /// `CIDInliningTests.preFeatureCacheDecodesCleanly` covers the same schema invariant
+    /// for the prior feature; this is the dark-engine-local restatement, not a duplicate
+    /// of its broader fixture — there is no dark-feature key to assert nil on, which is the
+    /// point: this feature serialized nothing.)
+    @Test func preFeatureCacheDecodesCleanlyAfterDarkEngine() throws {
+        let json = """
+        [{
+          "id": "pre-dark-1",
+          "account": "acct@host",
+          "from": "alice@host",
+          "subject": "Cached before dark-engine",
+          "preview": "hi",
+          "body": "plain body text",
+          "time": "9:00 AM",
+          "day": "earlier",
+          "unread": false,
+          "starred": false,
+          "hasAttachment": false,
+          "labels": [],
+          "folder": "INBOX",
+          "bodyLoaded": true,
+          "attachments": []
+        }]
+        """
+        let emails = try JSONDecoder().decode([Email].self, from: Data(json.utf8))
+        #expect(emails.count == 1)
+        let e = try #require(emails.first)
+        #expect(e.id == "pre-dark-1")
+        #expect(e.body == "plain body text")
+        // The dark feature added no stored property, so the prior feature-era optionals
+        // remain the only additive keys — still absent here → nil, NOT a decode error.
+        #expect(e.bodyHTML == nil)
+        #expect(e.bodyComplete == nil)
+        #expect(e.sortDate == nil)
+    }
 }
