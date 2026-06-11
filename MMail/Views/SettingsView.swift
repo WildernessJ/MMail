@@ -90,23 +90,7 @@ struct SettingsView: View {
                             Text("No account connected.").font(.system(size: 13)).foregroundStyle(p.fg3).padding(.vertical, 12)
                         } else {
                             ForEach(Array(model.realConfigs.enumerated()), id: \.element.id) { idx, cfg in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(cfg.email).font(.system(size: 13.5, weight: .medium)).foregroundStyle(p.fg1)
-                                        Text("\(cfg.imapHost) · IMAP/SMTP").font(.system(size: 12)).foregroundStyle(p.fg3)
-                                    }
-                                    Spacer()
-                                    Button { model.loadFolder(cfg.id, "inbox", force: true) } label: {
-                                        HStack(spacing: 6) { Icon(name: "refresh", size: 14); Text("Resync").font(.system(size: 12.5, weight: .medium)) }
-                                            .foregroundStyle(p.fg2).padding(.horizontal, 10).frame(height: 30)
-                                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
-                                    }.buttonStyle(.plain)
-                                    Button { model.removeRealAccount(cfg.id) } label: {
-                                        Text("Remove").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.danger)
-                                            .padding(.horizontal, 10).frame(height: 30)
-                                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.danger.opacity(0.4), lineWidth: 1))
-                                    }.buttonStyle(.plain)
-                                }.padding(.vertical, 12)
+                                AccountEditRow(cfg: cfg)
                                 if idx < model.realConfigs.count - 1 { Rectangle().fill(p.border).frame(height: 1) }
                             }
                         }
