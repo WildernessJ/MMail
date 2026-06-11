@@ -2678,26 +2678,38 @@ final class AppModel: ObservableObject {
             guard let datas = try? await self.withTimeout(30, {
                 try await session.fetchMessageDatas(mailbox: box, uids: uids, byteLimit: 65_536)
             }) else { return }
-            var parsedByUID: [UInt32: (text: String, html: String?, atts: [AttachmentMeta], unsub: String?, cal: String?, complete: Bool)] = [:]
+            var parsedByUID: [UInt32: (text: String, html: String?, atts: [AttachmentMeta], unsub: String?, cal: String?, complete: Bool, inlineParts: [String: InlinePart])] = [:]
             for (uid, data) in datas {
                 let p = MIME.parse(data)
-                let metas = p.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
+                // Second pass (T006): drop inline-referenced CID parts before promoting
+                // to `AttachmentMeta`, and capture the referenced CID→bytes map (T007).
+                // The map MUST be built HERE while the `MIME.Attachment`s (which hold
+                // `.data`) are still in scope — they go out of scope at the end of this
+                // loop, before the MainActor apply, so the bytes are carried in the tuple.
+                let cidFilter = ReaderHTML.filterInlineCID(html: p.html, attachments: p.attachments)
+                let metas = cidFilter.survivingAttachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
                 // `data` is the raw reassembled IMAP bytes — the byte count the
                 // 64 KB cap is measured against. Complete only when the message
                 // fit strictly under the cap (else it may be truncated → the
                 // uncapped open fetch upgrades it).
                 let complete = BodyFetch.isComplete(returnedBytes: data.count, byteLimit: 65_536)
-                parsedByUID[uid] = (p.text, p.html, metas, p.listUnsubscribe, p.calendar, complete)
+                parsedByUID[uid] = (p.text, p.html, metas, p.listUnsubscribe, p.calendar, complete, cidFilter.inlineParts)
             }
             await MainActor.run {
                 for (uid, p) in parsedByUID {
-                    // Skip any message already fully loaded: if the user opened a
-                    // >64 KB message during this prefetch's network window, the
-                    // open path set the complete body + bodyComplete=true. Writing
-                    // this (possibly truncated) 64 KB preview over it would demote
-                    // a complete body and reintroduce the truncation bug.
-                    guard let id = uidToId[uid],
-                          let i = self.emails.firstIndex(where: { $0.id == id }),
+                    guard let id = uidToId[uid] else { continue }
+                    // Populate the render-time CID-bytes map UNCONDITIONALLY (before the
+                    // bodyComplete guard): a message that is complete on first prefetch
+                    // early-returns in `loadBodyIfNeeded`, so the open path never re-fetches
+                    // and never re-populates the map — the prefetch path must cover it.
+                    // Render-time-only, keyed by id; overwriting with the same parse is benign.
+                    if !p.inlineParts.isEmpty { self.inlinePartsByEmailID[id] = p.inlineParts }
+                    // Skip the BODY write for any message already fully loaded: if the
+                    // user opened a >64 KB message during this prefetch's network window,
+                    // the open path set the complete body + bodyComplete=true. Writing
+                    // this (possibly truncated) 64 KB preview over it would demote a
+                    // complete body and reintroduce the truncation bug.
+                    guard let i = self.emails.firstIndex(where: { $0.id == id }),
                           self.emails[i].bodyComplete != true else { continue }
                     self.emails[i].body = p.text
                     self.emails[i].preview = String(p.text.replacingOccurrences(of: "\n", with: " ").prefix(140))
@@ -2750,6 +2762,24 @@ final class AppModel: ObservableObject {
     /// duplicate fetch on every selection / re-render.
     private var bodyLoadInFlight: Set<String> = []
 
+    /// Render-time-only map of `Email.id` → referenced CID-token → embedded
+    /// `InlinePart` bytes, used by `ReaderView` to rewrite `cid:` `<img>` refs to
+    /// `data:` URIs (T007/T008). NEVER serialized to `MailCache` — the cache keeps
+    /// the raw `cid:` HTML (SC-006). Populated at BOTH the prefetch and open parse
+    /// sites (a prefetched-and-complete message early-returns in `loadBodyIfNeeded`,
+    /// so the prefetch path must populate it itself). Keyed by `Email.id`, so a
+    /// `serverSearchResults` copy (same id) shares the single entry. Not `@Published`:
+    /// the body/`bodyHTML` assignment that accompanies each write already triggers
+    /// the reader re-render. NO eviction hook — grows by one entry per opened/
+    /// prefetched CID-bearing message for the session (accepted, bounded leak).
+    private var inlinePartsByEmailID: [String: [String: InlinePart]] = [:]
+
+    /// Referenced CID→`InlinePart` bytes map for `email.id`, for the render-time
+    /// `data:` rewrite in `ReaderView`. Empty when the message has no inline CID parts.
+    func inlineParts(for emailID: String) -> [String: InlinePart] {
+        inlinePartsByEmailID[emailID] ?? [:]
+    }
+
     func loadBodyIfNeeded() {
         guard let e = selectedEmail, isRealAccount(e.account),
               BodyFetch.needsFullFetch(bodyLoaded: e.bodyLoaded, bodyComplete: e.bodyComplete),
@@ -2784,10 +2814,20 @@ final class AppModel: ObservableObject {
                     try await session.fetchMessageData(mailbox: box, uid: uid, byteLimit: nil)
                 }
                 let parsed = MIME.parse(data)
-                let metas = parsed.attachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
+                // Second pass (T006): drop parts referenced inline by a `cid:` in the
+                // HTML before promotion to `AttachmentMeta`, and capture the referenced
+                // CID→bytes map (T007) for render-time `data:` inlining. Building `metas`
+                // from the SURVIVING attachments means both the `emails[i]` and the
+                // `serverSearchResults?[j]` mirror inherit the filter (they reuse `metas`).
+                let cidFilter = ReaderHTML.filterInlineCID(html: parsed.html, attachments: parsed.attachments)
+                let metas = cidFilter.survivingAttachments.map { AttachmentMeta(filename: $0.filename, mimeType: $0.mimeType, size: $0.data.count) }
+                let inlineParts = cidFilter.inlineParts
                 await MainActor.run {
                     self.bodyLoadInFlight.remove(id)
                     self.bodyLoadFailed.remove(id)
+                    // Populate the render-time CID-bytes map keyed by id (covers both the
+                    // emails[i] row and the serverSearchResults[j] copy — same id).
+                    self.inlinePartsByEmailID[id] = inlineParts
                     if let i = self.emails.firstIndex(where: { $0.id == id }) {
                         self.emails[i].body = parsed.text
                         self.emails[i].preview = String(parsed.text.replacingOccurrences(of: "\n", with: " ").prefix(140))

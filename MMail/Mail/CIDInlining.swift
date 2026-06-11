@@ -64,6 +64,38 @@ enum ReaderHTML {
         return re.firstMatch(in: html, options: [], range: range) != nil
     }
 
+    // MARK: - B5: second-pass CID filter at the promotion boundary (T006)
+
+    /// Result of the post-parse referenced/unreferenced filtering: the attachments
+    /// that survive (referenced inline CID parts dropped, everything else kept) and
+    /// the referenced CID→`InlinePart` BYTES map for render-time inlining (T007).
+    struct CIDFilterResult {
+        let survivingAttachments: [MIME.Attachment]
+        let inlineParts: [String: InlinePart]
+    }
+
+    /// Second pass over a fully-assembled parse result. Given the message `html` and
+    /// the parsed `attachments`, DROP any attachment whose `contentID` is non-nil AND
+    /// referenced by a `cid:` in the HTML (it renders inline instead), and KEEP every
+    /// other part (unreferenced CID parts and no-CID parts stay normal attachments).
+    /// Also build the referenced CID→bytes map so the render-time `data:` rewrite has
+    /// the embedded bytes (which `AttachmentMeta` discards). Pure over (HTML, parts).
+    static func filterInlineCID(html: String?, attachments: [MIME.Attachment]) -> CIDFilterResult {
+        guard let html, html.range(of: "cid:", options: .caseInsensitive) != nil else {
+            return CIDFilterResult(survivingAttachments: attachments, inlineParts: [:])
+        }
+        var surviving: [MIME.Attachment] = []
+        var parts: [String: InlinePart] = [:]
+        for att in attachments {
+            if let cid = att.contentID, isReferenced(cidToken: cid, inHTML: html) {
+                parts[cid] = InlinePart(mimeType: att.mimeType, data: att.data)
+            } else {
+                surviving.append(att)
+            }
+        }
+        return CIDFilterResult(survivingAttachments: surviving, inlineParts: parts)
+    }
+
     // MARK: - B3: cid:→data: rewrite (T004)
 
     /// Rewrite every `<img src="cid:TOKEN">` whose TOKEN matches a key in `parts` to a

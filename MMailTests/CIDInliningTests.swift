@@ -164,6 +164,54 @@ import Foundation
         #expect(pdf?.contentID == nil)
     }
 
+    // MARK: - B5 second-pass filter: filterInlineCID (T006)
+
+    private func att(_ filename: String, _ mime: String, cid: String?, bytes: [UInt8] = [0x00]) -> MIME.Attachment {
+        MIME.Attachment(filename: filename, mimeType: mime, data: Data(bytes), contentID: cid)
+    }
+
+    @Test func filterDropsReferencedCIDPartAndCapturesItsBytes() {
+        let html = "<img src=\"cid:logo@acme\">"
+        let logo = att("logo.png", "image/png", cid: "logo@acme", bytes: [0x89, 0x50])
+        let result = ReaderHTML.filterInlineCID(html: html, attachments: [logo])
+        #expect(result.survivingAttachments.isEmpty)
+        #expect(result.inlineParts["logo@acme"] == InlinePart(mimeType: "image/png", data: Data([0x89, 0x50])))
+    }
+
+    @Test func filterKeepsUnreferencedCIDPartAsAttachment() {
+        let html = "<p>no inline image here</p>"
+        let orphan = att("orphan.png", "image/png", cid: "orphan@acme")
+        let result = ReaderHTML.filterInlineCID(html: html, attachments: [orphan])
+        #expect(result.survivingAttachments.count == 1)
+        #expect(result.survivingAttachments.first?.filename == "orphan.png")
+        #expect(result.inlineParts.isEmpty)
+    }
+
+    @Test func filterKeepsNoContentIDPart() {
+        let html = "<img src=\"cid:logo@acme\">"
+        let doc = att("doc.pdf", "application/pdf", cid: nil)
+        let result = ReaderHTML.filterInlineCID(html: html, attachments: [doc])
+        #expect(result.survivingAttachments.count == 1)
+        #expect(result.inlineParts.isEmpty)
+    }
+
+    @Test func filterMixedKeepsAndDropsCorrectly() {
+        let html = "<img src=\"cid:sig@acme\"> and <p>text</p>"
+        let sig = att("sig.png", "image/png", cid: "sig@acme")        // referenced → dropped
+        let orphan = att("orphan.gif", "image/gif", cid: "orphan@acme") // unreferenced CID → kept
+        let doc = att("doc.pdf", "application/pdf", cid: nil)          // no CID → kept
+        let result = ReaderHTML.filterInlineCID(html: html, attachments: [sig, orphan, doc])
+        #expect(Set(result.survivingAttachments.map { $0.filename }) == ["orphan.gif", "doc.pdf"])
+        #expect(result.inlineParts.keys.sorted() == ["sig@acme"])
+    }
+
+    @Test func filterWithNilHTMLKeepsAllAttachments() {
+        let a = att("a.png", "image/png", cid: "a@x")
+        let result = ReaderHTML.filterInlineCID(html: nil, attachments: [a])
+        #expect(result.survivingAttachments.count == 1)
+        #expect(result.inlineParts.isEmpty)
+    }
+
     @Test func messageWithNoCIDPartParsesIdentically() {
         // A plain multipart/alternative (text + HTML, no related images) yields the
         // same text/html/attachments/calendar/unsubscribe as before the feature.
