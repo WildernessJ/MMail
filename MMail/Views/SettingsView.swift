@@ -411,7 +411,6 @@ struct AccountEditRow: View {
     let cfg: MailAccountConfig
     @State private var name = ""
     @State private var colorOpen = false
-    @State private var imageOpen = false
 
     private let swatchCols = Array(repeating: GridItem(.fixed(24), spacing: 8), count: 5)
 
