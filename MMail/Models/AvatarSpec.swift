@@ -9,7 +9,7 @@ struct AvatarSpec {
     let usesImage: Bool
 
     static func resolve(displayName: String, email: String, customColorHex: String?, hasImage: Bool) -> AvatarSpec {
-        let trimmedName = displayName.trimmingCharacters(in: .whitespaces)
+        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let source = trimmedName.isEmpty ? email : trimmedName
         let initials = String(source.prefix(1)).uppercased()
         let gradientHex = customColorHex.map { [$0, $0] } ?? [Sender.stableColorHex(for: email), "1E2DB0"]

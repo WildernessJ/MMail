@@ -91,4 +91,31 @@ import Foundation
         #expect(decoded.avatarColorHex == "1FB36B")
         #expect(decoded.hasCustomAvatar == true)
     }
+
+    // MARK: - uiAccount end-to-end (SC-005 value-preservation)
+
+    /// A decoded pre-feature config must produce a derived `Account` identical to
+    /// the pre-refactor derivation: initials from the name, gradient/colorHex from
+    /// the email hash, and no image. Guards the whole `uiAccount` path, not just
+    /// the `AvatarSpec` seam in isolation.
+    @Test func uiAccountPreservesTodaysDerivationForUnCustomizedConfig() throws {
+        let cfg = try JSONDecoder().decode(MailAccountConfig.self,
+                                           from: Data(preFeatureJSON.utf8))
+        let account = AppModel.uiAccount(for: cfg)
+        let base = Sender.stableColorHex(for: "jane@x.org")
+        #expect(account.name == "Jane Doe")
+        #expect(account.initials == "J")
+        #expect(account.colorHex == base)
+        #expect(account.gradient == [base, "1E2DB0"])
+    }
+
+    /// A whitespace-only displayName resolves initials from the email (trim-then-
+    /// empty-check). This is an intentional, spec-compliant divergence from the
+    /// old `.isEmpty`-only check, which would have yielded a blank initial.
+    @Test func uiAccountWhitespaceNameFallsBackToEmailInitial() throws {
+        var cfg = try JSONDecoder().decode(MailAccountConfig.self,
+                                           from: Data(preFeatureJSON.utf8))
+        cfg.displayName = "   "
+        #expect(AppModel.uiAccount(for: cfg).initials == "J")
+    }
 }
