@@ -344,10 +344,9 @@ private struct ReaderContent: View {
                     .lineSpacing(5)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .padding(.top, 16)
             }
 
