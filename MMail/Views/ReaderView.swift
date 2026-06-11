@@ -332,28 +332,10 @@ private struct ReaderContent: View {
                 // referenced inline part becomes a self-contained `data:` URI — is fed to
                 // the WebView, so inline images render even with remote blocking on.
                 let rendered = ReaderHTML.inlineCIDImages(inHTML: html, parts: model.inlineParts(for: email.id))
-                // Per-message "Show original" control (T012, SC-006). Only shown in dark
-                // mode — in light mode the dark-apply predicate is already false, so the
-                // control would be a visual no-op and is omitted to avoid chrome clutter.
-                // Mirrors the privacy-strip affordance (the "Load images" button above).
-                if model.dark {
-                    HStack(spacing: 8) {
-                        Icon(name: "sun", size: 12).foregroundStyle(p.brandBlue)
-                        Text(showOriginal ? "Showing the original (light) message."
-                                          : "This message is rendered in dark mode.")
-                            .font(.system(size: 12)).foregroundStyle(p.fg3)
-                        Spacer()
-                        Button { showOriginal.toggle() } label: {
-                            Text(showOriginal ? "Show dark" : "Show original")
-                                .font(.system(size: 12, weight: .semibold)).foregroundStyle(p.brandBlue)
-                        }.buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(p.bg2)
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(p.border, lineWidth: 1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .padding(.top, 16)
-                }
+                // Per-message "Show original" control (T012, SC-006). Shared with the
+                // plain-text branch via `showOriginalStrip()` (one definition, two call
+                // sites). Self-gates on `model.dark`, so it's a no-op in light mode.
+                showOriginalStrip()
                 HTMLMessageView(html: rendered, blockRemote: !showImages,
                                 proxyConfig: model.imageProxyConfig,
                                 applyDark: ReaderHTML.shouldApplyDark(dark: model.dark, showOriginal: showOriginal),
@@ -371,6 +353,10 @@ private struct ReaderContent: View {
                 // literals. Surrounding reader chrome stays themed; the HTML branch is
                 // untouched.
                 let plainDark = ReaderHTML.shouldApplyDark(dark: model.dark, showOriginal: showOriginal)
+                // Same per-message "Show original" control as the HTML branch (T012,
+                // SC-008) so a darkened plain-text message has a revert path. Self-gated
+                // on `model.dark`; placed above the body to mirror the HTML affordance.
+                showOriginalStrip()
                 Text(email.body)
                     .font(.system(size: 15))
                     .foregroundStyle(plainDark ? ReaderHTML.darkSurfaceTextColor : ReaderHTML.bodyTextColor)
@@ -379,7 +365,7 @@ private struct ReaderContent: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(plainDark ? ReaderHTML.bodyTextColor : Color.white)
+                    .background(plainDark ? ReaderHTML.darkSurfaceBackgroundColor : Color.white)
                     .padding(.top, 16)
             }
 
@@ -396,6 +382,34 @@ private struct ReaderContent: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(p.border, lineWidth: 1))
         .shadow(color: .black.opacity(p.isDark ? 0.4 : 0.08), radius: 12, y: 6)
         .zIndex(10)
+    }
+
+    /// Per-message "Show original" control (T012, SC-006/SC-008). ONE definition shared
+    /// by the HTML and plain-text body branches so the affordance can't diverge. Self-gates
+    /// on `model.dark` — in light mode the dark-apply predicate is already false, so the
+    /// control would be a visual no-op and is omitted to avoid chrome clutter. Mirrors the
+    /// privacy-strip affordance (the "Load images" button). Toggles `showOriginal`, which
+    /// both branches feed into `shouldApplyDark(...)`.
+    @ViewBuilder
+    private func showOriginalStrip() -> some View {
+        if model.dark {
+            HStack(spacing: 8) {
+                Icon(name: "sun", size: 12).foregroundStyle(p.brandBlue)
+                Text(showOriginal ? "Showing the original (light) message."
+                                  : "This message is rendered in dark mode.")
+                    .font(.system(size: 12)).foregroundStyle(p.fg3)
+                Spacer()
+                Button { showOriginal.toggle() } label: {
+                    Text(showOriginal ? "Show dark" : "Show original")
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(p.brandBlue)
+                }.buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(p.bg2)
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(p.border, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.top, 16)
+        }
     }
 
     /// Read-only per-message indicator for the realized image-load path. Renders

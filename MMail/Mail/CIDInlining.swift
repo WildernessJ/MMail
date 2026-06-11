@@ -34,6 +34,13 @@ enum ReaderHTML {
         red: 0xE8 / 255.0, green: 0xE8 / 255.0, blue: 0xE8 / 255.0
     )
 
+    /// The dark reading surface BACKGROUND for the plain-text dark path (review nit). The
+    /// SAME `#1A1A1A` value as `bodyTextColorHex`/`bodyTextColor` — same value, different
+    /// role: here it fills the surface BEHIND the light text, whereas `bodyTextColor` names
+    /// the (light-mode) text color. Aliased to `bodyTextColor` so there is still exactly
+    /// ONE `#1A1A1A` literal (in `bodyTextColorHex`) — no second hardcoded source of truth.
+    static let darkSurfaceBackgroundColor = bodyTextColor
+
     /// Build the full wrapped reader document for `innerHTML`. Forces an opaque
     /// pure-white surface decoupled from the app theme: `color-scheme: only light`
     /// so WebKit never applies a dark auto-transform, plus an opaque white background
