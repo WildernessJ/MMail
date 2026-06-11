@@ -322,18 +322,32 @@ private struct ReaderContent: View {
                     showImages: showImages,
                     proxyActive: model.imageProxyConfig != nil)
                 imageLoadIndicator(imageState)
-                HTMLMessageView(html: html, blockRemote: !showImages,
+                // Render-time-only CID→data: rewrite (T008). Tracker counting and
+                // remote-image detection above run on the RAW `cid:` html (a cid:/data:
+                // image is not a remote tracker); only the rewritten string — where any
+                // referenced inline part becomes a self-contained `data:` URI — is fed to
+                // the WebView, so inline images render even with remote blocking on.
+                let rendered = ReaderHTML.inlineCIDImages(inHTML: html, parts: model.inlineParts(for: email.id))
+                HTMLMessageView(html: rendered, blockRemote: !showImages,
                                 proxyConfig: model.imageProxyConfig, height: $htmlHeight)
                     .frame(height: max(htmlHeight, 80))
                     .padding(.top, 16)
             } else {
+                // Plain-text-only body on the SAME stable white surface as the HTML path
+                // (T010): fixed dark text (ReaderHTML.bodyTextColor — the single source of
+                // truth shared with the HTML head's CSS color, so the two surfaces cannot
+                // diverge) on opaque white, decoupled from the app theme. Surrounding
+                // reader chrome stays themed.
                 Text(email.body)
                     .font(.system(size: 15))
-                    .foregroundStyle(p.fg1)
+                    .foregroundStyle(ReaderHTML.bodyTextColor)
                     .lineSpacing(5)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 24)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.white)
+                    .padding(.top, 16)
             }
 
             if !email.attachments.isEmpty {

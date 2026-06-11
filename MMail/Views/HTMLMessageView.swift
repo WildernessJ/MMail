@@ -72,18 +72,13 @@ struct HTMLMessageView: NSViewRepresentable {
         }
     }
 
+    /// Thin private wrapper over the tested `ReaderHTML.wrappedDocument` builder
+    /// (T009) so the production wrapper IS the unit-tested code (no parallel copy).
+    /// Forces `color-scheme: only light` + an opaque white body background — the
+    /// `drawsBackground=false` WKWebView (makeNSView) then reads white over the dark
+    /// window from this CSS background rather than from a transparent webview.
     private static func wrapped(_ html: String) -> String {
-        """
-        <!doctype html><html><head><meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-          :root { color-scheme: light dark; }
-          body { font: 14px -apple-system, system-ui, sans-serif; margin: 0; padding: 0;
-                 word-wrap: break-word; overflow-wrap: anywhere; -webkit-text-size-adjust: 100%; }
-          img, table { max-width: 100% !important; height: auto; }
-          a { color: #2D3DEC; }
-        </style></head><body>\(html)</body></html>
-        """
+        ReaderHTML.wrappedDocument(html)
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
@@ -98,8 +93,18 @@ struct HTMLMessageView: NSViewRepresentable {
         private var generation = 0
         init(_ parent: HTMLMessageView) { self.parent = parent }
 
-        private static let blockRules = """
-        [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}}]
+        // Block every remote resource type, then `ignore-previous-rules` (allow) for
+        // `data:` URIs (T011). The `.*` url-filter matches a `data:` string too, so
+        // without this carve-out an inline CID image (rewritten to a self-contained
+        // `data:` URI at render time) would be blocked alongside genuine remotes.
+        // A `data:` URI is embedded — zero network request leaves the machine — so
+        // allowing it is privacy-safe; every remote http(s) resource stays blocked.
+        // `internal` (not `private`) so `@testable import MMail` can compile this exact
+        // JSON through WKContentRuleListStore in a headless test (the `data:` carve-out's
+        // JSON validity is otherwise only observable at runtime in the live UI).
+        static let blockRules = """
+        [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}},\
+        {"trigger":{"url-filter":"^data:"},"action":{"type":"ignore-previous-rules"}}]
         """
 
         /// Regex-escape a string so it can be embedded literally in a
@@ -133,9 +138,14 @@ struct HTMLMessageView: NSViewRepresentable {
             // the regex needs (`\.` -> `\\.` in the JSON string literal).
             let hostPattern = regexEscaped(host).replacingOccurrences(of: "\\", with: "\\\\")
             let urlFilter = "^https://\(hostPattern)/"
+            // Same `data:` carve-out as `blockRules` (T011): un-block self-contained
+            // `data:` URIs (inline CID images) so they render in the proxy path too,
+            // while every non-proxy remote http(s) resource stays blocked. Privacy-safe
+            // — a `data:` URI makes no network request.
             return """
             [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}},\
-            {"trigger":{"url-filter":"\(urlFilter)"},"action":{"type":"ignore-previous-rules"}}]
+            {"trigger":{"url-filter":"\(urlFilter)"},"action":{"type":"ignore-previous-rules"}},\
+            {"trigger":{"url-filter":"^data:"},"action":{"type":"ignore-previous-rules"}}]
             """
         }
 

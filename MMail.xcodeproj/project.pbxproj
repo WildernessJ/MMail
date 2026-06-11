@@ -15,6 +15,7 @@
 		176319134E244076A6D32A6D /* ForAllTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0649229767316E20454C74A6 /* ForAllTests.swift */; };
 		17BB225EB35F1847D5C57B7E /* AddAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3415F5DC40ADAD49F09977A1 /* AddAccountView.swift */; };
 		19285F804F6884A30716E15E /* SeededRNGTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3213D3CC90190DC70BF895C /* SeededRNGTests.swift */; };
+		1AA0F64652F74C64A77804D5 /* CIDInlining.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E35FB9545ED62EE0922391 /* CIDInlining.swift */; };
 		1DA1A0882FD4131DB44249F2 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98D419268CA68F3EEBD01D83 /* Keychain.swift */; };
 		1DFC3F2DAF0EC366C0C09CA0 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = F42875495E2357EB4CCAA6AE /* NIOCore */; };
 		249EC9BE7F8321C47676CAA9 /* IMAPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314CDDF0121DFE61BA2FDF2E /* IMAPService.swift */; };
@@ -69,6 +70,7 @@
 		C1D940DE4037688B2084641F /* ProxySecretStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BF51D01F34777AB4792E72F /* ProxySecretStoreTests.swift */; };
 		C2E07547425A80AD42EAD413 /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9FE22A6CEE48BF1C394B2A /* CommandPaletteView.swift */; };
 		CC5ED000189ABA9C357BED33 /* PeopleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9E1FBE4FCEF6BB8A40762A /* PeopleView.swift */; };
+		CC65D37A489EE01B6F692FCB /* CIDInliningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E69C843AF3C2249C405EF07D /* CIDInliningTests.swift */; };
 		CC7DF28D10C2AA0AD23C18C8 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68E9DF829AD4EBED12B2F2E /* Theme.swift */; };
 		D15A8EBFB7A1D4BEDCD62E47 /* OutboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E054A4FFB969B6585FDC7C /* OutboxView.swift */; };
 		D44F0647EB8CD4A4165C6230 /* ForAll.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA1B25C3AD475F5E76149ED /* ForAll.swift */; };
@@ -158,11 +160,13 @@
 		B7E054A4FFB969B6585FDC7C /* OutboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxView.swift; sourceTree = "<group>"; };
 		BCF837DA11612E96523D7324 /* AdvancedSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSearchView.swift; sourceTree = "<group>"; };
 		D55AA6D4C8349A644BFB08F5 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
+		D6E35FB9545ED62EE0922391 /* CIDInlining.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CIDInlining.swift; sourceTree = "<group>"; };
 		DC94B4B5F477D3AAE2C700E5 /* ReaderImageLoadStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderImageLoadStateTests.swift; sourceTree = "<group>"; };
 		DCE3F1CD7EC6E7E41F63893D /* ProxySecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxySecretStore.swift; sourceTree = "<group>"; };
 		E2CF45DFB8B78E1224BD9514 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		E4B1166FDCCB29E8F5298BAA /* ImageProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageProxy.swift; sourceTree = "<group>"; };
 		E68E9DF829AD4EBED12B2F2E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		E69C843AF3C2249C405EF07D /* CIDInliningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CIDInliningTests.swift; sourceTree = "<group>"; };
 		E7292F99D4DC4A62C6721CE1 /* MMailTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MMailTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9A5E7C83395FC5B1CB3CE04 /* ForAllSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForAllSmokeTests.swift; sourceTree = "<group>"; };
 		EA2148554E9EF016B1B83B1F /* IMAPSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPSession.swift; sourceTree = "<group>"; };
@@ -308,6 +312,7 @@
 				40876145EE0BFD2170EE60EF /* PropertyTesting */,
 				3556BDB70B56741A0277850B /* AvatarSpecTests.swift */,
 				543FB0E1666E91A2FAFB1259 /* BodyCompletenessTests.swift */,
+				E69C843AF3C2249C405EF07D /* CIDInliningTests.swift */,
 				7DCED4891A853A78BC84FFCA /* ClassifyTests.swift */,
 				A473B68689B03F79C3F1B514 /* DisplayFormattingTests.swift */,
 				A6A4163DC7A8992EBF0012B9 /* DockBadgeTests.swift */,
@@ -328,6 +333,7 @@
 			children = (
 				6E1C2A6396539CA03A1C5FDF /* AvatarStore.swift */,
 				1081BC96750597241E4AB372 /* BodyCompleteness.swift */,
+				D6E35FB9545ED62EE0922391 /* CIDInlining.swift */,
 				E4B1166FDCCB29E8F5298BAA /* ImageProxy.swift */,
 				314CDDF0121DFE61BA2FDF2E /* IMAPService.swift */,
 				EA2148554E9EF016B1B83B1F /* IMAPSession.swift */,
@@ -464,6 +470,7 @@
 			files = (
 				2D95098881FED17987917AE5 /* AvatarSpecTests.swift in Sources */,
 				0A138B861E4C31CA30F57321 /* BodyCompletenessTests.swift in Sources */,
+				CC65D37A489EE01B6F692FCB /* CIDInliningTests.swift in Sources */,
 				5354C7D4409165444226CE30 /* ClassifyTests.swift in Sources */,
 				B895E35C6C37202A764D5638 /* CleanLinkProperties.swift in Sources */,
 				5B362B36FF020226FF9BBBFB /* DedupByIdProperties.swift in Sources */,
@@ -501,6 +508,7 @@
 				8AF18DAF53BE297222F01B80 /* AvatarSpec.swift in Sources */,
 				664A0FAAB588C39E8CDC31C1 /* AvatarStore.swift in Sources */,
 				28B813ABA7EE379BA20F8263 /* BodyCompleteness.swift in Sources */,
+				1AA0F64652F74C64A77804D5 /* CIDInlining.swift in Sources */,
 				C2E07547425A80AD42EAD413 /* CommandPaletteView.swift in Sources */,
 				70289C8E18AFF23A0FF1E46B /* ComposeView.swift in Sources */,
 				63C8FFCEDFECD21D7D7C351D /* EmailListView.swift in Sources */,
