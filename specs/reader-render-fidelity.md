@@ -316,6 +316,36 @@ asserted as settled in advance.
 - **THEN** it is NOT blocked (verified against WKWebView; a `data:`-scheme allow carve-out
   is added if the `.*` filter would otherwise catch it)
 
+### Requirement: Inline CID images render for already-cached messages
+
+The render-time CID→bytes map is session-memory only (never serialized to `MailCache`, per
+the no-bloat decision) and is built ONLY when a body is fetched and parsed. A message whose
+complete body is already cached (`bodyLoaded = true`, `bodyComplete = true` loaded from disk
+on relaunch) is otherwise never re-fetched — prefetch skips `bodyLoaded` messages and the
+open path early-returns when the body is already complete — so its inline map would be empty,
+the `cid:` image would render as a broken box, and the inline part would linger as an
+attachment. The implementation SHALL detect this and re-derive the map: when a selected
+message's body references a `cid:` image AND no inline-parts entry exists for it this session,
+the open path SHALL fetch + parse the message once to rebuild the map (and apply the
+second-pass attachment filter). This MUST NOT loop: once the open-path apply records an
+inline-parts entry for the message — even an empty one (a dangling `cid:` with no matching
+part) — subsequent opens SHALL NOT re-fetch (key-absence guard, not emptiness).
+
+#### Scenario: Cached CID-image message renders inline after relaunch
+
+- **GIVEN** a message with an inline `cid:` image whose complete body is already cached
+- **AND** the app has just relaunched (the session inline map is empty)
+- **WHEN** the message is opened
+- **THEN** the message is re-fetched once, the inline image renders, and the inline part is
+  dropped from the attachment list
+
+#### Scenario: No re-fetch loop for a dangling cid
+
+- **GIVEN** a message that references a `cid:` with no matching embedded part
+- **WHEN** it is opened and re-fetched once
+- **THEN** an (empty) inline-parts entry is recorded for it
+- **AND** subsequent opens do NOT re-fetch
+
 ## Success Criteria
 
 - **SC-001**: In the dark app theme, opening a real message with a white-background
@@ -351,6 +381,10 @@ asserted as settled in advance.
   existing `MailCache` JSON still loads (the inline-image filtering is applied at promotion,
   leaving `AttachmentMeta` unchanged) — confirmed by a decode test over a pre-feature cache
   fixture or by inspection that no required key was added.
+- **SC-010**: After an app relaunch (empty session inline map), opening a previously-cached
+  CID-image message renders the logo inline AND drops it from the attachment list — confirmed
+  by live verification against the real ETHS signature email (2026-06-11). A dangling-`cid:`
+  message does NOT trigger a re-fetch loop (key-absence guard + unit tests).
 
 ## Non-Goals
 
