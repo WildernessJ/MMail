@@ -1562,6 +1562,47 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Account identity editing
+    // All mutations run synchronously on the main thread (called from SwiftUI
+    // actions); NSImage never crosses a Task/actor boundary.
+
+    /// Rebuild EXACTLY the one `accounts` entry whose id matches, from its config.
+    private func rebuildAccount(_ id: String) {
+        guard let cfg = config(for: id),
+              let i = accounts.firstIndex(where: { $0.id == id }) else { return }
+        accounts[i] = AppModel.uiAccount(for: cfg)
+    }
+
+    func renameAccount(_ id: String, to newName: String) {
+        guard let i = realConfigs.firstIndex(where: { $0.id == id }) else { return }
+        realConfigs[i].displayName = newName.trimmingCharacters(in: .whitespaces)
+        rebuildAccount(id)
+        persistRealAccounts()
+    }
+
+    func setAccountColor(_ id: String, hex: String) {
+        guard let i = realConfigs.firstIndex(where: { $0.id == id }) else { return }
+        realConfigs[i].avatarColorHex = hex
+        rebuildAccount(id)
+        persistRealAccounts()
+    }
+
+    func setAccountImage(_ id: String, _ image: NSImage) {
+        guard let i = realConfigs.firstIndex(where: { $0.id == id }) else { return }
+        AvatarStore.default.save(image, for: id)
+        realConfigs[i].hasCustomAvatar = true
+        rebuildAccount(id)
+        persistRealAccounts()
+    }
+
+    func removeAccountImage(_ id: String) {
+        guard let i = realConfigs.firstIndex(where: { $0.id == id }) else { return }
+        AvatarStore.default.remove(for: id)
+        realConfigs[i].hasCustomAvatar = false
+        rebuildAccount(id)
+        persistRealAccounts()
+    }
+
     func addRealAccount(config: MailAccountConfig, imapPassword: String, smtpPassword: String) {
         Keychain.setPassword(imapPassword, account: config.imapPasswordKey)
         Keychain.setPassword(smtpPassword, account: config.smtpPasswordKey)
