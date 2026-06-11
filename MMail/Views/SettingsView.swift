@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
@@ -497,7 +498,16 @@ struct AccountEditRow: View {
         .padding(12)
     }
 
-    private func chooseImage() {}
+    private func chooseImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let img = NSImage(contentsOf: url) else { return }
+        model.setAccountImage(cfg.id, img)
+    }
 }
 
 struct MMToggle: View {
