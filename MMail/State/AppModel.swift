@@ -2698,12 +2698,6 @@ final class AppModel: ObservableObject {
             await MainActor.run {
                 for (uid, p) in parsedByUID {
                     guard let id = uidToId[uid] else { continue }
-                    // Populate the render-time CID-bytes map UNCONDITIONALLY (before the
-                    // bodyComplete guard): a message that is complete on first prefetch
-                    // early-returns in `loadBodyIfNeeded`, so the open path never re-fetches
-                    // and never re-populates the map — the prefetch path must cover it.
-                    // Render-time-only, keyed by id; overwriting with the same parse is benign.
-                    if !p.inlineParts.isEmpty { self.inlinePartsByEmailID[id] = p.inlineParts }
                     // Skip the BODY write for any message already fully loaded: if the
                     // user opened a >64 KB message during this prefetch's network window,
                     // the open path set the complete body + bodyComplete=true. Writing
@@ -2711,6 +2705,19 @@ final class AppModel: ObservableObject {
                     // complete body and reintroduce the truncation bug.
                     guard let i = self.emails.firstIndex(where: { $0.id == id }),
                           self.emails[i].bodyComplete != true else { continue }
+                    // Populate the render-time CID-bytes map UNDER THE SAME `bodyComplete`
+                    // guard as the body write. The guard reads the EXISTING (pre-write)
+                    // bodyComplete state, so this reconciles two requirements:
+                    //   • FRESH prefetch — bodyComplete is still nil/false, so we pass the
+                    //     guard and DO populate the map (then set bodyComplete below). A
+                    //     prefetched-and-complete message early-returns in `loadBodyIfNeeded`,
+                    //     so the open path never re-populates it — this write is its only cover.
+                    //   • BELATED prefetch (network finished after the user already opened the
+                    //     message) — bodyComplete is already true, so we SKIP. Otherwise this
+                    //     truncated-parse (≤64 KB-capped) map would clobber the GOOD map the
+                    //     uncapped open path wrote, breaking inline images beyond 64 KB.
+                    // Render-time-only, keyed by id; overwriting with the same parse is benign.
+                    if !p.inlineParts.isEmpty { self.inlinePartsByEmailID[id] = p.inlineParts }
                     self.emails[i].body = p.text
                     self.emails[i].preview = String(p.text.replacingOccurrences(of: "\n", with: " ").prefix(140))
                     self.emails[i].bodyLoaded = true
@@ -2776,6 +2783,11 @@ final class AppModel: ObservableObject {
 
     /// Referenced CID→`InlinePart` bytes map for `email.id`, for the render-time
     /// `data:` rewrite in `ReaderView`. Empty when the message has no inline CID parts.
+    /// `@MainActor`: `inlinePartsByEmailID` is written only inside `MainActor.run { }`
+    /// blocks; this read accessor MUST stay on the main actor too, or a future off-main
+    /// caller would be a latent data race under Swift 6 (`AppModel` is intentionally
+    /// not `@MainActor`). No off-main call site exists today (no view consumer yet).
+    @MainActor
     func inlineParts(for emailID: String) -> [String: InlinePart] {
         inlinePartsByEmailID[emailID] ?? [:]
     }

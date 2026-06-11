@@ -58,7 +58,9 @@ enum ReaderHTML {
         // `.` and `@` in `image001.png@host`) are literal. Token is case-SENSITIVE
         // (RFC 2392); only the `cid:` scheme is case-insensitive.
         let escaped = NSRegularExpression.escapedPattern(for: cidToken)
-        let pattern = "(?i:cid:)\(escaped)[\"']"
+        // Tolerate optional whitespace between the token and the closing quote:
+        // `src="cid:logo@acme "` (RFC-legal trailing space) must still match.
+        let pattern = "(?i:cid:)\(escaped)\\s*[\"']"
         guard let re = try? NSRegularExpression(pattern: pattern, options: []) else { return false }
         let range = NSRange(html.startIndex..., in: html)
         return re.firstMatch(in: html, options: [], range: range) != nil
@@ -111,7 +113,10 @@ enum ReaderHTML {
             // Replace `cid:TOKEN` exactly (case-sensitive token, case-insensitive scheme),
             // anchored to a following quote so `cid:logo` does not match `cid:logobar`.
             let escaped = NSRegularExpression.escapedPattern(for: token)
-            let pattern = "(?i:cid:)\(escaped)(?=[\"'])"
+            // Consume any optional whitespace between the token and the closing quote so
+            // `src="cid:logo@acme "` (RFC-legal trailing space) is rewritten, not skipped.
+            // Kept consistent with the `isReferenced` predicate. The quote stays via lookahead.
+            let pattern = "(?i:cid:)\(escaped)\\s*(?=[\"'])"
             guard let re = try? NSRegularExpression(pattern: pattern, options: []) else { continue }
             let range = NSRange(out.startIndex..., in: out)
             // Escape `$`/`\` in the replacement so the base64 string is inserted literally.

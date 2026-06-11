@@ -77,6 +77,12 @@ import Foundation
         #expect(ReaderHTML.isReferenced(cidToken: "", inHTML: "<img src=\"cid:\">") == false)
     }
 
+    @Test func trailingWhitespaceBeforeQuoteStillReferenced() {
+        // RFC-legal trailing whitespace between the token and the closing quote.
+        let html = "<img src=\"cid:logo@acme \">"
+        #expect(ReaderHTML.isReferenced(cidToken: "logo@acme", inHTML: html) == true)
+    }
+
     // MARK: - B3 rewrite: inlineCIDImages (SC-005b)
 
     private func pngPart(_ bytes: [UInt8]) -> InlinePart {
@@ -115,6 +121,17 @@ import Foundation
     @Test func emptyPartsMapIsIdentity() {
         let html = "<img src=\"cid:logo@acme\">"
         #expect(ReaderHTML.inlineCIDImages(inHTML: html, parts: [:]) == html)
+    }
+
+    @Test func trailingWhitespaceBeforeQuoteIsRewritten() {
+        // RFC-legal trailing whitespace between the token and the closing quote must
+        // still rewrite (the whitespace is consumed; the closing quote is preserved).
+        let html = "<img src=\"cid:logo@acme \">"
+        let part = pngPart([0x89, 0x50, 0x4E, 0x47])
+        let out = ReaderHTML.inlineCIDImages(inHTML: html, parts: ["logo@acme": part])
+        #expect(out.contains("data:image/png;base64,\(part.base64)"))
+        #expect(!out.contains("cid:logo@acme"))
+        #expect(out.contains("\">"))  // closing quote preserved
     }
 
     // MARK: - MIME Content-ID capture (T005, additive — in-memory only)
