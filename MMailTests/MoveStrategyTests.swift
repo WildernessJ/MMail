@@ -79,7 +79,15 @@ import Testing
         }
         let first = items.sorted(by: cmp)
         let second = items.sorted(by: cmp)
-        #expect(first.map { $0.2 } == second.map { $0.2 })
+        // Correct order: date desc (t2 > t1 > t0 > nil/distantPast), then uid
+        // desc within equal dates, then id asc. This exercises cross-account
+        // interleave, nil-date sink, and both tiebreaks at once.
+        let expected = ["m#INBOX#7800",   // t2
+                        "g#INBOX#98000", "m#INBOX#7801",     // t1, uid desc
+                        "g#INBOX#130000", "m#INBOX#7799",    // t0, uid desc
+                        "g#INBOX#131000", "m#INBOX#7500"]    // nil → distantPast, uid desc
+        #expect(first.map { $0.2 } == expected)
+        #expect(first.map { $0.2 } == second.map { $0.2 })  // deterministic / stable
     }
 }
 
