@@ -1722,13 +1722,25 @@ final class AppModel: ObservableObject {
         do {
             // Prefer incremental (UID > maxLoaded) when we have a window.
             if let box, !loaded.isEmpty, let maxUID = loaded.compactMap({ $0.uid }).max() {
-                let oldestUID = loaded.compactMap({ $0.uid }).min() ?? 0
+                let loadedUIDs = loaded.compactMap { $0.uid }
+                let oldestUID = loadedUIDs.min() ?? 0
                 let sync = try await withTimeout(20) {
                     try await session.syncFolder(mailbox: box, afterUID: maxUID,
                                                  oldestUID: oldestUID, newLimit: 100)
                 }
                 await MainActor.run {
                     self.mergeIncremental(sync, accountId: accountId, folderId: folderId)
+                }
+                // Decoupled, best-effort backfill of holes inside the loaded
+                // window. The base merge above is unconditional and already
+                // committed; backfill failures never affect it. Uses the
+                // pre-base-merge `loadedUIDs` — hole UIDs are below afterUID and
+                // new-arrival UIDs above it, so the sets never overlap.
+                let bf = await fetchWindowBackfill(session: session, box: box, loadedUIDs: loadedUIDs, sync: sync)
+                if !bf.isEmpty {
+                    await MainActor.run {
+                        self.insertBackfill(bf, accountId: accountId, folderId: folderId)
+                    }
                 }
                 return
             }
@@ -2143,6 +2155,17 @@ final class AppModel: ObservableObject {
                         self.mergeIncremental(sync, accountId: accountId, folderId: folderId)
                         self.loadingAccounts.remove(accountId)
                     }
+                    // Decoupled, best-effort backfill of holes inside the loaded
+                    // window. The base merge above is unconditional and already
+                    // committed; backfill failures never affect it. Uses the
+                    // pre-base-merge `uids` — hole UIDs are below afterUID and
+                    // new-arrival UIDs above it, so the sets never overlap.
+                    let bf = await self.fetchWindowBackfill(session: session, box: box, loadedUIDs: uids, sync: sync)
+                    if !bf.isEmpty {
+                        await MainActor.run {
+                            self.insertBackfill(bf, accountId: accountId, folderId: folderId)
+                        }
+                    }
                     return
                 }
 
@@ -2455,8 +2478,14 @@ final class AppModel: ObservableObject {
             registerLabels(from: mapped)
         }
         if folderId == "inbox" {
-            let maxUID = emails.filter { $0.account == accountId && $0.folder == folderId }.compactMap { $0.uid }.max() ?? 0
-            lastSeenUID[accountId] = max(lastSeenUID[accountId] ?? 0, maxUID)
+            // Scope the new-mail high-water to GENUINE new arrivals only (the
+            // UIDs fetched above afterUID), never `max(all inbox UIDs)`. A
+            // backfilled historical UID must never advance lastSeenUID — even a
+            // high UID from a server-side reimport — or it would suppress a
+            // future real arrival's notification.
+            lastSeenUID[accountId] = AppModel.newMailHighWater(
+                current: lastSeenUID[accountId] ?? 0,
+                newArrivalUIDs: sync.newMessages.map { $0.uid })
         }
         autoTrashBlocked(accountId: accountId, folderId: folderId)
         applyRules(accountId: accountId, folderId: folderId)
@@ -2469,6 +2498,47 @@ final class AppModel: ObservableObject {
             }
         }
         prefetchBodies(accountId, folderId)
+    }
+
+    /// Merge backfilled (historical) messages silently. Unlike
+    /// `mergeIncremental`, this does the bare minimum — dedup by UID and id,
+    /// append, register labels, persist — and DELIBERATELY skips every tail
+    /// effect that treats a row as a new arrival: NO notification, NO
+    /// `lastSeenUID` advance, NO `autoTrashBlocked`, NO `applyRules`, NO
+    /// `selectedId` reset, NO `prefetchBodies`. Backfilled rows are old mail
+    /// the user already received; they fill holes inside the loaded window and
+    /// stay put (matching `mergeRealFolder`'s historical-mail convention). The
+    /// Dock unread badge updates automatically via the `emails` `didSet`.
+    private func insertBackfill(_ msgs: [IMAPMessage], accountId: String, folderId: String) {
+        guard !msgs.isEmpty else { return }
+        let existingUIDs = Set(emails.filter { $0.account == accountId && $0.folder == folderId }.compactMap { $0.uid })
+        let existingIDs = Set(emails.map { $0.id })
+        var seenUIDs = Set<UInt32>()
+        let survivors = msgs
+            .filter { m in
+                guard !existingUIDs.contains(m.uid) else { return false }
+                return seenUIDs.insert(m.uid).inserted
+            }
+            .map { AppModel.makeEmail($0, accountId: accountId, folder: folderId) }
+            .filter { !existingIDs.contains($0.id) }
+        guard !survivors.isEmpty else { return }
+        emails.append(contentsOf: survivors)
+        registerLabels(from: survivors)
+        MailCache.save(emails.filter { $0.account == accountId && $0.folder == folderId }, account: accountId, folder: folderId)
+    }
+
+    /// Best-effort backfill fetch, decoupled from the base sync. Computes the
+    /// missing UID set from the FLAGS response (`sync.flags.keys` = the
+    /// server's present UIDs over the covered range) and fetches those
+    /// envelopes. ANY failure or timeout returns `[]` so the base sync is never
+    /// affected — the hole simply heals on a later poll. Skips entirely when no
+    /// FLAGS range was covered (no loaded window).
+    private func fetchWindowBackfill(session: IMAPSession, box: String, loadedUIDs: [UInt32], sync: IMAPFolderSync) async -> [IMAPMessage] {
+        guard let range = sync.flagRange else { return [] }
+        let missing = AppModel.backfillWindowUIDs(
+            loaded: loadedUIDs, present: Set(sync.flags.keys), range: range, limit: Self.backfillCap)
+        guard !missing.isEmpty else { return [] }
+        return (try? await withTimeout(15) { try await session.fetchEnvelopes(mailbox: box, uids: missing) }) ?? []
     }
 
     /// Warm the cache for the messages most likely to be opened: the newest few
