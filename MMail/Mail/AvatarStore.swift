@@ -19,13 +19,62 @@ struct AvatarStore {
         directory.appendingPathComponent("\(id).png")
     }
 
+    /// Center-crop the source to a square, downscale to at most 256px, PNG-encode,
+    /// and write to `<id>.png`. Runs synchronously on the main thread (lockFocus is
+    /// main-thread-only). Returns false (logged) on any nil/throw; never crashes.
     @discardableResult
-    func save(_ image: NSImage, for id: String) -> Bool { false }
+    func save(_ image: NSImage, for id: String) -> Bool {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            Self.log.error("avatar: no CGImage")
+            return false
+        }
+        let rect = AvatarImage.squareCropRect(sourceWidth: CGFloat(cg.width), sourceHeight: CGFloat(cg.height))
+        guard let cropped = cg.cropping(to: rect) else { return false }
 
-    func load(for id: String) -> NSImage? { nil }
+        // Downscale (never upscale): the crop is square so width == height.
+        let targetEdge = min(cropped.width, 256)
+        let out = NSImage(size: NSSize(width: targetEdge, height: targetEdge))
+        out.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        NSImage(cgImage: cropped, size: .zero).draw(
+            in: NSRect(x: 0, y: 0, width: targetEdge, height: targetEdge),
+            from: .zero, operation: .copy, fraction: 1)
+        out.unlockFocus()
 
+        guard let tiff = out.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.representation(using: .png, properties: [:]) else { return false }
+        do {
+            try data.write(to: fileURL(for: id))
+            return true
+        } catch {
+            Self.log.error("avatar: write failed \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    /// Read the file's bytes fresh and build a NEW `NSImage` on every call (no
+    /// name/URL cache), so a replaced file always loads its new contents.
+    func load(for id: String) -> NSImage? {
+        guard let data = try? Data(contentsOf: fileURL(for: id)) else { return nil }
+        return NSImage(data: data)
+    }
+
+    /// Delete the stored file. Missing-file is not an error (the post-condition
+    /// "no file at <id>.png" already holds), so it returns true.
     @discardableResult
-    func remove(for id: String) -> Bool { false }
+    func remove(for id: String) -> Bool {
+        let url = fileURL(for: id)
+        guard FileManager.default.fileExists(atPath: url.path) else { return true }
+        do {
+            try FileManager.default.removeItem(at: url)
+            return true
+        } catch {
+            Self.log.error("avatar: remove failed \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
 
     // MARK: - Default instance
 
