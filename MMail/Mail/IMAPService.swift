@@ -346,6 +346,19 @@ final class IMAPService {
         return IMAPFolderSync(newMessages: newMessages, flags: flags, flagRange: flagRange)
     }
 
+    /// Fetch full envelopes for an explicit list of UIDs. Used by the
+    /// incremental backfill pass to re-request messages that are present on the
+    /// server inside the loaded window but missing locally. Returns the
+    /// envelopes newest-first (by date); an empty `uids` list is a no-op.
+    func fetchEnvelopes(mailbox name: String, uids: [UInt32]) async throws -> [IMAPMessage] {
+        guard !uids.isEmpty else { return [] }
+        _ = try await ensureSelected(name)
+        let ranges = uids.map { MessageIdentifierRange<UID>(UID(rawValue: $0)...UID(rawValue: $0)) }
+        guard let set = MessageIdentifierSetNonEmpty(set: MessageIdentifierSet(ranges)) else { return [] }
+        let responses = try await send(.uidFetch(.set(set), [.uid, .flags, .envelope, .internalDate], []))
+        return parseMessages(responses).sorted { $0.date > $1.date }
+    }
+
     /// Fetch envelopes for every UID delivered on or after `date`. Far cheaper
     /// than `fetchRecent` for a weekly window — the server filters by
     /// INTERNALDATE and we FETCH only the matching subset.

@@ -66,6 +66,9 @@ actor IMAPSession {
     func syncFolder(mailbox: String, afterUID: UInt32, oldestUID: UInt32, newLimit: Int) async throws -> IMAPFolderSync {
         try await run { try await $0.syncFolder(mailbox: mailbox, afterUID: afterUID, oldestUID: oldestUID, newLimit: newLimit) }
     }
+    func fetchEnvelopes(mailbox: String, uids: [UInt32]) async throws -> [IMAPMessage] {
+        try await run { try await $0.fetchEnvelopes(mailbox: mailbox, uids: uids) }
+    }
     func store(mailbox: String, uid: UInt32, _ kind: MailFlagKind, add: Bool) async throws {
         try await run { try await $0.store(mailbox: mailbox, uid: uid, kind, add: add) }
     }

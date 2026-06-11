@@ -80,3 +80,123 @@ import Testing
         #expect(expunged == [10, 11, 12])
     }
 }
+
+/// Unit tests for the pure `AppModel.backfillWindowUIDs(loaded:present:range:limit:)`
+/// seam: the inverse of `expungedWindowUIDs`. It decides which server-present
+/// UIDs inside the loaded window are missing locally and must be re-fetched
+/// (the holes), newest-first and capped per cycle. Live merge wiring in
+/// `insertBackfill`/`fetchWindowBackfill` is manual-exploration; this suite
+/// locks the pure selection policy. Backfill feature (backlog #1 follow-up).
+@Suite struct BackfillReconciliation {
+
+    /// The core case: a hole inside the window is selected, present − loaded,
+    /// newest-first; no loaded UID appears in the result.
+    @Test func holeInsideWindowSelectedNewestFirst() {
+        let backfill = AppModel.backfillWindowUIDs(
+            loaded: [7866, 7830, 7524],
+            present: [7524, 7600, 7700, 7830, 7866],
+            range: 7524...7866, limit: 10)
+        #expect(backfill == [7700, 7600])
+        let loaded: Set<UInt32> = [7866, 7830, 7524]
+        #expect(Set(backfill).isDisjoint(with: loaded))
+    }
+
+    /// The cap truncates the result to the newest missing UIDs.
+    @Test func capTruncatesToNewestMissing() {
+        let backfill = AppModel.backfillWindowUIDs(
+            loaded: [7866],
+            present: [7000, 7100, 7200, 7300, 7866],
+            range: 7000...7866, limit: 2)
+        #expect(backfill == [7300, 7200])
+        #expect(backfill.count == 2)
+    }
+
+    /// Nothing missing → empty result (idempotent at the seam).
+    @Test func nothingMissingIsEmpty() {
+        let backfill = AppModel.backfillWindowUIDs(
+            loaded: [7866, 7830, 7524],
+            present: [7524, 7830, 7866],
+            range: 7524...7866, limit: 10)
+        #expect(backfill.isEmpty)
+    }
+
+    /// A present UID above the range top is ignored (it belongs to the
+    /// new-message path, not backfill); an in-range hole is still returned.
+    /// NOTE: the spec/plan's literal data (`present:[7400, 7900]`, `range:
+    /// 7524...7866` ⇒ `[7400]`) is internally inconsistent — `7400 < 7524` is
+    /// BELOW the range bottom, so `range.contains(7400)` is false and the
+    /// plan's own impl body excludes it; that also violates the spec invariant
+    /// "backfill MUST NEVER fetch UIDs older than oldest loaded" (oldest loaded
+    /// here is 7866). The in-range present UID is moved to `7600` (clearly
+    /// inside `7524...7866`) so the case actually exercises its stated intent:
+    /// above-range `7900` ignored, in-range hole `7600` backfilled.
+    @Test func presentUIDAboveRangeIgnored() {
+        let backfill = AppModel.backfillWindowUIDs(
+            loaded: [7866],
+            present: [7600, 7900],
+            range: 7524...7866, limit: 10)
+        #expect(backfill == [7600])
+        #expect(!backfill.contains(7900))
+    }
+
+    /// A hole entirely below `oldestLoaded` is not backfilled — that is the job
+    /// of load-older / full reload, not backfill.
+    @Test func holeBelowWindowNotSelected() {
+        let backfill = AppModel.backfillWindowUIDs(
+            loaded: [7800, 7866],
+            present: [7500, 7800, 7866],
+            range: 7800...7866, limit: 10)
+        #expect(backfill.isEmpty)
+    }
+
+    /// Backfill (present − loaded) and expunge (loaded − present) over the same
+    /// window are disjoint by construction: a UID is never both fetched and
+    /// dropped in the same cycle. `7524` is expunged (loaded, gone on server),
+    /// `7600` is backfilled (server-present, missing locally).
+    @Test func backfillAndExpungeAreDisjoint() {
+        let loaded: [UInt32] = [7524, 7700, 7866]
+        let present: Set<UInt32> = [7600, 7700, 7866]
+        let range: ClosedRange<UInt32> = 7524...7866
+        let backfill = AppModel.backfillWindowUIDs(
+            loaded: loaded, present: present, range: range, limit: 10)
+        let expunged = AppModel.expungedWindowUIDs(
+            loaded: loaded, present: present, range: range)
+        #expect(backfill == [7600])
+        #expect(expunged == [7524])
+        #expect(Set(backfill).isDisjoint(with: expunged))
+    }
+
+    // MARK: - newMailHighWater (high-water scoped to new arrivals)
+
+    /// A cycle that backfills historical mail (no new arrivals) does NOT
+    /// advance the high-water mark — the high-water is computed from the
+    /// new-arrival channel only, which is empty here.
+    @Test func backfillDoesNotAdvanceHighWater() {
+        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: []) == 7866)
+    }
+
+    /// A genuine new arrival above the current mark advances the high-water.
+    @Test func newArrivalAdvancesHighWater() {
+        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: [7900]) == 7900)
+    }
+
+    /// New arrivals strictly below the current mark never move it (max
+    /// semantics): only a UID above current advances. This is the property that
+    /// keeps a backfilled (always-below-afterUID) UID from advancing the mark —
+    /// even if it were ever mis-routed into the new-arrival list.
+    @Test func newArrivalsBelowCurrentDoNotAdvance() {
+        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: [7000, 7100]) == 7866)
+    }
+
+    /// Steady-state idempotence at the seam level: when the cache already
+    /// equals the server window and no new mail arrived, backfill adds nothing
+    /// and the high-water does not move.
+    @Test func steadyStateCycleIsNoOp() {
+        let backfill = AppModel.backfillWindowUIDs(
+            loaded: [7700, 7830, 7866],
+            present: [7700, 7830, 7866],
+            range: 7700...7866, limit: 200)
+        #expect(backfill.isEmpty)
+        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: []) == 7866)
+    }
+}
