@@ -9,7 +9,11 @@ struct AvatarSpec {
     let usesImage: Bool
 
     static func resolve(displayName: String, email: String, customColorHex: String?, hasImage: Bool) -> AvatarSpec {
-        AvatarSpec(initials: "", gradientHex: [], usesImage: false)
+        let trimmedName = displayName.trimmingCharacters(in: .whitespaces)
+        let source = trimmedName.isEmpty ? email : trimmedName
+        let initials = String(source.prefix(1)).uppercased()
+        let gradientHex = customColorHex.map { [$0, $0] } ?? [Sender.stableColorHex(for: email), "1E2DB0"]
+        return AvatarSpec(initials: initials, gradientHex: gradientHex, usesImage: hasImage)
     }
 }
 
@@ -19,6 +23,9 @@ enum AvatarImage {
     /// Centered square crop rectangle in TOP-LEFT origin image coordinates
     /// (the convention of `CGImage.cropping(to:)`).
     static func squareCropRect(sourceWidth: CGFloat, sourceHeight: CGFloat) -> CGRect {
-        .zero
+        let edge = min(sourceWidth, sourceHeight)
+        let x = (sourceWidth - edge) / 2
+        let y = (sourceHeight - edge) / 2
+        return CGRect(x: x, y: y, width: edge, height: edge)
     }
 }
