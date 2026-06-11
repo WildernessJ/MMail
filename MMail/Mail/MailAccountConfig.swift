@@ -31,6 +31,9 @@ struct MailAccountConfig: Codable, Identifiable {
     var smtpSecurity: ConnectionSecurity
     var smtpUsername: String
 
+    var avatarColorHex: String? = nil
+    var hasCustomAvatar: Bool? = nil
+
     var imapPasswordKey: String { "\(id).imap" }
     var smtpPasswordKey: String { "\(id).smtp" }
 
