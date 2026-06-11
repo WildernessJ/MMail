@@ -37,6 +37,28 @@ import Foundation
         #expect(spec.gradientHex == ["E5484D", "E5484D"])
     }
 
+    // MARK: - AllInboxSpec.resolve
+
+    @Test func allInboxNamedUsesShortTextAndFullLabel() {
+        let spec = AllInboxSpec.resolve(name: "Everything", hasImage: false)
+        #expect(spec.tileText == "Eve")
+        #expect(spec.label == "Everything")
+        #expect(spec.usesImage == false)
+    }
+
+    @Test func allInboxBlankNameFallsBackToDefaults() {
+        let spec = AllInboxSpec.resolve(name: "   ", hasImage: false)
+        #expect(spec.tileText == "All")
+        #expect(spec.label == "All inboxes")
+    }
+
+    @Test func allInboxImageFlagPassesThroughWithText() {
+        let spec = AllInboxSpec.resolve(name: "Hi", hasImage: true)
+        #expect(spec.tileText == "Hi")
+        #expect(spec.label == "Hi")
+        #expect(spec.usesImage == true)
+    }
+
     // MARK: - AvatarImage.squareCropRect
 
     @Test func squareCropOfWideImage() {

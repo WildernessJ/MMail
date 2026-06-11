@@ -17,6 +17,22 @@ struct AvatarSpec {
     }
 }
 
+/// Pure, SwiftUI-free resolution of the unified "All" inbox tile's short text,
+/// full label, and usesImage. Unlike `AvatarSpec` (single initial), the unified
+/// tile uses up-to-3 characters of the custom name to preserve its identity.
+struct AllInboxSpec {
+    let tileText: String
+    let label: String
+    let usesImage: Bool
+
+    static func resolve(name: String, hasImage: Bool) -> AllInboxSpec {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tileText = trimmed.isEmpty ? "All" : String(trimmed.prefix(3))
+        let label = trimmed.isEmpty ? "All inboxes" : trimmed
+        return AllInboxSpec(tileText: tileText, label: label, usesImage: hasImage)
+    }
+}
+
 /// Pure helpers for avatar image geometry. `CGRect`/`CGFloat` come from CoreGraphics
 /// (re-exported by Foundation on Apple platforms) — no SwiftUI/AppKit needed here.
 enum AvatarImage {
