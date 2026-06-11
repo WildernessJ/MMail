@@ -361,20 +361,25 @@ private struct ReaderContent: View {
                     .frame(height: max(htmlHeight, 80))
                     .padding(.top, 16)
             } else {
-                // Plain-text-only body on the SAME stable white surface as the HTML path
-                // (T010): fixed dark text (ReaderHTML.bodyTextColor — the single source of
-                // truth shared with the HTML head's CSS color, so the two surfaces cannot
-                // diverge) on opaque white, decoupled from the app theme. Surrounding
-                // reader chrome stays themed.
+                // Plain-text-only body (NOT a WebView, so DarkReader can't reach it —
+                // T013, SC-008). In dark mode with "Show original" off, render light text
+                // on a dark surface consistent with the HTML dark look; otherwise keep the
+                // shipped dark-on-white surface from `reader-render-fidelity`. Both colors
+                // reuse the single sources of truth (`bodyTextColor` = the `#1A1A1A` the
+                // HTML dark path uses as its background; `darkSurfaceTextColor` = the
+                // `#e8e8e8` the HTML path emits as `darkSchemeTextColor`) — no scattered
+                // literals. Surrounding reader chrome stays themed; the HTML branch is
+                // untouched.
+                let plainDark = ReaderHTML.shouldApplyDark(dark: model.dark, showOriginal: showOriginal)
                 Text(email.body)
                     .font(.system(size: 15))
-                    .foregroundStyle(ReaderHTML.bodyTextColor)
+                    .foregroundStyle(plainDark ? ReaderHTML.darkSurfaceTextColor : ReaderHTML.bodyTextColor)
                     .lineSpacing(5)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.white)
+                    .background(plainDark ? ReaderHTML.bodyTextColor : Color.white)
                     .padding(.top, 16)
             }
 

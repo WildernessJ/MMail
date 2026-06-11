@@ -18,9 +18,20 @@ enum ReaderHTML {
     static let bodyTextColorHex = "#1A1A1A"
 
     /// SwiftUI `Color` derived from the SAME hex as `bodyTextColorHex`, for the
-    /// plain-text reader path's `.foregroundStyle` (single source of truth).
+    /// plain-text reader path's `.foregroundStyle` (single source of truth). Doubles as
+    /// the plain-text DARK SURFACE color (T013): the `#1A1A1A` source of truth that the
+    /// HTML dark path uses as its background, reused here so the two dark surfaces
+    /// cannot diverge — NOT a second hardcoded literal.
     static let bodyTextColor = Color(
         red: 0x1A / 255.0, green: 0x1A / 255.0, blue: 0x1A / 255.0
+    )
+
+    /// The light text color for the plain-text dark surface (T013, SC-008). The SAME
+    /// `#e8e8e8` value the HTML path's `darkEnableScript()` emits as `darkSchemeTextColor`,
+    /// promoted to a single `Color` constant so the plain-text and HTML dark surfaces use
+    /// one source of truth (no scattered `#e8e8e8` literals).
+    static let darkSurfaceTextColor = Color(
+        red: 0xE8 / 255.0, green: 0xE8 / 255.0, blue: 0xE8 / 255.0
     )
 
     /// Build the full wrapped reader document for `innerHTML`. Forces an opaque
