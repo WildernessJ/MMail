@@ -93,8 +93,18 @@ struct HTMLMessageView: NSViewRepresentable {
         private var generation = 0
         init(_ parent: HTMLMessageView) { self.parent = parent }
 
-        private static let blockRules = """
-        [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}}]
+        // Block every remote resource type, then `ignore-previous-rules` (allow) for
+        // `data:` URIs (T011). The `.*` url-filter matches a `data:` string too, so
+        // without this carve-out an inline CID image (rewritten to a self-contained
+        // `data:` URI at render time) would be blocked alongside genuine remotes.
+        // A `data:` URI is embedded — zero network request leaves the machine — so
+        // allowing it is privacy-safe; every remote http(s) resource stays blocked.
+        // `internal` (not `private`) so `@testable import MMail` can compile this exact
+        // JSON through WKContentRuleListStore in a headless test (the `data:` carve-out's
+        // JSON validity is otherwise only observable at runtime in the live UI).
+        static let blockRules = """
+        [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}},\
+        {"trigger":{"url-filter":"^data:"},"action":{"type":"ignore-previous-rules"}}]
         """
 
         /// Regex-escape a string so it can be embedded literally in a
@@ -128,9 +138,14 @@ struct HTMLMessageView: NSViewRepresentable {
             // the regex needs (`\.` -> `\\.` in the JSON string literal).
             let hostPattern = regexEscaped(host).replacingOccurrences(of: "\\", with: "\\\\")
             let urlFilter = "^https://\(hostPattern)/"
+            // Same `data:` carve-out as `blockRules` (T011): un-block self-contained
+            // `data:` URIs (inline CID images) so they render in the proxy path too,
+            // while every non-proxy remote http(s) resource stays blocked. Privacy-safe
+            // — a `data:` URI makes no network request.
             return """
             [{"trigger":{"url-filter":".*","resource-type":["image","media","style-sheet","font","raw","script","fetch","websocket","other"]},"action":{"type":"block"}},\
-            {"trigger":{"url-filter":"\(urlFilter)"},"action":{"type":"ignore-previous-rules"}}]
+            {"trigger":{"url-filter":"\(urlFilter)"},"action":{"type":"ignore-previous-rules"}},\
+            {"trigger":{"url-filter":"^data:"},"action":{"type":"ignore-previous-rules"}}]
             """
         }
 
