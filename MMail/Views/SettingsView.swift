@@ -420,6 +420,86 @@ struct LabelEditRow: View {
     }
 }
 
+struct AccountEditRow: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.palette) private var p
+    let cfg: MailAccountConfig
+    @State private var name = ""
+    @State private var colorOpen = false
+    @State private var imageOpen = false
+
+    private let swatchCols = Array(repeating: GridItem(.fixed(24), spacing: 8), count: 5)
+
+    var body: some View {
+        let acct = model.accountsById[cfg.id] ?? AppModel.uiAccount(for: cfg)
+        HStack(spacing: 10) {
+            GradientTile(colors: acct.gradientColors, text: acct.initials, size: 32, image: acct.avatarImage)
+
+            VStack(alignment: .leading, spacing: 2) {
+                TextField("Account name", text: $name)
+                    .textFieldStyle(.plain).font(.system(size: 13.5, weight: .medium)).foregroundStyle(p.fg1)
+                    .onSubmit { model.renameAccount(cfg.id, to: name) }
+                Text("\(cfg.email) · \(cfg.imapHost)").font(.system(size: 12)).foregroundStyle(p.fg3).lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            if cfg.hasCustomAvatar != true {
+                Button { colorOpen.toggle() } label: {
+                    Circle().fill(acct.color).frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(p.border, lineWidth: 1))
+                }
+                .buttonStyle(.plain).help("Pick avatar color")
+                .popover(isPresented: $colorOpen, arrowEdge: .bottom) { swatches }
+            }
+
+            Button { chooseImage() } label: {
+                Text("Choose image…").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg2)
+                    .padding(.horizontal, 10).frame(height: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
+            }.buttonStyle(.plain)
+
+            if cfg.hasCustomAvatar == true {
+                Button { model.removeAccountImage(cfg.id) } label: {
+                    Text("Use letters").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg2)
+                        .padding(.horizontal, 10).frame(height: 30)
+                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
+                }.buttonStyle(.plain)
+            }
+
+            Button { model.loadFolder(cfg.id, "inbox", force: true) } label: {
+                HStack(spacing: 6) { Icon(name: "refresh", size: 14); Text("Resync").font(.system(size: 12.5, weight: .medium)) }
+                    .foregroundStyle(p.fg2).padding(.horizontal, 10).frame(height: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
+            }.buttonStyle(.plain)
+
+            Button { model.removeRealAccount(cfg.id) } label: {
+                Text("Remove").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.danger)
+                    .padding(.horizontal, 10).frame(height: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.danger.opacity(0.4), lineWidth: 1))
+            }.buttonStyle(.plain)
+        }
+        .padding(.vertical, 12)
+        .onAppear { name = cfg.displayName }
+        .onChange(of: cfg.displayName) { _, v in name = v }
+    }
+
+    private var swatches: some View {
+        LazyVGrid(columns: swatchCols, spacing: 8) {
+            ForEach(AppModel.labelPalette, id: \.self) { hex in
+                Button { model.setAccountColor(cfg.id, hex: hex); colorOpen = false } label: {
+                    Circle().fill(Color(hex: hex)).frame(width: 22, height: 22)
+                        .overlay(Circle().stroke(cfg.avatarColorHex == hex ? p.fg1 : Color.clear, lineWidth: 2))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+    }
+
+    private func chooseImage() {}
+}
+
 struct MMToggle: View {
     @Environment(\.palette) private var p
     @Binding var on: Bool
