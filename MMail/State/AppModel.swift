@@ -470,14 +470,25 @@ final class AppModel: ObservableObject {
         return "to \(account?.email ?? "me")"
     }
 
-    /// Pure comparator: orders two messages newest-first by descending `uid`
-    /// (the arrival proxy the app already sorts by). To keep the order total,
-    /// deterministic, and render-stable when `uid` values are equal or absent
-    /// (a missing `uid` is treated as 0), ties break by ascending `id`.
-    static func isNewerFirst(_ a: Email, _ b: Email) -> Bool {
-        let ua = a.uid ?? 0, ub = b.uid ?? 0
+    /// Pure comparator: orders two messages newest-first by descending
+    /// `sortDate` (the real received date), falling back to descending `uid`
+    /// then ascending `id` when dates are equal or absent. A `nil` `sortDate`
+    /// is treated as `.distantPast` so the relation is total and a valid strict
+    /// weak ordering (never trapping `sort`); a missing `uid` is treated as 0.
+    /// Decomposed into a primitive-typed static so it is unit-testable without
+    /// constructing full `Email` values.
+    static func orderNewerFirst(aDate: Date?, aUID: UInt32?, aID: String,
+                                bDate: Date?, bUID: UInt32?, bID: String) -> Bool {
+        let da = aDate ?? .distantPast, db = bDate ?? .distantPast
+        if da != db { return da > db }
+        let ua = aUID ?? 0, ub = bUID ?? 0
         if ua != ub { return ua > ub }
-        return a.id < b.id
+        return aID < bID
+    }
+
+    static func isNewerFirst(_ a: Email, _ b: Email) -> Bool {
+        orderNewerFirst(aDate: a.sortDate, aUID: a.uid, aID: a.id,
+                        bDate: b.sortDate, bUID: b.uid, bID: b.id)
     }
 
     var position: Int {
@@ -2619,6 +2630,7 @@ final class AppModel: ObservableObject {
                           fromName: m.fromName, fromEmail: m.fromEmail, uid: m.uid, bodyLoaded: false)
         email.messageID = m.messageID.isEmpty ? nil : m.messageID
         email.inReplyTo = m.inReplyTo.isEmpty ? nil : m.inReplyTo
+        email.sortDate = m.date
         return email
     }
 
