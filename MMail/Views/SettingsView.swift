@@ -544,6 +544,7 @@ struct AllInboxEditRow: View {
         }
         .padding(.vertical, 12)
         .onAppear { name = model.allInboxName }
+        .onChange(of: model.allInboxName) { _, v in name = v }
     }
 
     private var swatches: some View {
