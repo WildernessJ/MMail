@@ -1,0 +1,119 @@
+import Testing
+import Foundation
+@testable import MMail
+
+/// Unit tests for the PURE reader-HTML seams in `ReaderHTML` (no WebView, no AppModel):
+///   - the white-surface wrapped-`<head>` builder (`wrappedDocument`) — SC-005a
+///   - the `cid:`-referenced predicate (`isReferenced(cidToken:inHTML:)`) — SC-005c
+///   - the `cid:`→`data:` rewrite (`inlineCIDImages(inHTML:parts:)`) — SC-005b
+/// plus the additive MIME Content-ID capture (T005). Everything is exercised with
+/// injected `String` / `[String: InlinePart]` values, proving purity. The WebView
+/// render, remote-block interaction, and real-email checks are the manual exploration
+/// step, not assertable by this target.
+@Suite struct CIDInliningTests {
+
+    // MARK: - White-surface head builder (SC-005a)
+
+    @Test func headForcesOnlyLightColorScheme() {
+        let doc = ReaderHTML.wrappedDocument("<p>hi</p>")
+        #expect(doc.contains("color-scheme: only light"))
+        #expect(!doc.contains("color-scheme: light dark"))
+    }
+
+    @Test func headPaintsOpaqueWhiteBackground() {
+        let doc = ReaderHTML.wrappedDocument("<p>hi</p>")
+        // An opaque white background behind the body (so transparent regions read white).
+        #expect(doc.contains("background: #ffffff"))
+    }
+
+    @Test func headEmitsTheSharedFixedDarkTextColor() {
+        // The CSS color comes from the SINGLE source of truth shared with the
+        // plain-text path (T010), so the two surfaces cannot diverge.
+        let doc = ReaderHTML.wrappedDocument("<p>hi</p>")
+        #expect(doc.contains("color: \(ReaderHTML.bodyTextColorHex)"))
+    }
+
+    @Test func headPreservesInnerHTMLVerbatim() {
+        let inner = "<div class=\"x\">Sender's <b>own</b> markup &amp; <img src=\"cid:logo@acme\"></div>"
+        let doc = ReaderHTML.wrappedDocument(inner)
+        #expect(doc.contains(inner))
+    }
+
+    // MARK: - B2 predicate: isReferenced (SC-005c)
+
+    @Test func referencedTokenIsDetected() {
+        let html = "<p><img src=\"cid:logo@acme\"></p>"
+        #expect(ReaderHTML.isReferenced(cidToken: "logo@acme", inHTML: html) == true)
+    }
+
+    @Test func singleQuotedSrcIsDetected() {
+        let html = "<img src='cid:logo@acme'>"
+        #expect(ReaderHTML.isReferenced(cidToken: "logo@acme", inHTML: html) == true)
+    }
+
+    @Test func caseInsensitiveCidSchemeStillMatches() {
+        let html = "<img src=\"CID:logo@acme\">"
+        #expect(ReaderHTML.isReferenced(cidToken: "logo@acme", inHTML: html) == true)
+    }
+
+    @Test func tokenPresentOnlyAsAttachmentIsNotReferenced() {
+        // The token appears as a Content-ID-ish string but NOT inside an `<img src="cid:…">`.
+        let html = "<p>see attached file image001@host.png</p>"
+        #expect(ReaderHTML.isReferenced(cidToken: "image001@host", inHTML: html) == false)
+    }
+
+    @Test func absentTokenIsNotReferenced() {
+        let html = "<img src=\"cid:other@host\">"
+        #expect(ReaderHTML.isReferenced(cidToken: "logo@acme", inHTML: html) == false)
+    }
+
+    @Test func prefixTokenDoesNotPartialMatch() {
+        // `cid:logo` must NOT count as referencing token `log` (anchored to the quote).
+        let html = "<img src=\"cid:logobar@acme\">"
+        #expect(ReaderHTML.isReferenced(cidToken: "logo@acme", inHTML: html) == false)
+    }
+
+    @Test func emptyTokenIsNeverReferenced() {
+        #expect(ReaderHTML.isReferenced(cidToken: "", inHTML: "<img src=\"cid:\">") == false)
+    }
+
+    // MARK: - B3 rewrite: inlineCIDImages (SC-005b)
+
+    private func pngPart(_ bytes: [UInt8]) -> InlinePart {
+        InlinePart(mimeType: "image/png", data: Data(bytes))
+    }
+
+    @Test func matchedRefIsRewrittenToDataURI() {
+        let html = "<img src=\"cid:logo@acme\">"
+        let part = pngPart([0x89, 0x50, 0x4E, 0x47])
+        let out = ReaderHTML.inlineCIDImages(inHTML: html, parts: ["logo@acme": part])
+        #expect(out.contains("data:image/png;base64,\(part.base64)"))
+        #expect(!out.contains("cid:logo@acme"))
+    }
+
+    @Test func danglingRefIsLeftUntouched() {
+        let html = "<img src=\"cid:missing@host\">"
+        let out = ReaderHTML.inlineCIDImages(inHTML: html, parts: ["logo@acme": pngPart([0x00])])
+        #expect(out == html)
+        #expect(out.contains("cid:missing@host"))
+    }
+
+    @Test func multipleDistinctRefsAreAllRewritten() {
+        let html = "<img src=\"cid:a@x\"><img src='cid:b@y'><img src=\"cid:c@z\">"
+        let parts: [String: InlinePart] = [
+            "a@x": InlinePart(mimeType: "image/png", data: Data([0x01])),
+            "b@y": InlinePart(mimeType: "image/gif", data: Data([0x02])),
+            "c@z": InlinePart(mimeType: "image/jpeg", data: Data([0x03])),
+        ]
+        let out = ReaderHTML.inlineCIDImages(inHTML: html, parts: parts)
+        #expect(out.contains("data:image/png;base64,\(parts["a@x"]!.base64)"))
+        #expect(out.contains("data:image/gif;base64,\(parts["b@y"]!.base64)"))
+        #expect(out.contains("data:image/jpeg;base64,\(parts["c@z"]!.base64)"))
+        #expect(!out.contains("cid:"))
+    }
+
+    @Test func emptyPartsMapIsIdentity() {
+        let html = "<img src=\"cid:logo@acme\">"
+        #expect(ReaderHTML.inlineCIDImages(inHTML: html, parts: [:]) == html)
+    }
+}
