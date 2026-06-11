@@ -1590,7 +1590,13 @@ final class AppModel: ObservableObject {
 
     func setAccountImage(_ id: String, _ image: NSImage) {
         guard let i = realConfigs.firstIndex(where: { $0.id == id }) else { return }
-        AvatarStore.default.save(image, for: id)
+        // Only mark the account as image-backed if the file actually landed — else
+        // a failed save would persist hasCustomAvatar=true with no file, leaving a
+        // letters tile the user can't explain or recover from.
+        guard AvatarStore.default.save(image, for: id) else {
+            showToast("Couldn't save that image.")
+            return
+        }
         realConfigs[i].hasCustomAvatar = true
         rebuildAccount(id)
         persistRealAccounts()

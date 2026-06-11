@@ -61,14 +61,15 @@ struct AvatarStore {
         return NSImage(data: data)
     }
 
-    /// Delete the stored file. Missing-file is not an error (the post-condition
-    /// "no file at <id>.png" already holds), so it returns true.
+    /// Delete the stored file. A missing file is not an error — the post-condition
+    /// "no file at <id>.png" already holds — so a not-found error counts as success
+    /// (no fileExists pre-check, to avoid a check-then-delete race).
     @discardableResult
     func remove(for id: String) -> Bool {
-        let url = fileURL(for: id)
-        guard FileManager.default.fileExists(atPath: url.path) else { return true }
         do {
-            try FileManager.default.removeItem(at: url)
+            try FileManager.default.removeItem(at: fileURL(for: id))
+            return true
+        } catch CocoaError.fileNoSuchFile {
             return true
         } catch {
             Self.log.error("avatar: remove failed \(error.localizedDescription, privacy: .public)")
