@@ -165,4 +165,37 @@ import Testing
         #expect(expunged == [7524])
         #expect(Set(backfill).isDisjoint(with: expunged))
     }
+
+    // MARK: - newMailHighWater (high-water scoped to new arrivals)
+
+    /// A cycle that backfills historical mail (no new arrivals) does NOT
+    /// advance the high-water mark — the high-water is computed from the
+    /// new-arrival channel only, which is empty here.
+    @Test func backfillDoesNotAdvanceHighWater() {
+        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: []) == 7866)
+    }
+
+    /// A genuine new arrival above the current mark advances the high-water.
+    @Test func newArrivalAdvancesHighWater() {
+        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: [7900]) == 7900)
+    }
+
+    /// A hypothetical high backfilled UID (e.g. from a server-side reimport)
+    /// can NOT move the mark, because backfilled UIDs are never passed as
+    /// new arrivals — the new-arrival list is empty, so the mark is unchanged.
+    @Test func backfilledHighUIDNotInNewArrivalsCannotAdvance() {
+        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: []) == 7866)
+    }
+
+    /// Steady-state idempotence at the seam level: when the cache already
+    /// equals the server window and no new mail arrived, backfill adds nothing
+    /// and the high-water does not move.
+    @Test func steadyStateCycleIsNoOp() {
+        let backfill = AppModel.backfillWindowUIDs(
+            loaded: [7700, 7830, 7866],
+            present: [7700, 7830, 7866],
+            range: 7700...7866, limit: 200)
+        #expect(backfill.isEmpty)
+        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: []) == 7866)
+    }
 }

@@ -429,6 +429,17 @@ final class AppModel: ObservableObject {
             .map { $0 }
     }
 
+    /// Pure high-water seam: the new-mail notification high-water `lastSeenUID`
+    /// MUST advance only on genuine new arrivals, never on a backfilled
+    /// (historical) UID. Given the current high-water and the UIDs fetched as
+    /// new messages this cycle (the new-arrival channel ONLY), return the
+    /// advanced high-water. Backfilled UIDs are never passed here, so a
+    /// historical UID — even a high one from a server-side reimport — can never
+    /// silently advance the mark.
+    static func newMailHighWater(current: UInt32, newArrivalUIDs: [UInt32]) -> UInt32 {
+        return max(current, newArrivalUIDs.max() ?? current)
+    }
+
     /// Recompute the unread-inbox total and push it to the macOS Dock badge.
     /// Reads `emails` only (never mutates it — that would recurse via `didSet`).
     /// `AppModel` is NOT @MainActor and `emails` can be mutated from background
