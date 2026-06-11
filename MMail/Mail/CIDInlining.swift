@@ -66,6 +66,17 @@ enum ReaderHTML {
         return re.firstMatch(in: html, options: [], range: range) != nil
     }
 
+    // MARK: - cid: reference guard (cache-rehydrate trigger)
+
+    /// True iff `html` is non-nil and references the `cid:` scheme (case-insensitively).
+    /// Mirrors the cheap `cid:` guard already used by `filterInlineCID`/`inlineCIDImages`.
+    /// Used by `loadBodyIfNeeded` to decide whether a cached-complete email must be
+    /// re-fetched so its session-only `inlineParts` map can be rebuilt. Pure over `html`.
+    static func referencesCID(_ html: String?) -> Bool {
+        guard let html else { return false }
+        return html.range(of: "cid:", options: .caseInsensitive) != nil
+    }
+
     // MARK: - B5: second-pass CID filter at the promotion boundary (T006)
 
     /// Result of the post-parse referenced/unreferenced filtering: the attachments

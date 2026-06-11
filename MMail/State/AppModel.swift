@@ -2793,8 +2793,20 @@ final class AppModel: ObservableObject {
     }
 
     func loadBodyIfNeeded() {
-        guard let e = selectedEmail, isRealAccount(e.account),
-              BodyFetch.needsFullFetch(bodyLoaded: e.bodyLoaded, bodyComplete: e.bodyComplete),
+        guard let e = selectedEmail, isRealAccount(e.account) else { return }
+        // Fetch when the body is missing/truncated (`needsFullFetch`) OR when the body
+        // references a `cid:` inline image but THIS SESSION has no inline-parts entry yet
+        // (`needsInlineParts`). The latter rehydrates a cached-complete email (loaded from
+        // disk with bodyLoaded/bodyComplete=true) so the session-only `inlinePartsByEmailID`
+        // map — never serialized — is rebuilt, letting the open path inline the image and
+        // re-save the cache with the inline attachment dropped.
+        //
+        // LOOP GUARD: key ABSENCE (`== nil`), not `.isEmpty`. The open-path completion
+        // (~2842) ALWAYS sets the key, even when no matching part exists (dangling cid),
+        // so a single re-fetch makes the key present and prevents re-fetch-on-every-open.
+        let needsFullFetch = BodyFetch.needsFullFetch(bodyLoaded: e.bodyLoaded, bodyComplete: e.bodyComplete)
+        let needsInlineParts = ReaderHTML.referencesCID(e.bodyHTML) && inlinePartsByEmailID[e.id] == nil
+        guard needsFullFetch || needsInlineParts,
               let uid = e.uid,
               let session = bodySession(for: e.account) else { return }
         // Don't auto-retry if a previous attempt failed — wait for the user to

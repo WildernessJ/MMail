@@ -181,6 +181,90 @@ import Foundation
         #expect(pdf?.contentID == nil)
     }
 
+    // MARK: - referencesCID guard (cache-rehydrate trigger)
+
+    @Test func referencesCIDDetectsLowercaseScheme() {
+        #expect(ReaderHTML.referencesCID("<img src=\"cid:logo@acme\">") == true)
+    }
+
+    @Test func referencesCIDIsCaseInsensitive() {
+        #expect(ReaderHTML.referencesCID("<img src=\"CID:logo@acme\">") == true)
+    }
+
+    @Test func referencesCIDFalseWhenAbsent() {
+        #expect(ReaderHTML.referencesCID("<p>no inline image here</p>") == false)
+    }
+
+    @Test func referencesCIDFalseForNil() {
+        #expect(ReaderHTML.referencesCID(nil) == false)
+    }
+
+    @Test func referencesCIDFalseForEmpty() {
+        #expect(ReaderHTML.referencesCID("") == false)
+    }
+
+    // MARK: - End-to-end seam: the EXACT failing real-email format
+    //
+    // Proves parse → match → inline for a realistic `multipart/related` message whose
+    // HTML references `cid:image001.png@01DCF82A.861A2ED0` and whose image part carries
+    // `Content-ID: <image001.png@01DCF82A.861A2ED0>` with a real (base64) PNG payload.
+    // This is the cached-email regression's exact shape (Outlook-style CID token).
+
+    @Test func endToEndCIDPipelineForRealOutlookFormat() throws {
+        let cidToken = "image001.png@01DCF82A.861A2ED0"
+        // A minimal-but-real 1x1 PNG (bytes), carried base64 in the MIME part.
+        let pngBytes: [UInt8] = [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // signature
+            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR length + type
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // 1x1
+            0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89,
+            0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, // IDAT
+            0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
+            0x0D, 0x0A, 0x2D, 0xB4,
+            0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82, // IEND
+        ]
+        let pngData = Data(pngBytes)
+        let pngBase64 = pngData.base64EncodedString()
+
+        // Realistic raw MIME: an HTML part referencing the cid, and the inline image
+        // part with a bracketed Content-ID and a base64 PNG body.
+        let raw = """
+        Content-Type: multipart/related; boundary="b"\r
+        \r
+        --b\r
+        Content-Type: text/html; charset=utf-8\r
+        \r
+        <html><body><p>See logo:</p><img src="cid:\(cidToken)"></body></html>\r
+        --b\r
+        Content-Type: image/png; name="image001.png"\r
+        Content-Transfer-Encoding: base64\r
+        Content-ID: <\(cidToken)>\r
+        Content-Disposition: inline; filename="image001.png"\r
+        \r
+        \(pngBase64)\r
+        --b--\r
+        """
+        let parsed = MIME.parse(Data(raw.utf8))
+
+        // 1) MIME.parse captures the (bracket-stripped) contentID on the image part,
+        //    and reassembles the exact PNG bytes from the base64 body.
+        let img = try #require(parsed.attachments.first { $0.mimeType == "image/png" })
+        #expect(img.contentID == cidToken)
+        #expect(img.data == pngData)
+
+        // 2) filterInlineCID drops the referenced inline part from survivingAttachments
+        //    and moves it (with bytes) into inlineParts keyed by the cid token.
+        let filter = ReaderHTML.filterInlineCID(html: parsed.html, attachments: parsed.attachments)
+        #expect(filter.survivingAttachments.isEmpty, "the inline cid image is dropped from the attachment list")
+        #expect(filter.inlineParts[cidToken] == InlinePart(mimeType: "image/png", data: pngData))
+
+        // 3) inlineCIDImages rewrites the cid: ref in the HTML to a data:image/png;base64 URI.
+        let html = try #require(parsed.html)
+        let rendered = ReaderHTML.inlineCIDImages(inHTML: html, parts: filter.inlineParts)
+        #expect(rendered.contains("data:image/png;base64,\(pngBase64)"))
+        #expect(!rendered.contains("cid:\(cidToken)"))
+    }
+
     // MARK: - B5 second-pass filter: filterInlineCID (T006)
 
     private func att(_ filename: String, _ mime: String, cid: String?, bytes: [UInt8] = [0x00]) -> MIME.Attachment {
