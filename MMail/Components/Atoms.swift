@@ -100,17 +100,26 @@ struct GradientTile: View {
     var size: CGFloat = 38
     var cornerRadius: CGFloat = 11
     var fontSize: CGFloat = 14
+    var image: NSImage? = nil
 
     var body: some View {
-        Text(text)
-            .font(.system(size: fontSize, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(
-                LinearGradient(colors: colors.isEmpty ? [.blue] : colors,
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        if let img = image {
+            Image(nsImage: img)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            Text(text)
+                .font(.system(size: fontSize, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(
+                    LinearGradient(colors: colors.isEmpty ? [.blue] : colors,
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        }
     }
 }
 
