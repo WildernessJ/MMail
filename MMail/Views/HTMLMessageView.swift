@@ -70,7 +70,7 @@ struct HTMLMessageView: NSViewRepresentable {
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
         web.setValue(false, forKey: "drawsBackground")
-        context.coordinator.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig)
+        context.coordinator.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig, applyDark: applyDark)
         return web
     }
 
@@ -81,7 +81,7 @@ struct HTMLMessageView: NSViewRepresentable {
             // load then applies dark in `didFinish` (`applyDarkAndMeasure`, T008), and
             // `load` records `lastApplyDark`, so the in-place branch below is skipped on
             // the same pass.
-            c.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig)
+            c.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig, applyDark: applyDark)
         } else if c.lastApplyDark != applyDark {
             // ONLY the dark-apply decision changed (app dark↔light or "Show original").
             // Toggle the engine IN-PLACE on the already-loaded page — no reload flash —
@@ -186,14 +186,17 @@ struct HTMLMessageView: NSViewRepresentable {
             """
         }
 
-        func load(_ web: WKWebView, html: String, blockRemote: Bool, proxyConfig: ImageProxyConfig?) {
+        func load(_ web: WKWebView, html: String, blockRemote: Bool, proxyConfig: ImageProxyConfig?, applyDark: Bool) {
             lastHTML = html
             lastBlock = blockRemote
             lastProxyConfig = proxyConfig
             // Record the applyDark state this fresh load will apply in `didFinish`
             // (via `applyDarkAndMeasure`), so a later `applyDark`-only change in
             // `updateNSView` is detected against the value actually on the page.
-            lastApplyDark = parent.applyDark
+            // Threaded EXPLICITLY from the live struct (like html/blockRemote/proxyConfig)
+            // — NOT read from `parent.applyDark`, which is a first-render snapshot frozen
+            // in `makeCoordinator()` and goes stale after an in-session light→dark toggle.
+            lastApplyDark = applyDark
 
             // Bump the generation so any in-flight compile from a prior load is
             // discarded when it completes (it will not match `myGen`).
@@ -258,7 +261,11 @@ struct HTMLMessageView: NSViewRepresentable {
         /// back via a `WKScriptMessageHandler`. `DispatchQueue.main.async` is the
         /// starting rung.
         private func applyDarkAndMeasure(_ web: WKWebView) {
-            guard parent.applyDark, let engine = HTMLMessageView.darkReaderScript else {
+            // Read the dark state from `lastApplyDark` — the value `load()` just recorded
+            // for the page now being measured — NOT `parent.applyDark`, which is the
+            // first-render struct snapshot and goes stale after an in-session toggle.
+            // `lastApplyDark` is the source of truth for "what dark state is on the page."
+            guard lastApplyDark, let engine = HTMLMessageView.darkReaderScript else {
                 // Light mode / "Show original": today's immediate measure, unchanged.
                 measureHeight(web)
                 return

@@ -46,8 +46,10 @@ import Foundation
         // JS uses the lowercased CSS form).
         #expect(js.lowercased().contains("#1a1a1a"))
         #expect(js.contains("darkSchemeBackgroundColor"))
-        // Light text for the dark surface.
+        // Light text for the dark surface — pin the exact emitted value so a palette
+        // change can't silently pass (the builder emits `'#e8e8e8'`).
         #expect(js.contains("darkSchemeTextColor"))
+        #expect(js.contains("#e8e8e8"))
     }
 
     @Test func darkEnableScriptGuardsOnTheDarkReaderGlobal() {
