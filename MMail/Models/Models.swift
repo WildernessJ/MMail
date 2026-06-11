@@ -74,6 +74,12 @@ struct Email: Identifiable, Codable {
     /// decode failure that would discard the whole cached folder.
     var bodyComplete: Bool?
     var attachments: [AttachmentMeta] = []
+    /// Received date for sorting. Set post-init by `AppModel.makeEmail` from the
+    /// IMAP message date; `nil` for demo data. Optional so it is additively
+    /// decodable: a cache written before this feature has no key → decodes as
+    /// `nil` (sorts via the UID/id fallback), NOT a decode failure that would
+    /// discard the whole cached folder.
+    var sortDate: Date? = nil
     var messageID: String?
     var inReplyTo: String?
     var unsubscribe: String?   // raw List-Unsubscribe header, when present

@@ -1,5 +1,95 @@
+import Foundation
 import Testing
 @testable import MMail
+
+/// Unit tests for the pure `AppModel.orderNewerFirst(aDate:aUID:aID:…)` seam:
+/// the date-first message comparator that fixes the unified "All inboxes"
+/// mis-ordering (UID is per-mailbox, so it cannot order across accounts).
+/// Orders newest-first by `sortDate` desc, then `uid` desc, then `id` asc; a
+/// `nil` date is treated as `.distantPast`. Reference dates are built from a
+/// fixed epoch offset (never `Date()`) so the suite is deterministic.
+/// SC-002/003/004.
+@Suite struct DateSortOrdering {
+    // Fixed reference instants (no `Date()`): t0 < t1 < t2.
+    static let t0 = Date(timeIntervalSince1970: 1_700_000_000) // earlier
+    static let t1 = Date(timeIntervalSince1970: 1_750_000_000) // later
+    static let t2 = Date(timeIntervalSince1970: 1_760_000_000) // latest
+
+    /// Cross-account: a far-lower UID with the newer date still sorts first —
+    /// date beats UID across the per-mailbox UID ranges (the core bug).
+    @Test func crossAccountOrdersByDateNotUID() {
+        #expect(AppModel.orderNewerFirst(
+            aDate: Self.t1, aUID: 7800, aID: "m#INBOX#7800",
+            bDate: Self.t0, bUID: 130000, bID: "g#INBOX#130000") == true)
+    }
+
+    /// Single-account normal delivery: date increases with UID, so the result
+    /// matches the prior UID-descending order.
+    @Test func singleAccountNormalMatchesUIDDescending() {
+        #expect(AppModel.orderNewerFirst(
+            aDate: Self.t1, aUID: 20, aID: "m#INBOX#20",
+            bDate: Self.t0, bUID: 10, bID: "m#INBOX#10") == true)
+    }
+
+    /// Single-account moved/delayed: A has the higher UID but the OLDER date;
+    /// B (lower UID, newer date) must sort first → orderNewerFirst(A,B) == false.
+    @Test func movedDelayedSingleAccountSortsByDate() {
+        #expect(AppModel.orderNewerFirst(
+            aDate: Self.t0, aUID: 7900, aID: "m#INBOX#7900",
+            bDate: Self.t1, bUID: 7800, bID: "m#INBOX#7800") == false)
+    }
+
+    /// A `nil` date sinks below any dated mail regardless of UID.
+    @Test func nilDateSinksBelowDated() {
+        #expect(AppModel.orderNewerFirst(
+            aDate: Self.t1, aUID: 7800, aID: "m#INBOX#7800",
+            bDate: nil, bUID: 131000, bID: "g#INBOX#131000") == true)
+    }
+
+    /// Equal dates → tiebreak by UID descending.
+    @Test func equalDateTiebreaksByUID() {
+        #expect(AppModel.orderNewerFirst(
+            aDate: Self.t1, aUID: 50, aID: "m#INBOX#50",
+            bDate: Self.t1, bUID: 40, bID: "m#INBOX#40") == true)
+    }
+
+    /// Equal date AND equal UID → tiebreak by id ascending.
+    @Test func equalDateAndUIDTiebreaksByID() {
+        #expect(AppModel.orderNewerFirst(
+            aDate: Self.t1, aUID: 50, aID: "a",
+            bDate: Self.t1, bUID: 50, bID: "b") == true)
+    }
+
+    /// Strict weak ordering over a mixed set (dated + nil-date, two disjoint UID
+    /// ranges): sorting completes without trapping and is deterministic across
+    /// repeated sorts.
+    @Test func strictWeakOrderingDeterministic() {
+        let items: [(Date?, UInt32?, String)] = [
+            (Self.t2, 7800, "m#INBOX#7800"),
+            (Self.t0, 130000, "g#INBOX#130000"),
+            (nil, 131000, "g#INBOX#131000"),
+            (Self.t1, 7801, "m#INBOX#7801"),
+            (Self.t1, 98000, "g#INBOX#98000"),
+            (nil, 7500, "m#INBOX#7500"),
+            (Self.t0, 7799, "m#INBOX#7799"),
+        ]
+        let cmp: ((Date?, UInt32?, String), (Date?, UInt32?, String)) -> Bool = {
+            AppModel.orderNewerFirst(aDate: $0.0, aUID: $0.1, aID: $0.2,
+                                     bDate: $1.0, bUID: $1.1, bID: $1.2)
+        }
+        let first = items.sorted(by: cmp)
+        let second = items.sorted(by: cmp)
+        // Correct order: date desc (t2 > t1 > t0 > nil/distantPast), then uid
+        // desc within equal dates, then id asc. This exercises cross-account
+        // interleave, nil-date sink, and both tiebreaks at once.
+        let expected = ["m#INBOX#7800",   // t2
+                        "g#INBOX#98000", "m#INBOX#7801",     // t1, uid desc
+                        "g#INBOX#130000", "m#INBOX#7799",    // t0, uid desc
+                        "g#INBOX#131000", "m#INBOX#7500"]    // nil → distantPast, uid desc
+        #expect(first.map { $0.2 } == expected)
+        #expect(first.map { $0.2 } == second.map { $0.2 })  // deterministic / stable
+    }
+}
 
 /// Unit tests for the pure `IMAPService.moveStrategy(capabilities:)` decision
 /// function — the only unit-testable seam of the IMAP MOVE fallback (SC-002,
