@@ -1510,6 +1510,7 @@ final class AppModel: ObservableObject {
         Keychain.deletePassword(account: cfg.imapPasswordKey)
         Keychain.deletePassword(account: cfg.smtpPasswordKey)
         MailCache.clear(account: accountId)
+        AvatarStore.default.remove(for: accountId)
         if let session = imapSessions[accountId] { Task { await session.close() } }
         if let body = bodySessions[accountId] { Task { await body.close() } }
         imapSessions[accountId] = nil
