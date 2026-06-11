@@ -1545,11 +1545,15 @@ final class AppModel: ObservableObject {
     func config(for id: String) -> MailAccountConfig? { realConfigs.first { $0.id == id } }
 
     static func uiAccount(for cfg: MailAccountConfig) -> Account {
+        let spec = AvatarSpec.resolve(displayName: cfg.displayName, email: cfg.email,
+                                      customColorHex: cfg.avatarColorHex,
+                                      hasImage: cfg.hasCustomAvatar ?? false)
         let display = cfg.displayName.isEmpty ? cfg.email : cfg.displayName
-        let base = Sender.stableColorHex(for: cfg.email)
+        // TODO Phase B: load image when spec.usesImage
         return Account(id: cfg.id, name: display, email: cfg.email,
-                       initials: String(display.prefix(1)).uppercased(),
-                       gradient: [base, "1E2DB0"], colorHex: base, provider: "IMAP / SMTP")
+                       initials: spec.initials, gradient: spec.gradientHex,
+                       colorHex: spec.gradientHex.first ?? Sender.stableColorHex(for: cfg.email),
+                       provider: "IMAP / SMTP")
     }
 
     func persistRealAccounts() {
