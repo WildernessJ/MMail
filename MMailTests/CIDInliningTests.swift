@@ -116,4 +116,75 @@ import Foundation
         let html = "<img src=\"cid:logo@acme\">"
         #expect(ReaderHTML.inlineCIDImages(inHTML: html, parts: [:]) == html)
     }
+
+    // MARK: - MIME Content-ID capture (T005, additive — in-memory only)
+
+    @Test func relatedImagePartCapturesBracketStrippedContentID() {
+        let raw = """
+        Content-Type: multipart/related; boundary="b"\r
+        \r
+        --b\r
+        Content-Type: text/html; charset=utf-8\r
+        \r
+        <img src="cid:logo@acme">\r
+        --b\r
+        Content-Type: image/png\r
+        Content-Transfer-Encoding: base64\r
+        Content-ID: <logo@acme>\r
+        Content-Disposition: inline; filename="logo.png"\r
+        \r
+        iVBORw0KGgo=\r
+        --b--\r
+        """
+        let parsed = MIME.parse(Data(raw.utf8))
+        let img = parsed.attachments.first { $0.mimeType == "image/png" }
+        #expect(img != nil)
+        #expect(img?.contentID == "logo@acme")
+    }
+
+    @Test func partWithNoContentIDStaysNil() {
+        let raw = """
+        Content-Type: multipart/mixed; boundary="b"\r
+        \r
+        --b\r
+        Content-Type: text/plain; charset=utf-8\r
+        \r
+        hello\r
+        --b\r
+        Content-Type: application/pdf\r
+        Content-Transfer-Encoding: base64\r
+        Content-Disposition: attachment; filename="doc.pdf"\r
+        \r
+        JVBERi0=\r
+        --b--\r
+        """
+        let parsed = MIME.parse(Data(raw.utf8))
+        let pdf = parsed.attachments.first { $0.filename == "doc.pdf" }
+        #expect(pdf != nil)
+        #expect(pdf?.contentID == nil)
+    }
+
+    @Test func messageWithNoCIDPartParsesIdentically() {
+        // A plain multipart/alternative (text + HTML, no related images) yields the
+        // same text/html/attachments/calendar/unsubscribe as before the feature.
+        let raw = """
+        Content-Type: multipart/alternative; boundary="b"\r
+        \r
+        --b\r
+        Content-Type: text/plain; charset=utf-8\r
+        \r
+        plain body\r
+        --b\r
+        Content-Type: text/html; charset=utf-8\r
+        \r
+        <p>html body</p>\r
+        --b--\r
+        """
+        let parsed = MIME.parse(Data(raw.utf8))
+        #expect(parsed.text == "plain body")
+        #expect(parsed.html == "<p>html body</p>")
+        #expect(parsed.attachments.isEmpty)
+        #expect(parsed.calendar == nil)
+        #expect(parsed.listUnsubscribe == nil)
+    }
 }

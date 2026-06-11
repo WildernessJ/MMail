@@ -136,7 +136,16 @@ enum MIME {
 
     // MARK: Incoming text + attachment extraction
 
-    struct Attachment { let filename: String; let mimeType: String; let data: Data }
+    struct Attachment {
+        let filename: String
+        let mimeType: String
+        let data: Data
+        /// In-memory only (never serialized): the part's `Content-ID` header with
+        /// surrounding angle brackets stripped (`<logo@acme>` → `logo@acme`), or nil.
+        /// Used by the post-parse referenced/unreferenced CID filtering. A part with
+        /// no Content-ID is `nil` and classified exactly as before.
+        var contentID: String? = nil
+    }
     struct Parsed { var text: String; var html: String?; var attachments: [Attachment]; var listUnsubscribe: String?; var calendar: String? }
 
     static func extractText(from data: Data) -> String { parse(data).text }
@@ -178,9 +187,16 @@ enum MIME {
         // Attachment: explicit disposition, or a named non-text part.
         if let filename, disp.contains("attachment") || !ctl.hasPrefix("text/") {
             let decoded = decodeBody(body, encoding: enc)
+            // Capture the part's Content-ID (in-memory only), bracket-stripped so
+            // `<logo@acme>` keys as `logo@acme` matching `cid:logo@acme`.
+            let cid = headers["content-id"].map {
+                $0.trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "<>"))
+            }
             result.attachments.append(Attachment(filename: decodeHeader(filename),
                                                   mimeType: ctl.split(separator: ";").first.map(String.init) ?? ctl,
-                                                  data: decoded))
+                                                  data: decoded,
+                                                  contentID: (cid?.isEmpty == false) ? cid : nil))
             return
         }
 
