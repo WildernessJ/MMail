@@ -44,6 +44,41 @@ enum ReaderHTML {
         """
     }
 
+    // MARK: - dark-engine pure seams (T005)
+
+    /// The pure dark-apply predicate: should the in-page DarkReader transform run for
+    /// this render? True iff the app is in dark mode AND the message is NOT in
+    /// per-message "Show original" state. Unit-testable without a WebView host.
+    static func shouldApplyDark(dark: Bool, showOriginal: Bool) -> Bool {
+        dark && !showOriginal
+    }
+
+    /// The pure injection-script builder: the JS that calls `DarkReader.enable({...})`
+    /// with the fixed dark palette (background = `bodyTextColorHex`'s `#1A1A1A` source
+    /// of truth, lowercased into the CSS form; light text). Pure, no view dependency.
+    /// This is the SAME theme config the Phase A spike feasibility-proved (dynamic mode
+    /// 1, bg `#1a1a1a`, light text `#e8e8e8`) so the seam matches what was confirmed.
+    /// Guards on `window.DarkReader` so it is a harmless no-op if the engine define did
+    /// not land.
+    static func darkEnableScript() -> String {
+        // The dark surface is the SINGLE source of truth (`bodyTextColorHex`),
+        // lowercased into the CSS hex DarkReader expects, so the HTML and plain-text
+        // dark surfaces cannot diverge.
+        let bg = bodyTextColorHex.lowercased()
+        return """
+        if (window.DarkReader) {
+          window.DarkReader.enable({
+            mode: 1,
+            brightness: 100,
+            contrast: 100,
+            sepia: 0,
+            darkSchemeBackgroundColor: '\(bg)',
+            darkSchemeTextColor: '#e8e8e8'
+          });
+        }
+        """
+    }
+
     // MARK: - B2: CID-referenced predicate (T003)
 
     /// True iff `cidToken` is referenced by an `<img … src="cid:TOKEN"…>` in `html`.
