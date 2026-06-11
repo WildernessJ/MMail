@@ -134,7 +134,8 @@ struct SidebarView: View {
             HStack(spacing: 10) {
                 GradientTile(colors: isAll ? [Color(hex: "2D3DEC"), Color(hex: "7A5AE0")] : (acct?.gradientColors ?? []),
                              text: isAll ? "M" : (acct?.initials ?? "M"),
-                             size: 28, cornerRadius: 14, fontSize: 11)
+                             size: 28, cornerRadius: 14, fontSize: 11,
+                             image: isAll ? nil : acct?.avatarImage)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(isAll ? "All inboxes" : (acct?.name ?? "")).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.fg1)
                     Text(isAll ? "Unified view" : (acct?.email ?? "")).font(.system(size: 11)).foregroundStyle(p.fg3)

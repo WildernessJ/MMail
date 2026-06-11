@@ -240,7 +240,7 @@ struct ComposeView: View {
             Button { fromPickerOpen.toggle() } label: {
                 HStack(spacing: 8) {
                     if let acct = fromAcct {
-                        GradientTile(colors: acct.gradientColors, text: acct.initials, size: 18, cornerRadius: 5, fontSize: 10)
+                        GradientTile(colors: acct.gradientColors, text: acct.initials, size: 18, cornerRadius: 5, fontSize: 10, image: acct.avatarImage)
                         Text(acct.email).font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg1).lineLimit(1)
                     } else {
                         Text("No account").font(.system(size: 12.5)).foregroundStyle(p.fg3)
@@ -258,7 +258,7 @@ struct ComposeView: View {
                     ForEach(model.accounts) { a in
                         Button { fromId = a.id; fromPickerOpen = false } label: {
                             HStack(spacing: 10) {
-                                GradientTile(colors: a.gradientColors, text: a.initials, size: 22, cornerRadius: 6, fontSize: 11)
+                                GradientTile(colors: a.gradientColors, text: a.initials, size: 22, cornerRadius: 6, fontSize: 11, image: a.avatarImage)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(a.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(p.fg1)
                                     Text(a.email).font(.system(size: 11)).foregroundStyle(p.fg3)

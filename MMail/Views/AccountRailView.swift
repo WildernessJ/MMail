@@ -25,7 +25,7 @@ struct AccountRailView: View {
                            tooltip: "\(a.name)  ⌘\(i + 1)") {
                     model.currentAccount = a.id
                 } label: {
-                    GradientTile(colors: a.gradientColors, text: a.initials, size: 38)
+                    GradientTile(colors: a.gradientColors, text: a.initials, size: 38, image: a.avatarImage)
                 }
             }
 
