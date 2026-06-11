@@ -86,6 +86,8 @@ struct SettingsView: View {
                         .padding(.vertical, 10)
                     }
                     section("Accounts") {
+                        AllInboxEditRow()
+                        Rectangle().fill(p.border).frame(height: 1)
                         if model.realConfigs.isEmpty {
                             Text("No account connected.").font(.system(size: 13)).foregroundStyle(p.fg3).padding(.vertical, 12)
                         } else {
@@ -490,6 +492,82 @@ struct AccountEditRow: View {
               let url = panel.url,
               let img = NSImage(contentsOf: url) else { return }
         model.setAccountImage(cfg.id, img)
+    }
+}
+
+/// Editing row for the unified "All" inbox — mirrors `AccountEditRow` but has no
+/// `cfg`, Resync, or Remove (the unified inbox is not a removable server account).
+struct AllInboxEditRow: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.palette) private var p
+    @State private var name = ""
+    @State private var colorOpen = false
+
+    private let swatchCols = Array(repeating: GridItem(.fixed(24), spacing: 8), count: 5)
+
+    var body: some View {
+        HStack(spacing: 10) {
+            GradientTile(colors: model.allInboxColorHex.map { [Color(hex: $0)] } ?? [p.magenta],
+                         text: model.allInboxSpec.tileText, size: 32, image: model.allInboxImage)
+
+            VStack(alignment: .leading, spacing: 2) {
+                TextField("All inboxes", text: $name)
+                    .textFieldStyle(.plain).font(.system(size: 13.5, weight: .medium)).foregroundStyle(p.fg1)
+                    .onSubmit { model.setAllInboxName(name) }
+                Text("Unified inbox").font(.system(size: 12)).foregroundStyle(p.fg3).lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            if !model.allInboxHasImage {
+                Button { colorOpen.toggle() } label: {
+                    Circle().fill(model.allInboxColorHex.map { Color(hex: $0) } ?? p.magenta).frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(p.border, lineWidth: 1))
+                }
+                .buttonStyle(.plain).help("Pick avatar color")
+                .popover(isPresented: $colorOpen, arrowEdge: .bottom) { swatches }
+            }
+
+            Button { chooseImage() } label: {
+                Text("Choose image…").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg2)
+                    .padding(.horizontal, 10).frame(height: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
+            }.buttonStyle(.plain)
+
+            if model.allInboxHasImage {
+                Button { model.removeAllInboxImage() } label: {
+                    Text("Use letters").font(.system(size: 12.5, weight: .medium)).foregroundStyle(p.fg2)
+                        .padding(.horizontal, 10).frame(height: 30)
+                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(p.border, lineWidth: 1))
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 12)
+        .onAppear { name = model.allInboxName }
+    }
+
+    private var swatches: some View {
+        LazyVGrid(columns: swatchCols, spacing: 8) {
+            ForEach(AppModel.labelPalette, id: \.self) { hex in
+                Button { model.setAllInboxColor(hex); colorOpen = false } label: {
+                    Circle().fill(Color(hex: hex)).frame(width: 22, height: 22)
+                        .overlay(Circle().stroke(model.allInboxColorHex == hex ? p.fg1 : Color.clear, lineWidth: 2))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+    }
+
+    private func chooseImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let img = NSImage(contentsOf: url) else { return }
+        model.setAllInboxImage(img)
     }
 }
 
