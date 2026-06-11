@@ -217,3 +217,63 @@ The Settings → Accounts section SHALL present, per account, an editing row (mi
 - No avatar customization for the unified "All" tile, the "you" reader avatar, or sender avatars — accounts only.
 - No editing of mail server settings (host/port/security/username) or credentials in this feature — identity (name + avatar) only.
 - No cross-device sync of avatars or customization — it is local to this machine, like `MailCache`.
+
+## ADDED Requirements
+
+### Requirement: Unified-inbox identity customization
+
+The unified "All" inbox (the `currentAccount == "all"` pseudo-entry, which has NO `MailAccountConfig`) SHALL be renamable and SHALL support a custom avatar color and image, mirroring account customization. Because "All" has no config, its customization SHALL persist in standalone `UserDefaults` keys (e.g. `allInboxName`, `allInboxColorHex`, `allInboxHasImage`) and its image SHALL reuse `AvatarStore` under the reserved id `"all"` (`avatars/all.png`); accounts SHALL be unaffected (additive). The customization SHALL render consistently at BOTH sites where "All" appears — the account rail (`AccountRailView` `allTile`, `AccountRailView.swift:53`) and the sidebar footer (`SidebarView` footer, `SidebarView.swift:135-141`) — replacing today's divergent hardcoded tiles (rail "All"/magenta vs sidebar "M"/blue) with one shared rendering. When no image is set, the tile SHALL show SHORT text: the first up-to-3 characters of the trimmed custom name, or `"All"` when the name is empty/unset. The full custom name SHALL be the sidebar footer label and the rail tooltip; when unset the label SHALL remain `"All inboxes"`. When an image is set it SHALL replace the letters tile at both sites. Default (uncustomized) color SHALL unify on the rail's existing magenta (`p.magenta`) at both sites.
+
+A pure, SwiftUI-free seam `AllInboxSpec.resolve(name:hasImage:)` SHALL compute the tile's short `tileText` (≤3 graphemes, default `"All"`), the `label` (default `"All inboxes"`), and `usesImage`, and SHALL be unit-testable. Color resolution stays in the view (custom hex → solid fill; nil → `p.magenta`).
+
+#### Scenario: Rename the unified inbox
+
+- **GIVEN** the unified inbox has no custom name
+- **WHEN** the user sets its name to "Everything"
+- **THEN** the rail tile shows `"Eve"`, the sidebar footer label and the rail tooltip show `"Everything"`
+- **AND** this persists across relaunch
+
+#### Scenario: Edge case: default unnamed unified inbox
+
+- **GIVEN** no custom name is set
+- **WHEN** the tiles render
+- **THEN** both the rail and sidebar tiles show `"All"` and the sidebar label shows `"All inboxes"`
+
+#### Scenario: Custom color is a solid fill at both sites
+
+- **WHEN** the user picks color `"1FB36B"` for the unified inbox
+- **THEN** both the rail and sidebar tiles render a solid `1FB36B` fill
+- **AND** it persists across relaunch
+
+#### Scenario: Custom image then revert
+
+- **WHEN** the user chooses an image for the unified inbox
+- **THEN** both tiles show the center-cropped image, a PNG exists at `…/avatars/all.png`, and a "Use letters" control appears
+- **WHEN** the user reverts (Use letters)
+- **THEN** both tiles return to the letters-and-color rendering and `…/avatars/all.png` is deleted
+
+#### Scenario: Pure short-text seam
+
+- **WHEN** `AllInboxSpec.resolve(name: "Everything", hasImage: false)` is called
+- **THEN** `tileText == "Eve"` and `label == "Everything"`
+- **AND** `AllInboxSpec.resolve(name: "   ", hasImage: false)` yields `tileText == "All"` and `label == "All inboxes"`
+
+### Requirement: Unified-inbox editing UI
+
+Settings → Accounts SHALL present a "Unified inbox" editing row ABOVE the per-account rows, with the same controls as an account row: avatar preview, inline name field (committing via a `setAllInboxName` mutation), a color-swatch popover over `AppModel.labelPalette` (→ `setAllInboxColor`), and Choose image…/Use letters (→ `setAllInboxImage`/`removeAllInboxImage`). It SHALL NOT offer Resync or Remove (the unified inbox is not a removable account and has no server folder of its own).
+
+#### Scenario: Edit from Settings updates both tiles live
+
+- **GIVEN** Settings → Accounts is open
+- **WHEN** the user edits the Unified inbox row's name, color, or image
+- **THEN** the matching `setAllInbox…` mutation runs, persists, and the rail tile + sidebar footer update without reopening Settings
+
+## ADDED Success Criteria
+
+- **SC-009**: The unified inbox can be renamed, recolored, and given/cleared an image from Settings, reflected at the rail and sidebar footer, persisting across relaunch (live-verified).
+- **SC-010**: `AllInboxSpec.resolve` short-text/label resolution (default "All"/"All inboxes", ≤3-char truncation, whitespace→default) is covered by a hand-authored Swift unit test; the type-check + manual gates are green.
+
+## ADDED Non-Goals
+
+- The unified-inbox tile uses a ≤3-char short text (e.g. "All", "Eve"), NOT the single-initial rule account tiles use — deliberate, to preserve the unified-inbox identity (user-chosen).
+- No per-site divergence after this change — rail and sidebar render from the one shared descriptor; the old sidebar "M"/blue default is removed.
