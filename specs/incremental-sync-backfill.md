@@ -13,7 +13,7 @@ The verified live hole — mailbox.org inbox, UIDs `7525–7829` missing between
 - Backfilled messages are historical, not new arrivals. The sync result MUST deliver them in a channel separate from new-arrival messages so that notification and high-water logic — which key off new arrivals only — never treat a backfilled message as new. Specifically:
   - Backfill MUST NEVER emit a macOS notification.
   - Backfill MUST NEVER advance the new-mail high-water mark `lastSeenUID`. To make this enforceable, `mergeIncremental` MUST compute `lastSeenUID` from the **new-arrival channel only** (the UIDs fetched as new messages above `afterUID`), NOT from `max(all inbox UIDs)` after the merge — otherwise a backfilled UID could silently advance it (e.g. after a server-side reimport that placed an old message at a high UID).
-  - Backfill MUST NEVER cause a message to be auto-trashed in the same cycle it is backfilled (historical mail follows the bulk-fetch convention in `mergeRealFolder`, which leaves blocked-sender mail in place). To make this enforceable, the per-cycle backfill UID set MUST be excluded from the `autoTrashBlocked` pass that `mergeIncremental` runs (`AppModel.swift:2428`) — either by passing the backfill UID set to `autoTrashBlocked` as an exclusion parameter, or by structuring the merge so backfilled rows are not in scope for that call in the same cycle.
+  - The act of backfilling MUST NEVER itself auto-trash mail: the backfill merge path (`insertBackfill`) MUST NOT invoke `autoTrashBlocked`, so filling a hole never directly triggers a server-side trash move. (This is NOT a permanent exemption: the normal per-cycle `autoTrashBlocked` maintenance that the base `mergeIncremental` runs continues to apply to the inbox as a whole, so a backfilled message from a blocked sender is handled by the same blocked-sender policy as any other inbox message on a subsequent cycle. That is intended and consistent with existing behavior — blocked mail is trashed wherever it surfaces — not a regression.)
 - The number of envelopes backfilled in a single sync cycle MUST be bounded by a fixed per-cycle cap — a named compile-time constant (the convergence scenarios below use illustrative values such as 200/500; the actual constant is chosen in the plan).
 - Sync MUST remain idempotent: a cycle in which the cache already equals the server's windowed contents MUST add nothing, remove nothing, and notify nothing.
 
@@ -52,10 +52,10 @@ A pure function SHALL compute, from the locally-loaded UIDs, the server's presen
 #### Scenario: Edge case: present UID above the range is ignored
 
 - **GIVEN** loaded UIDs `[7866]`
-- **AND** server-present UIDs `[7400, 7900]` where `7900` is above the range top
+- **AND** server-present UIDs `[7600, 7900]` where `7600` is an in-range hole and `7900` is above the range top
 - **AND** range `7524…7866` and cap `10`
 - **WHEN** the backfill set is computed
-- **THEN** the result is `[7400]`
+- **THEN** the result is `[7600]`
 - **AND** `7900` is not included (it is handled by the new-message path, not backfill)
 
 #### Scenario: Edge case: hole entirely below the window is not backfilled
@@ -106,9 +106,9 @@ When a sync result carries backfilled (historical) messages in their dedicated c
 - **GIVEN** a sender is on the block list
 - **AND** a historical message from that sender is present in the server inbox but missing locally
 - **WHEN** a sync cycle backfills it
-- **THEN** the message is added to the local inbox (historical mail stays put, matching `mergeRealFolder`)
-- **AND** it is not moved to trash by that sync cycle
-- **AND** the window-wide `autoTrashBlocked` pass invoked by `mergeIncremental` MUST NOT target a UID solely because it was backfilled this cycle
+- **THEN** the message is added to the local inbox
+- **AND** the backfill merge itself does not move it to trash (`insertBackfill` does not call `autoTrashBlocked`)
+- **AND** any later trashing occurs only via the normal per-cycle blocked-sender maintenance, identical to how any other inbox message from that sender is handled
 
 ### Requirement: Per-cycle bound and convergence
 

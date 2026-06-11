@@ -180,11 +180,12 @@ import Testing
         #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: [7900]) == 7900)
     }
 
-    /// A hypothetical high backfilled UID (e.g. from a server-side reimport)
-    /// can NOT move the mark, because backfilled UIDs are never passed as
-    /// new arrivals — the new-arrival list is empty, so the mark is unchanged.
-    @Test func backfilledHighUIDNotInNewArrivalsCannotAdvance() {
-        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: []) == 7866)
+    /// New arrivals strictly below the current mark never move it (max
+    /// semantics): only a UID above current advances. This is the property that
+    /// keeps a backfilled (always-below-afterUID) UID from advancing the mark —
+    /// even if it were ever mis-routed into the new-arrival list.
+    @Test func newArrivalsBelowCurrentDoNotAdvance() {
+        #expect(AppModel.newMailHighWater(current: 7866, newArrivalUIDs: [7000, 7100]) == 7866)
     }
 
     /// Steady-state idempotence at the seam level: when the cache already
