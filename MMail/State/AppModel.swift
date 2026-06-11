@@ -1549,11 +1549,11 @@ final class AppModel: ObservableObject {
                                       customColorHex: cfg.avatarColorHex,
                                       hasImage: cfg.hasCustomAvatar ?? false)
         let display = cfg.displayName.isEmpty ? cfg.email : cfg.displayName
-        // TODO Phase B: load image when spec.usesImage
         return Account(id: cfg.id, name: display, email: cfg.email,
                        initials: spec.initials, gradient: spec.gradientHex,
                        colorHex: spec.gradientHex.first ?? Sender.stableColorHex(for: cfg.email),
-                       provider: "IMAP / SMTP")
+                       provider: "IMAP / SMTP",
+                       avatarImage: spec.usesImage ? AvatarStore.default.load(for: cfg.id) : nil)
     }
 
     func persistRealAccounts() {

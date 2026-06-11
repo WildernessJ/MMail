@@ -25,6 +25,7 @@ struct Account: Identifiable {
     let gradient: [String]
     let colorHex: String
     let provider: String
+    var avatarImage: NSImage? = nil
     var color: Color { Color(hex: colorHex) }
     var gradientColors: [Color] { gradient.map { Color(hex: $0) } }
 }
