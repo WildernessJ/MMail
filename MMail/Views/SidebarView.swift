@@ -132,11 +132,12 @@ struct SidebarView: View {
         let acct = model.accountsById[model.currentAccount]
         return HStack(spacing: 8) {
             HStack(spacing: 10) {
-                GradientTile(colors: isAll ? [Color(hex: "2D3DEC"), Color(hex: "7A5AE0")] : (acct?.gradientColors ?? []),
-                             text: isAll ? "M" : (acct?.initials ?? "M"),
-                             size: 28, cornerRadius: 14, fontSize: 11)
+                GradientTile(colors: isAll ? (model.allInboxColorHex.map { [Color(hex: $0)] } ?? [p.magenta]) : (acct?.gradientColors ?? []),
+                             text: isAll ? model.allInboxSpec.tileText : (acct?.initials ?? "M"),
+                             size: 28, cornerRadius: 14, fontSize: 11,
+                             image: isAll ? model.allInboxImage : acct?.avatarImage)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(isAll ? "All inboxes" : (acct?.name ?? "")).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.fg1)
+                    Text(isAll ? model.allInboxSpec.label : (acct?.name ?? "")).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(p.fg1)
                     Text(isAll ? "Unified view" : (acct?.email ?? "")).font(.system(size: 11)).foregroundStyle(p.fg3)
                         .lineLimit(1)
                 }
