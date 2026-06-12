@@ -277,6 +277,11 @@ struct HTMLMessageView: NSViewRepresentable {
             }
             web.evaluateJavaScript(engine) { [weak self, weak web] _, defineErr in
                 guard let self, let web else { return }
+                // Stale define (a newer load() bumped generation while the ~105 KB engine
+                // define was in flight): do nothing further — mirrors `toggleDark`. Without
+                // this, a superseded load's define callback would call `DarkReader.enable(...)`
+                // on the NEWER page, darkening a light-mode page that should be white (SC-005).
+                guard self.generation == myGen else { return }
                 if let defineErr {
                     print("⚠️ MMail dark-engine: DarkReader define failed: \(defineErr)")
                     // Fall back to an immediate measure so a define failure does not
