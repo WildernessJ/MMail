@@ -124,6 +124,8 @@ final class AppModel: ObservableObject {
     @Published var dark: Bool
     @Published var sidebarVisible: Bool
     @Published var readingPane: Bool
+    @Published var sidebarSize: SidebarSize
+    @Published var listWidth: CGFloat
     @Published var vimNav: Bool
     @Published var confirmDiscard: Bool
     @Published var notificationsEnabled: Bool
@@ -235,6 +237,8 @@ final class AppModel: ObservableObject {
         dark = d.object(forKey: kDark) as? Bool ?? false
         sidebarVisible = d.object(forKey: kSidebar) as? Bool ?? true
         readingPane = d.object(forKey: kReadingPane) as? Bool ?? true
+        sidebarSize = loadSidebarSize(d)
+        listWidth = loadListWidth(d)
         vimNav = d.object(forKey: kVimNav) as? Bool ?? true
         confirmDiscard = d.object(forKey: kConfirmDiscard) as? Bool ?? false
         notificationsEnabled = d.object(forKey: kNotifications) as? Bool ?? true
@@ -518,6 +522,8 @@ final class AppModel: ObservableObject {
         d.set(dark, forKey: kDark)
         d.set(sidebarVisible, forKey: kSidebar)
         d.set(readingPane, forKey: kReadingPane)
+        d.set(sidebarSize.rawValue, forKey: LayoutDefaultsKey.sidebarSize)
+        d.set(Double(listWidth), forKey: LayoutDefaultsKey.listWidth)
     }
     func persistTodos() {
         if let data = try? JSONEncoder().encode(todos) {
@@ -1549,6 +1555,11 @@ final class AppModel: ObservableObject {
     func setDark(_ v: Bool) { dark = v; persistTweaks() }
     func setSidebar(_ v: Bool) { sidebarVisible = v; persistTweaks() }
     func setReadingPane(_ v: Bool) { readingPane = v; readerFullScreen = false; persistTweaks() }
+    func setSidebarSize(_ v: SidebarSize) { sidebarSize = v; persistTweaks() }
+    func cycleSidebarSize() { sidebarSize = sidebarSize.next; persistTweaks() }
+    /// Targeted single-key write — must NOT call `persistTweaks()` so the per-drag path
+    /// never flushes the whole tweak batch. Reads back via `loadListWidth` (same key).
+    func setListWidth(_ v: CGFloat) { listWidth = clampListWidth(v); UserDefaults.standard.set(Double(listWidth), forKey: LayoutDefaultsKey.listWidth) }
     func setVimNav(_ v: Bool) { vimNav = v; UserDefaults.standard.set(v, forKey: kVimNav) }
     func setConfirmDiscard(_ v: Bool) { confirmDiscard = v; UserDefaults.standard.set(v, forKey: kConfirmDiscard) }
     func setNotifications(_ v: Bool) {
