@@ -124,7 +124,9 @@ final class AppModel: ObservableObject {
     @Published var dark: Bool
     @Published var sidebarVisible: Bool
     @Published var readingPane: Bool
-    @Published var sidebarSize: SidebarSize
+    @Published var railSize: RailSize
+    @Published var sidebarLabelsVisible: Bool
+    @Published var sidebarWidth: CGFloat
     @Published var listWidth: CGFloat
     @Published var vimNav: Bool
     @Published var confirmDiscard: Bool
@@ -237,7 +239,9 @@ final class AppModel: ObservableObject {
         dark = d.object(forKey: kDark) as? Bool ?? false
         sidebarVisible = d.object(forKey: kSidebar) as? Bool ?? true
         readingPane = d.object(forKey: kReadingPane) as? Bool ?? true
-        sidebarSize = loadSidebarSize(d)
+        railSize = loadRailSize(d)
+        sidebarLabelsVisible = loadSidebarLabels(d)
+        sidebarWidth = loadSidebarWidth(d)
         listWidth = loadListWidth(d)
         vimNav = d.object(forKey: kVimNav) as? Bool ?? true
         confirmDiscard = d.object(forKey: kConfirmDiscard) as? Bool ?? false
@@ -522,7 +526,9 @@ final class AppModel: ObservableObject {
         d.set(dark, forKey: kDark)
         d.set(sidebarVisible, forKey: kSidebar)
         d.set(readingPane, forKey: kReadingPane)
-        d.set(sidebarSize.rawValue, forKey: LayoutDefaultsKey.sidebarSize)
+        d.set(railSize.rawValue, forKey: LayoutDefaultsKey.railSize)
+        d.set(sidebarLabelsVisible, forKey: LayoutDefaultsKey.sidebarLabels)
+        d.set(Double(sidebarWidth), forKey: LayoutDefaultsKey.sidebarWidth)
         d.set(Double(listWidth), forKey: LayoutDefaultsKey.listWidth)
     }
     func persistTodos() {
@@ -1555,8 +1561,13 @@ final class AppModel: ObservableObject {
     func setDark(_ v: Bool) { dark = v; persistTweaks() }
     func setSidebar(_ v: Bool) { sidebarVisible = v; persistTweaks() }
     func setReadingPane(_ v: Bool) { readingPane = v; readerFullScreen = false; persistTweaks() }
-    func setSidebarSize(_ v: SidebarSize) { sidebarSize = v; persistTweaks() }
-    func cycleSidebarSize() { sidebarSize = sidebarSize.next; persistTweaks() }
+    func setRailSize(_ v: RailSize) { railSize = v; persistTweaks() }
+    func cycleRailSize() { railSize = railSize.next; persistTweaks() }
+    func setSidebarLabels(_ v: Bool) { sidebarLabelsVisible = v; persistTweaks() }
+    func toggleSidebarLabels() { setSidebarLabels(!sidebarLabelsVisible) }
+    /// Targeted single-key write — must NOT call `persistTweaks()` so the per-drag path
+    /// never flushes the whole tweak batch. Reads back via `loadSidebarWidth` (same key).
+    func setSidebarWidth(_ v: CGFloat) { sidebarWidth = clampSidebarWidth(v); UserDefaults.standard.set(Double(sidebarWidth), forKey: LayoutDefaultsKey.sidebarWidth) }
     /// Targeted single-key write — must NOT call `persistTweaks()` so the per-drag path
     /// never flushes the whole tweak batch. Reads back via `loadListWidth` (same key).
     func setListWidth(_ v: CGFloat) { listWidth = clampListWidth(v); UserDefaults.standard.set(Double(listWidth), forKey: LayoutDefaultsKey.listWidth) }
@@ -3291,7 +3302,7 @@ final class AppModel: ObservableObject {
             case "s": setSidebar(!sidebarVisible); return true
             case "r": setReadingPane(!readingPane); return true
             case "d": setDark(!dark); return true
-            case "l": cycleSidebarSize(); return true
+            case "l": cycleRailSize(); return true
             default: break
             }
         }

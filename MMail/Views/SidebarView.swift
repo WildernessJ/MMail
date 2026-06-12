@@ -10,7 +10,7 @@ struct SidebarView: View {
         "done": "done", "archive": "archive", "sent": "send", "outbox": "outbox", "drafts": "draft", "spam": "spam", "trash": "trash"
     ]
 
-    private var compact: Bool { !model.sidebarSize.showsLabels }
+    private var compact: Bool { !model.sidebarLabelsVisible }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -53,7 +53,7 @@ struct SidebarView: View {
         }
         .padding(.horizontal, compact ? 6 : 8)
         .padding(.vertical, 10)
-        .frame(width: model.sidebarSize.width)
+        .frame(width: model.sidebarWidth)
         .frame(maxHeight: .infinity)
         .background(p.bg1)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
