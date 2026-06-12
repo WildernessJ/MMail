@@ -59,12 +59,16 @@ struct DetachedReaderView: View {
                         model.loadBodyIfNeeded(forId: emailId)
                     }
             } else {
-                // Lookup nil. Either (b) the model is still loading on relaunch (wait — the
-                // email may resolve) or (c) it is loaded and the email is truly gone (dismiss).
-                // No placeholder (SC-005): render an empty surface; the dismiss-if-gone check
-                // runs in `.onAppear` and on `emailsLoaded` flipping true.
+                // Lookup nil in `model.emails`. Before considering dismissal, try to resolve
+                // the email from the on-disk cache (any folder for its account) and seed it into
+                // `model.emails` — `bootstrapRealAccounts` seeds ONLY the inbox synchronously, so
+                // a window restored for a non-inbox email (done/sent/starred/spam/trash/label)
+                // lands here even though the email IS cached (FIX 1). A successful resolve
+                // mutates `model.emails` → `email` recomputes → the `if let email` arm renders.
+                // Only if the cache ALSO lacks it AND the model has finished loading do we
+                // dismiss (truly gone, SC-008). No placeholder (SC-005): render an empty surface.
                 Color.clear
-                    .onAppear { dismissIfTrulyGone() }
+                    .onAppear { resolveOrDismiss() }
             }
         }
         // Folder-change + expunge auto-close (T019, INV-9, SC-005). Re-evaluate the close
@@ -78,18 +82,30 @@ struct DetachedReaderView: View {
         }
         // Relaunch truly-gone check (T022, SC-008): if this window appeared while the model
         // was still loading (nil lookup, no opener captured), re-check once the cache seed
-        // completes. A still-nil lookup now means the email is genuinely gone → dismiss.
-        .onChange(of: model.emailsLoaded) { _, _ in dismissIfTrulyGone() }
+        // completes. Before dismissing, try the on-disk cache resolve (FIX 1): a non-inbox
+        // email is in the cache but not yet in `emails` once `emailsLoaded` flips, so resolve
+        // it first. Only a still-nil lookup AFTER the cache miss means it is genuinely gone.
+        .onChange(of: model.emailsLoaded) { _, _ in resolveOrDismiss() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(p.bg2)
     }
 
-    /// Dismiss only when the lookup is nil AND the model has finished its cold-launch cache
-    /// seed (`emailsLoaded`). Guards against killing a relaunch-restored window during the
-    /// transient nil window before `emails` populates (SC-008). Deferred (INV-4 view layer +
-    /// no synchronous dismiss inside a view-update pass).
-    private func dismissIfTrulyGone() {
-        guard email == nil, model.emailsLoaded else { return }
+    /// Resolve-then-dismiss for a nil `model.emails` lookup (FIX 1). First try to seed this
+    /// window's email from the on-disk cache (`AppModel.resolveDetachedEmailFromCache`, which
+    /// scans ALL folders for the account — so a non-inbox or moved-while-closed email that
+    /// `bootstrapRealAccounts` never seeded into `emails` is still found and rendered). If it
+    /// resolves, `email` recomputes non-nil next pass and we render. Only when the email is
+    /// absent from BOTH `emails` and the cache, AND the model has finished its cold-launch seed
+    /// (`emailsLoaded`), is it genuinely gone (expunged) → dismiss (SC-008). While the model is
+    /// still loading (`!emailsLoaded`) and the cache lacks it, we WAIT rather than dismiss —
+    /// the email may resolve once the seed completes. Deferred dismiss (INV-4 view layer + no
+    /// synchronous dismiss inside a view-update pass).
+    private func resolveOrDismiss() {
+        // Already present, or just seeded from cache → render, never dismiss.
+        if model.resolveDetachedEmailFromCache(emailId) { return }
+        // Not in `emails` and not in the cache. Dismiss only if the model has finished loading
+        // (truly gone); otherwise wait for the cold-launch seed to complete.
+        guard model.emailsLoaded else { return }
         deferredDismiss()
     }
 

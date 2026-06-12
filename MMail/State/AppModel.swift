@@ -345,6 +345,42 @@ final class AppModel: ObservableObject {
         detachQueue.append(id)
     }
 
+    /// Make a relaunch-restored detached window's email available even when it lives in a
+    /// non-inbox folder. `bootstrapRealAccounts()` synchronously seeds ONLY the inbox folder
+    /// into `emails` before flipping `emailsLoaded` true, so a window restored for an email in
+    /// done/sent/starred/spam/trash/label would find nil in `emails` and wrongly dismiss
+    /// (FIX 1). This seeds that ONE email from the on-disk cache so the existing lookup seam,
+    /// body-load, opener-folder capture, and toolbar all work unchanged.
+    ///
+    /// Returns true if the email is present in `emails` after the call (already there, or
+    /// freshly seeded from cache), false if it is genuinely absent from BOTH the model and the
+    /// cache (truly gone → the caller may dismiss). Stays SwiftUI-window-free (INV-4): pure
+    /// model/cache logic; the dismiss decision stays in the view.
+    ///
+    /// A moved-while-closed email keeps its original-folder id (`account#folder#uid`) but its
+    /// cached `folder` field reflects its CURRENT folder; matching on `id` finds it regardless,
+    /// and seeding the cache copy carries that current folder so opener-folder capture is correct.
+    @discardableResult
+    func resolveDetachedEmailFromCache(_ id: String) -> Bool {
+        // Already present (inbox seed, or an earlier resolve) — nothing to do.
+        if emails.contains(where: { $0.id == id }) { return true }
+        // id shape is `account#folder#uid`; the account is the first component. Scope the
+        // cache scan to that account so we never seed a foreign-account row.
+        guard let account = id.split(separator: "#", maxSplits: 1).first.map(String.init),
+              !account.isEmpty else { return false }
+        // Bounded scan of the on-disk cache across ALL folders for this account. `loadAll`
+        // reads every cached folder file; we keep only this account and find the one id.
+        guard let found = MailCache.loadAll().first(where: { $0.account == account && $0.id == id }) else {
+            return false
+        }
+        // Lean seed (mirror `insertBackfill`'s tail): append + register labels only. NO
+        // notify/auto-trash/merge side effects — this is a silent restore, not a sync.
+        // dedup-by-id is guaranteed by the early `contains` guard above.
+        emails.append(found)
+        registerLabels(from: [found])
+        return true
+    }
+
     // MARK: - Derived
 
     var accountsById: [String: Account] {
@@ -2942,11 +2978,19 @@ final class AppModel: ObservableObject {
 
     /// User clicked Retry on the reader's "Couldn't load message" state.
     /// Clears the failed flag and re-runs the body fetch on a fresh session.
+    /// No-arg form delegates to the id-targeted variant via the live selection.
     func retryBodyLoad() {
         guard let id = selectedEmail?.id else { return }
+        retryBodyLoad(forId: id)
+    }
+
+    /// Id-targeted Retry (INV-10): clears the failed/in-flight state for THIS id and
+    /// re-runs the body fetch for it, never the live selection. A detached window's Retry
+    /// button calls this so it retries its OWN email, not the main-window selection.
+    func retryBodyLoad(forId id: String) {
         bodyLoadFailed.remove(id)
         bodyLoadInFlight.remove(id)
-        loadBodyIfNeeded()
+        loadBodyIfNeeded(forId: id)
     }
 
     enum AttachmentOpenMode { case quickLook, defaultApp, app(URL), reveal, saveToDownloads }

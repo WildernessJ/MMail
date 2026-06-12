@@ -279,7 +279,7 @@ struct ReaderContent: View {
                                 .font(.system(size: 12)).foregroundStyle(p.fg3)
                         }
                         Spacer()
-                        Button { model.retryBodyLoad() } label: {
+                        Button { detached ? model.retryBodyLoad(forId: email.id) : model.retryBodyLoad() } label: {
                             Text("Retry").font(.system(size: 12.5, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 12).padding(.vertical, 6)
@@ -738,7 +738,12 @@ struct ReaderContent: View {
             if collapsed {
                 withAnimation(.easeOut(duration: 0.2)) { expanded = true }
             } else if let id = t.emailId {
-                model.openThreadMessage(id)
+                // Inline reader: navigate the main selection to the tapped message.
+                // Detached window: opening a thread card here would mutate the main
+                // selection + folder (INV-3 violation), so instead open that message in
+                // its OWN detached window — this window stays bound to its one email
+                // (INV-3/INV-1).
+                detached ? model.requestDetachedWindow(id) : model.openThreadMessage(id)
             }
         }
     }
