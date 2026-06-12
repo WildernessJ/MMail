@@ -328,6 +328,17 @@ final class AppModel: ObservableObject {
         purgeSeedData()
         // Set the Dock badge correctly on launch (empty -> cleared when nothing unread).
         refreshDockBadge()
+        // Install the single lifetime OS-appearance observer (INV-4/INV-5). RETAIN the
+        // returned token into appearanceObserver — discarding it releases the observer and
+        // System mode would silently never follow the OS. queue: .main delivers the
+        // recompute on the main actor (no race with setAppearanceMode); [weak self] avoids
+        // a retain cycle; the recompute is GATED on .system, re-evaluated at fire time.
+        appearanceObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                if self.appearanceMode == .system { self.recomputeDark() }
+        }
     }
 
     /// Remove the old demo to-dos / journal entries that earlier builds seeded,
@@ -1578,6 +1589,7 @@ final class AppModel: ObservableObject {
             Command(id: "help", group: "App", label: "Show keyboard shortcuts", icon: "command", shortcut: "?") { [weak self] in self?.help = true },
             Command(id: "settings", group: "App", label: "Open settings", icon: "settings", shortcut: "⌘,") { [weak self] in self?.settings = true },
             Command(id: "dark", group: "App", label: "Toggle dark mode (now \(dark ? "on" : "off"))", icon: "zap", shortcut: "⌘⇧D") { [weak self] in guard let self else { return }; self.setAppearanceMode(AppearanceMode.toggledExplicit(currentDark: self.dark)) },
+            Command(id: "appearance-system", group: "App", label: "System appearance (follow macOS)", icon: "zap") { [weak self] in self?.setAppearanceMode(.system) },
             Command(id: "sidebar", group: "App", label: "Toggle sidebar (now \(sidebarVisible ? "shown" : "hidden"))", icon: "sidebar", shortcut: "⌘⇧S") { [weak self] in self?.setSidebar(!(self?.sidebarVisible ?? true)) },
             Command(id: "reading", group: "App", label: "Toggle reading pane (now \(readingPane ? "on" : "off"))", icon: "panel", shortcut: "⌘⇧R") { [weak self] in self?.setReadingPane(!(self?.readingPane ?? true)) },
             Command(id: "palette", group: "App", label: "Command palette", icon: "command", shortcut: "⌘K") { [weak self] in self?.palette.toggle() },
