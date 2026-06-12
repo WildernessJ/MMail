@@ -1535,7 +1535,7 @@ final class AppModel: ObservableObject {
             Command(id: "reply", group: "Mail", label: "Reply to current message", icon: "reply", shortcut: "R") { [weak self] in self?.reply() },
             Command(id: "replyAll", group: "Mail", label: "Reply all", icon: "replyAll", shortcut: "A") { [weak self] in self?.replyAll() },
             Command(id: "forward", group: "Mail", label: "Forward", icon: "forward", shortcut: "F") { [weak self] in self?.forward() },
-            Command(id: "open-window", group: "Mail", label: "Open in New Window", icon: "window", shortcut: "⌘O") { [weak self] in if let id = self?.selectedId { self?.requestDetachedWindow(id) } },
+            Command(id: "open-window", group: "Mail", label: "Open in New Window", icon: "window", shortcut: "⌘O") { [weak self] in guard let self, let id = self.selectedId, self.emails.contains(where: { $0.id == id }) else { return }; self.requestDetachedWindow(id) },
             Command(id: "archive", group: "Triage", label: "Archive", icon: "archive", shortcut: "E") { [weak self] in self?.archive() },
             Command(id: "done", group: "Triage", label: "Mark as done", icon: "check", shortcut: "H") { [weak self] in self?.markDone() },
             Command(id: "snooze", group: "Triage", label: "Snooze", icon: "clock", shortcut: "Z") { [weak self] in self?.snooze() },

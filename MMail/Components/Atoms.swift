@@ -49,7 +49,8 @@ enum Icons {
         "crown": "crown.fill",
         "outbox": "tray.and.arrow.up",
         "photo": "photo",
-        "shield": "lock.shield"
+        "shield": "lock.shield",
+        "window": "macwindow"
     ]
 }
 

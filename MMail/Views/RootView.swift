@@ -43,7 +43,9 @@ struct RootView: View {
             guard !q.isEmpty else { return }
             Task { @MainActor in
                 for id in q { openWindow(id: "reader", value: id) }
-                model.detachQueue.removeAll()
+                // Remove ONLY the ids we just opened — an enqueue that arrived after this
+                // onChange snapshot must survive to be drained by its own onChange firing.
+                model.detachQueue.removeAll { q.contains($0) }
             }
         }
         .animation(.easeOut(duration: 0.2), value: model.sidebarVisible)
