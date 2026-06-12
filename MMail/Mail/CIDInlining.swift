@@ -18,10 +18,28 @@ enum ReaderHTML {
     static let bodyTextColorHex = "#1A1A1A"
 
     /// SwiftUI `Color` derived from the SAME hex as `bodyTextColorHex`, for the
-    /// plain-text reader path's `.foregroundStyle` (single source of truth).
+    /// plain-text reader path's `.foregroundStyle` (single source of truth). Doubles as
+    /// the plain-text DARK SURFACE color (T013): the `#1A1A1A` source of truth that the
+    /// HTML dark path uses as its background, reused here so the two dark surfaces
+    /// cannot diverge — NOT a second hardcoded literal.
     static let bodyTextColor = Color(
         red: 0x1A / 255.0, green: 0x1A / 255.0, blue: 0x1A / 255.0
     )
+
+    /// The light text color for the plain-text dark surface (T013, SC-008). The SAME
+    /// `#e8e8e8` value the HTML path's `darkEnableScript()` emits as `darkSchemeTextColor`,
+    /// promoted to a single `Color` constant so the plain-text and HTML dark surfaces use
+    /// one source of truth (no scattered `#e8e8e8` literals).
+    static let darkSurfaceTextColor = Color(
+        red: 0xE8 / 255.0, green: 0xE8 / 255.0, blue: 0xE8 / 255.0
+    )
+
+    /// The dark reading surface BACKGROUND for the plain-text dark path (review nit). The
+    /// SAME `#1A1A1A` value as `bodyTextColorHex`/`bodyTextColor` — same value, different
+    /// role: here it fills the surface BEHIND the light text, whereas `bodyTextColor` names
+    /// the (light-mode) text color. Aliased to `bodyTextColor` so there is still exactly
+    /// ONE `#1A1A1A` literal (in `bodyTextColorHex`) — no second hardcoded source of truth.
+    static let darkSurfaceBackgroundColor = bodyTextColor
 
     /// Build the full wrapped reader document for `innerHTML`. Forces an opaque
     /// pure-white surface decoupled from the app theme: `color-scheme: only light`
@@ -41,6 +59,41 @@ enum ReaderHTML {
           img, table { max-width: 100% !important; height: auto; }
           a { color: #2D3DEC; }
         </style></head><body>\(innerHTML)</body></html>
+        """
+    }
+
+    // MARK: - dark-engine pure seams (T005)
+
+    /// The pure dark-apply predicate: should the in-page DarkReader transform run for
+    /// this render? True iff the app is in dark mode AND the message is NOT in
+    /// per-message "Show original" state. Unit-testable without a WebView host.
+    static func shouldApplyDark(dark: Bool, showOriginal: Bool) -> Bool {
+        dark && !showOriginal
+    }
+
+    /// The pure injection-script builder: the JS that calls `DarkReader.enable({...})`
+    /// with the fixed dark palette (background = `bodyTextColorHex`'s `#1A1A1A` source
+    /// of truth, lowercased into the CSS form; light text). Pure, no view dependency.
+    /// This is the SAME theme config the Phase A spike feasibility-proved (dynamic mode
+    /// 1, bg `#1a1a1a`, light text `#e8e8e8`) so the seam matches what was confirmed.
+    /// Guards on `window.DarkReader` so it is a harmless no-op if the engine define did
+    /// not land.
+    static func darkEnableScript() -> String {
+        // The dark surface is the SINGLE source of truth (`bodyTextColorHex`),
+        // lowercased into the CSS hex DarkReader expects, so the HTML and plain-text
+        // dark surfaces cannot diverge.
+        let bg = bodyTextColorHex.lowercased()
+        return """
+        if (window.DarkReader) {
+          window.DarkReader.enable({
+            mode: 1,
+            brightness: 100,
+            contrast: 100,
+            sepia: 0,
+            darkSchemeBackgroundColor: '\(bg)',
+            darkSchemeTextColor: '#e8e8e8'
+          });
+        }
         """
     }
 

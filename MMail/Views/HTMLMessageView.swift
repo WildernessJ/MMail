@@ -52,6 +52,15 @@ struct HTMLMessageView: NSViewRepresentable {
     /// block-all-except-proxy-origin content rule. Nil ⇒ today's behavior
     /// (direct load when shown, block-all when blocked).
     var proxyConfig: ImageProxyConfig? = nil
+    /// When true, after a body loads the vendored DarkReader engine is injected and
+    /// `DarkReader.enable(ReaderHTML.darkEnableScript())` is called to darken the page
+    /// in-page; when it later changes, `updateNSView` toggles the engine IN-PLACE
+    /// (`enable`/`disable` via `evaluateJavaScript`, no reload flash) and re-measures the
+    /// transformed-DOM height (T008/T009). The call site passes
+    /// `ReaderHTML.shouldApplyDark(dark:showOriginal:)`. In light mode / "Show original"
+    /// this is `false` → today's path byte-for-byte (no engine injected, immediate
+    /// height measure).
+    var applyDark: Bool = false
     @Binding var height: CGFloat
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -61,14 +70,23 @@ struct HTMLMessageView: NSViewRepresentable {
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
         web.setValue(false, forKey: "drawsBackground")
-        context.coordinator.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig)
+        context.coordinator.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig, applyDark: applyDark)
         return web
     }
 
     func updateNSView(_ web: WKWebView, context: Context) {
         let c = context.coordinator
         if c.lastHTML != html || c.lastBlock != blockRemote || c.lastProxyConfig != proxyConfig {
-            c.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig)
+            // An html/blockRemote/proxyConfig change re-runs `load` as today; the fresh
+            // load then applies dark in `didFinish` (`applyDarkAndMeasure`, T008), and
+            // `load` records `lastApplyDark`, so the in-place branch below is skipped on
+            // the same pass.
+            c.load(web, html: html, blockRemote: blockRemote, proxyConfig: proxyConfig, applyDark: applyDark)
+        } else if c.lastApplyDark != applyDark {
+            // ONLY the dark-apply decision changed (app dark↔light or "Show original").
+            // Toggle the engine IN-PLACE on the already-loaded page — no reload flash —
+            // then re-measure the transformed-DOM height (T009).
+            c.toggleDark(web, applyDark: applyDark)
         }
     }
 
@@ -81,11 +99,30 @@ struct HTMLMessageView: NSViewRepresentable {
         ReaderHTML.wrappedDocument(html)
     }
 
+    /// Load the vendored DarkReader UMD engine (MMail/Resources/darkreader.js,
+    /// MIT — see darkreader.LICENSE) from the app bundle, once. Returns the JS
+    /// source as a String that, when evaluated in a page, defines the global
+    /// `window.DarkReader` (confirmed UMD global name; API: `DarkReader.enable` /
+    /// `DarkReader.disable`). A nil URL means the resource did not ship in the
+    /// built bundle (XcodeGen auto-classification failed) — that MUST be loud, so
+    /// we log it; an unbundled engine is the first failure to surface in the spike.
+    private static let darkReaderScript: String? = {
+        guard let url = Bundle.main.url(forResource: "darkreader", withExtension: "js") else {
+            print("⚠️ MMail: darkreader.js NOT FOUND in Bundle.main — the dark engine resource did not ship in the build.")
+            return nil
+        }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }()
+
     final class Coordinator: NSObject, WKNavigationDelegate {
         let parent: HTMLMessageView
         var lastHTML = ""
         var lastBlock = true
         var lastProxyConfig: ImageProxyConfig?
+        /// Mirrors `lastBlock`: the `applyDark` value last applied to the loaded page, so
+        /// `updateNSView` can detect an `applyDark`-only change and toggle the engine
+        /// IN-PLACE (no reload flash) instead of re-running `load` (T009).
+        var lastApplyDark = false
         /// Monotonic token bumped on every `load`. A content-rule compile is async;
         /// when it completes we install/load ONLY if the token still matches, so a
         /// reconfigure (toggle/URL change) that started a newer load can never have
@@ -149,10 +186,17 @@ struct HTMLMessageView: NSViewRepresentable {
             """
         }
 
-        func load(_ web: WKWebView, html: String, blockRemote: Bool, proxyConfig: ImageProxyConfig?) {
+        func load(_ web: WKWebView, html: String, blockRemote: Bool, proxyConfig: ImageProxyConfig?, applyDark: Bool) {
             lastHTML = html
             lastBlock = blockRemote
             lastProxyConfig = proxyConfig
+            // Record the applyDark state this fresh load will apply in `didFinish`
+            // (via `applyDarkAndMeasure`), so a later `applyDark`-only change in
+            // `updateNSView` is detected against the value actually on the page.
+            // Threaded EXPLICITLY from the live struct (like html/blockRemote/proxyConfig)
+            // — NOT read from `parent.applyDark`, which is a first-render snapshot frozen
+            // in `makeCoordinator()` and goes stale after an in-session light→dark toggle.
+            lastApplyDark = applyDark
 
             // Bump the generation so any in-flight compile from a prior load is
             // discarded when it completes (it will not match `myGen`).
@@ -194,9 +238,146 @@ struct HTMLMessageView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            webView.evaluateJavaScript("document.body.scrollHeight") { result, _ in
+            applyDarkAndMeasure(webView)
+        }
+
+        /// Single sequencing seam for the load-completion path (T008). When
+        /// `applyDark`: inject the vendored DarkReader engine to define
+        /// `window.DarkReader`, THEN — only after that define resolves — evaluate
+        /// `ReaderHTML.darkEnableScript()` (the tested fixed-palette `enable(...)`),
+        /// and read `document.body.scrollHeight` on the NEXT runloop turn inside the
+        /// enable() completion. The deferred read matters: DarkReader's `enable()`
+        /// injects CSS + attaches a MutationObserver and its effect is NOT fully
+        /// applied synchronously when the `evaluateJavaScript` completion fires —
+        /// reading height in the bare completion samples a pre/mid-transform height
+        /// (violates SC-007). The deferred read therefore SUPERSEDES the immediate
+        /// measure so a darkening layout shift never leaves a stale height.
+        /// When NOT `applyDark`: measure `scrollHeight` immediately (today's path).
+        ///
+        /// Settle escalation (resolved at T015 live verify): the single-runloop
+        /// `DispatchQueue.main.async` deferral sampled height BEFORE DarkReader's
+        /// restyle + relayout had painted on heavier emails, clipping the first render.
+        /// The dark paths now measure via `measureHeightAfterPaint` — a double
+        /// `requestAnimationFrame` awaited inside `callAsyncJavaScript`, so the read
+        /// fires post-paint. The light / define-fail paths keep the immediate
+        /// `measureHeight` (no transform → nothing to settle).
+        private func applyDarkAndMeasure(_ web: WKWebView) {
+            // Capture the generation up front: `didFinish` can be followed by a new
+            // `load()` that bumps `generation` while this enable→measure chain is in
+            // flight, so the dark measure must be generation-guarded too.
+            let myGen = generation
+            // Read the dark state from `lastApplyDark` — the value `load()` just recorded
+            // for the page now being measured — NOT `parent.applyDark`, which is the
+            // first-render struct snapshot and goes stale after an in-session toggle.
+            // `lastApplyDark` is the source of truth for "what dark state is on the page."
+            guard lastApplyDark, let engine = HTMLMessageView.darkReaderScript else {
+                // Light mode / "Show original": today's immediate measure, unchanged.
+                measureHeight(web)
+                return
+            }
+            web.evaluateJavaScript(engine) { [weak self, weak web] _, defineErr in
+                guard let self, let web else { return }
+                // Stale define (a newer load() bumped generation while the ~105 KB engine
+                // define was in flight): do nothing further — mirrors `toggleDark`. Without
+                // this, a superseded load's define callback would call `DarkReader.enable(...)`
+                // on the NEWER page, darkening a light-mode page that should be white (SC-005).
+                guard self.generation == myGen else { return }
+                if let defineErr {
+                    print("⚠️ MMail dark-engine: DarkReader define failed: \(defineErr)")
+                    // Fall back to an immediate measure so a define failure does not
+                    // leave height at zero (the page still rendered, just not darkened).
+                    self.measureHeight(web)
+                    return
+                }
+                web.evaluateJavaScript(ReaderHTML.darkEnableScript()) { [weak self, weak web] _, enableErr in
+                    guard let self, let web else { return }
+                    if let enableErr {
+                        print("⚠️ MMail dark-engine: DarkReader.enable failed: \(enableErr)")
+                    }
+                    // Measure AFTER the dark transform paints (double-rAF) so the
+                    // settled relayout height is read, not a pre/mid-transform one.
+                    self.measureHeightAfterPaint(web, generation: myGen)
+                }
+            }
+        }
+
+        /// Toggle the dark transform IN-PLACE on the ALREADY-LOADED page (T009) — no
+        /// reload, so no white-then-dark flash on every dark↔light / "Show original"
+        /// toggle. Toggling ON re-injects the engine define (the page may have first
+        /// loaded in light mode, never injecting it) then `DarkReader.enable(...)`;
+        /// toggling OFF calls `DarkReader.disable()`. Every injected call is GUARDED with
+        /// `if (window.DarkReader)` so a toggle on a never-injected page is a harmless
+        /// no-op. After the toggle settles, re-measure the transformed-DOM height via the
+        /// SAME deferred settle path as `applyDarkAndMeasure` (one runloop turn — see its
+        /// escalation ladder).
+        ///
+        /// Generation snap-and-check (mirrors `load()`): capture `myGen = generation`
+        /// BEFORE the async toggle; `guard generation == myGen` in BOTH the toggle
+        /// completion AND the deferred height read, so a stale toggle cannot race a newer
+        /// `load()` that already bumped `generation`.
+        func toggleDark(_ web: WKWebView, applyDark: Bool) {
+            // Record the intended state synchronously so a rapid follow-up `updateNSView`
+            // re-detects the next change against the value this toggle is applying.
+            lastApplyDark = applyDark
+            let myGen = generation
+
+            // Build the in-place JS. ON: re-define the engine (cheap idempotent UMD eval)
+            // then enable; OFF: disable. Both guard on `window.DarkReader`.
+            let toggleJS: String
+            if applyDark {
+                // Re-inject the engine define so a first-light-then-dark page gets the
+                // global; `darkEnableScript()` itself also guards on `window.DarkReader`.
+                let engine = HTMLMessageView.darkReaderScript ?? ""
+                toggleJS = engine + "\n" + ReaderHTML.darkEnableScript()
+            } else {
+                toggleJS = "if (window.DarkReader) { window.DarkReader.disable(); }"
+            }
+
+            web.evaluateJavaScript(toggleJS) { [weak self, weak web] _, err in
+                guard let self, let web else { return }
+                // Stale toggle (a newer load() bumped generation): do nothing further.
+                guard self.generation == myGen else { return }
+                if let err {
+                    print("⚠️ MMail dark-engine: in-place toggle failed: \(err)")
+                }
+                // Re-measure AFTER the restyle + relayout paints (double-rAF) so the
+                // settled height is read. Covers BOTH enable (ON) and disable (OFF) —
+                // each relayouts. Generation-guarded inside `measureHeightAfterPaint`.
+                self.measureHeightAfterPaint(web, generation: myGen)
+            }
+        }
+
+        /// Read `document.body.scrollHeight` and publish it to `height`. The sole height
+        /// measure, routed through both the load-completion path (T008) and the in-place
+        /// toggle path (T009) so a transformed-DOM layout shift never leaves a stale value.
+        private func measureHeight(_ web: WKWebView) {
+            web.evaluateJavaScript("document.body.scrollHeight") { result, _ in
                 if let h = result as? CGFloat, h > 0 {
                     DispatchQueue.main.async { self.parent.height = ceil(h) }
+                }
+            }
+        }
+
+        /// Measure `scrollHeight` AFTER the dark transform has painted: await two
+        /// animation frames (so DarkReader's restyle + relayout has applied), then read.
+        /// `callAsyncJavaScript` awaits the returned promise, so the completion fires
+        /// post-paint — eliminating the first-render clipping the single-runloop deferral
+        /// (DispatchQueue.main.async) caused. Generation-guarded so a stale measure from a
+        /// superseded load/toggle cannot clobber a newer page's height. `.page` content
+        /// world is required so the JS sees the page's `document` / `requestAnimationFrame`.
+        private func measureHeightAfterPaint(_ web: WKWebView, generation myGen: Int) {
+            let js = "await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); return document.body.scrollHeight;"
+            // The completion handler is @MainActor, so the height write runs on the
+            // main thread directly (no DispatchQueue.main.async hop needed here).
+            web.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { [weak self] result in
+                guard let self, self.generation == myGen else { return }
+                if case .success(let value) = result {
+                    if let h = value as? CGFloat, h > 0 {
+                        self.parent.height = ceil(h)
+                    } else if let n = value as? NSNumber {
+                        let h = CGFloat(truncating: n)
+                        if h > 0 { self.parent.height = ceil(h) }
+                    }
                 }
             }
         }
