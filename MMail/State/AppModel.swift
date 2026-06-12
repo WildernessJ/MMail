@@ -311,6 +311,22 @@ final class AppModel: ObservableObject {
         if cleanJournal.count != journalRecent.count { journalRecent = cleanJournal; persistJournalRecent() }
     }
 
+    // MARK: - Open-in-window pure seams (SC-009)
+
+    /// Pure lookup-by-id seam used by detached windows (INV-1/INV-3): given an id and the
+    /// shared model's `emails`, return the matching `Email` or nil. No selection coupling.
+    static func email(withId id: String, in emails: [Email]) -> Email? {
+        emails.first { $0.id == id }
+    }
+
+    /// Pure close-decision predicate (INV-9): a detached window should close when its email's
+    /// CURRENT `folder` differs from the opener folder (local triage mutates folder in place,
+    /// keeping the row) OR the email is absent from the model entirely (hard expunge).
+    static func shouldCloseDetached(id: String, openerFolder: String, in emails: [Email]) -> Bool {
+        guard let e = email(withId: id, in: emails) else { return true }
+        return e.folder != openerFolder
+    }
+
     // MARK: - Derived
 
     var accountsById: [String: Account] {

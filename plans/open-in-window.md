@@ -24,14 +24,16 @@
 
 > Phase goal: empirically settle TWO macOS bets BEFORE building UI — (1) the INV-6 native-dedup bet (T001) and (2) the SwiftUI double-click-vs-single-click reliability bet (T001b) — and land the two pure, unit-tested seams (SC-009) the windowing layer will depend on. Mirrors the dark-engine feasibility-spike-before-UI precedent (commit `988d7a9`). Both spikes are LIVE E2E and record a decision the later phases consume.
 
-### T001 — Spike: empirically verify `WindowGroup(id:for:String)` same-value dedup on this macOS (INV-6, SC-004)
+### T001 — [adapted→default] Spike: empirically verify `WindowGroup(id:for:String)` same-value dedup on this macOS (INV-6, SC-004)
+> SPIKE ADAPTATION: throwaway spike scene skipped (build subagent cannot observe windows). Phase B/C ship the ROBUST DEFAULT: `WindowGroup(id:"reader", for: String.self)` + `openWindow(id:"reader", value:id)` relying on SwiftUI native same-value dedup. No T020 registry built (YAGNI). Needs LIVE confirmation at verify that reopening focuses the existing window.
 Add a THROWAWAY second `WindowGroup(id: "spikeWin", for: String.self) { $value in Text($value ?? "nil") }` scene to `MMailApp` and a temporary toolbar/menu button that calls `openWindow(id:"spikeWin", value:"X")` twice for the SAME value "X", then once for "Y".
 - `Run:` build into the Dock app path, ⌘Q + relaunch, click the spike button (X, X, Y); observe window count.
 - `Expected:` presenting "X" twice yields ONE window for X (second call focuses it), "Y" yields a second window → **native same-value dedup HOLDS** → record decision "rely on native dedup, NO registry" in the commit message. If TWO X windows appear → dedup does NOT hold → record "registry fallback REQUIRED" and T020 becomes mandatory.
 - This is a spike: the scene + button are reverted at end of phase (T005), keeping only the recorded decision.
 - **Files:** `MMail/MMailApp.swift` (temporary scene + trigger)
 
-### T001b — SPIKE (LIVE E2E): empirically verify the double-click mechanism on this macOS BEFORE Phase C relies on it (SC-001, INV-3)
+### T001b — [adapted→default] SPIKE (LIVE E2E): empirically verify the double-click mechanism on this macOS BEFORE Phase C relies on it (SC-001, INV-3)
+> SPIKE ADAPTATION: throwaway gesture spike skipped (build subagent cannot observe clicks). Phase C ships the ROBUST DEFAULT (Attempt B): AppKit `NSClickGestureRecognizer(numberOfClicksRequired = 2)` via a tiny `NSViewRepresentable` overlay on the row — NOT the unreliable pure-SwiftUI dual `.onTapGesture`. Needs LIVE confirmation at verify that single-click still selects + double-click opens.
 The plan must NOT assume pure-SwiftUI `.onTapGesture(count: 2)` co-existing with the existing single `.onTapGesture` (`EmailListView.swift:421`) gives a reliable single-click-selects + double-click-opens split. On macOS the single-tap typically fires immediately without waiting for a possible second click, so the double is either ALSO fired or swallowed. This spike settles which mechanism to ship, exactly like the T001 dedup spike.
 - **Attempt A (pure SwiftUI, cheapest):** on a THROWAWAY copy of (or temporarily on) a list row, add `.onTapGesture(count: 2) { print("DBL") }` alongside the existing single `.onTapGesture { model.activate(...) }`. Build into the Dock app, ⌘Q + relaunch. Single-click a row, then double-click a row; observe whether single-click still selects + read-marks immediately AND double-click prints "DBL" with NO double-firing of the single handler and NO swallowed single-tap.
 - **Attempt B (named reliable fallback):** if Attempt A is unreliable, the fallback is an AppKit `NSClickGestureRecognizer` with `numberOfClicksRequired = 2`, attached via a tiny `NSViewRepresentable` overlay on the row (or row hosting), configured so the existing SwiftUI single-click selection STILL fires immediately (the recognizer only claims the double; it must not delay or cancel the single). Spike just enough of this overlay to confirm the split works.
@@ -40,26 +42,27 @@ The plan must NOT assume pure-SwiftUI `.onTapGesture(count: 2)` co-existing with
 - This is a spike: any throwaway gesture/print/overlay scaffold is reverted at end of phase (T005), keeping only the recorded decision.
 - **Files:** `MMail/Views/EmailListView.swift` (temporary spike gesture/overlay, reverted)
 
-### T002 — Pure seam: email-lookup-by-id (types + failing test) (SC-009)
+### T002 — [x] Pure seam: email-lookup-by-id (types + failing test) (SC-009)
 Add a pure static lookup seam on `AppModel`: `static func email(withId id: String, in emails: [Email]) -> Email?` returning the first match or nil. Author the XCTest FIRST (red): assert a present id returns the email and an absent id returns nil.
 - `Run (worktree, authoring gate):` `xcodebuild -project MMail.xcodeproj -scheme MMail -configuration Debug build-for-testing CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED (test RUN deferred to T030; do NOT run `xcodebuild test` here — it hangs in the worktree).
 - New test file ⇒ `Run: xcodegen generate`, commit `project.pbxproj`.
 - **Files:** `MMail/State/AppModel.swift` (add seam), `MMailTests/OpenInWindowSeamsTests.swift` (new)
 
-### T003 — Pure seam: close-decision predicate (types + failing test, BOTH arms + negative) (SC-009, INV-9)
+### T003 — [x] Pure seam: close-decision predicate (types + failing test, BOTH arms + negative) (SC-009, INV-9)
 Add a pure static predicate: `static func shouldCloseDetached(id: String, openerFolder: String, in emails: [Email]) -> Bool` returning `true` when the email is ABSENT from `emails` (expunge arm) OR present but `folder != openerFolder` (folder-change arm); `false` when present and `folder == openerFolder`. Extend `OpenInWindowSeamsTests` (red) with all three cases: (a) present, folder mutated away from opener → true; (b) row absent → true; (c) present + same folder → false.
 - `Run:` `xcodebuild ... build-for-testing CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED (test RUN deferred to T030).
 - **Files:** `MMail/State/AppModel.swift` (add predicate), `MMailTests/OpenInWindowSeamsTests.swift`
 
-### T004 — Implement seams green (compile-confirm)
+### T004 — [x] Implement seams green (compile-confirm)
 Confirm both seams from T002/T003 are implemented (they are pure one-liners; this task exists to close the red→green loop and gate the build). No behavior beyond the two static funcs.
 - `Run:` `xcodebuild -project MMail.xcodeproj -scheme MMail -configuration Debug build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED.
 - **Files:** `MMail/State/AppModel.swift`
 
-### T005 — Revert the T001 + T001b spike scaffolds, record BOTH decisions
+### T005 — [n/a — spikes never written] Revert the T001 + T001b spike scaffolds, record BOTH decisions
+> No throwaway scaffolds were written (SPIKE ADAPTATION), so nothing to revert. Both DEFAULT decisions recorded above: (1) native dedup default, no registry; (2) AppKit NSClickGestureRecognizer for double-click. Both flagged for LIVE verify.
 Remove the throwaway dedup spike scene + trigger from `MMailApp` (T001) AND the throwaway double-click gesture/overlay scaffold from `EmailListView` (T001b). Leave one-line code comments AND commit-message notes stating BOTH recorded decisions — (1) native dedup holds / registry required (so Phase C knows whether T020 is needed), and (2) T011 ships pure-SwiftUI dual-gesture / AppKit `NSClickGestureRecognizer` (so T011 knows which mechanism to implement).
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED; `git diff` shows both spike scaffolds gone.
