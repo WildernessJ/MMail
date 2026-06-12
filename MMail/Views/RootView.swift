@@ -184,6 +184,10 @@ private struct ListDragHandle: View {
                         if dragStart != nil { model.setListWidth(model.listWidth) }
                         dragStart = nil
                         dragging = false
+                        // Reset the cursor on release: a drag that ends with the pointer
+                        // off the handle gets no onHover(false) (it was suppressed mid-drag),
+                        // so pop here. If still over the handle, the next onHover(true) re-pushes.
+                        if pushed { NSCursor.pop(); pushed = false }
                     }
             )
             .onHover { inside in
