@@ -32,8 +32,25 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     section("Appearance") {
-                        toggleRow("Dark mode", "Use a dark interface, day or night.",
-                                  on: Binding(get: { model.dark }, set: { model.setDark($0) }))
+                        VStack(spacing: 0) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Appearance").font(.system(size: 13.5, weight: .medium)).foregroundStyle(p.fg1)
+                                    Text("Follow macOS, or force Light/Dark.").font(.system(size: 12)).foregroundStyle(p.fg3)
+                                }
+                                Spacer()
+                                Picker("", selection: Binding(get: { model.appearanceMode }, set: { model.setAppearanceMode($0) })) {
+                                    Text("System").tag(AppearanceMode.system)
+                                    Text("Light").tag(AppearanceMode.light)
+                                    Text("Dark").tag(AppearanceMode.dark)
+                                }
+                                .pickerStyle(.segmented)
+                                .labelsHidden()
+                                .fixedSize()
+                            }
+                            .padding(.vertical, 12)
+                            Rectangle().fill(p.border).frame(height: 1)
+                        }
                         toggleRow("Show sidebar", "Folders and labels rail on the left.",
                                   on: Binding(get: { model.sidebarVisible }, set: { model.setSidebar($0) }))
                         toggleRow("Reading pane", "Read messages alongside the list (off goes full-width).",
