@@ -101,12 +101,19 @@ struct DetachedReaderView: View {
     /// the email may resolve once the seed completes. Deferred dismiss (INV-4 view layer + no
     /// synchronous dismiss inside a view-update pass).
     private func resolveOrDismiss() {
-        // Already present, or just seeded from cache → render, never dismiss.
-        if model.resolveDetachedEmailFromCache(emailId) { return }
-        // Not in `emails` and not in the cache. Dismiss only if the model has finished loading
-        // (truly gone); otherwise wait for the cold-launch seed to complete.
-        guard model.emailsLoaded else { return }
-        deferredDismiss()
+        // Defer off the view-update pass: this runs from `.onAppear`/`.onChange`, and
+        // `resolveDetachedEmailFromCache` mutates `@Published model.emails` (the cache seed) —
+        // calling it synchronously here is a "modifying state during view update" hazard (the
+        // same deferral the dismiss + the RootView open-drain use). Deferring also makes the
+        // seed → folderToken/onAppear ordering well-defined across runloop turns.
+        Task { @MainActor in
+            // Already present, or just seeded from cache → render, never dismiss.
+            if model.resolveDetachedEmailFromCache(emailId) { return }
+            // Not in `emails` and not in the cache. Dismiss only if the model has finished
+            // loading (truly gone); otherwise wait for the cold-launch seed to complete.
+            guard model.emailsLoaded else { return }
+            dismiss()
+        }
     }
 
     /// Close THIS window via the view layer, on the NEXT runloop turn. `.onChange`/`.onAppear`
