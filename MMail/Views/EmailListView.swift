@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct EmailListView: View {
     @EnvironmentObject var model: AppModel
@@ -421,6 +422,15 @@ struct EmailRowView: View {
             .onTapGesture {
                 if model.selectionActive { model.toggleSelect(email.id) } else { model.activate(email.id) }
             }
+            // Double-click opens the row in a detached window (SC-001, INV-3). An AppKit
+            // NSClickGestureRecognizer(numberOfClicksRequired: 2) sits BEHIND the SwiftUI
+            // `.onTapGesture` (single-click): it claims ONLY the double-click and does not
+            // delay or cancel the single click, so `model.activate(email.id)` (select +
+            // read-mark) and the multi-select branch above still fire immediately.
+            .background(
+                DoubleClickCatcher { model.requestDetachedWindow(email.id) }
+                    .allowsHitTesting(true)
+            )
             if hovered || selected {
                 VStack {
                     HStack(spacing: 2) {
@@ -524,5 +534,41 @@ struct EmailRowView: View {
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+}
+
+// MARK: - Double-click catcher (open-in-window, SC-001)
+
+/// A transparent AppKit overlay that fires `onDoubleClick` on a TWO-click NSClickGestureRecognizer.
+/// Placed BEHIND the row's SwiftUI `.onTapGesture` so the single-click selection still fires
+/// immediately — the recognizer claims only the double-click and never delays/cancels the single
+/// (chosen over the unreliable pure-SwiftUI `.onTapGesture(count:2)`+`count:1` combo). Needs LIVE
+/// verify that single-click-selects + double-click-opens both hold.
+struct DoubleClickCatcher: NSViewRepresentable {
+    let onDoubleClick: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onDoubleClick) }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        let recognizer = NSClickGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleDoubleClick)
+        )
+        recognizer.numberOfClicksRequired = 2
+        // Don't delay/swallow single clicks: the recognizer only claims the double.
+        recognizer.delaysPrimaryMouseButtonEvents = false
+        view.addGestureRecognizer(recognizer)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onDoubleClick = onDoubleClick
+    }
+
+    final class Coordinator: NSObject {
+        var onDoubleClick: () -> Void
+        init(_ onDoubleClick: @escaping () -> Void) { self.onDoubleClick = onDoubleClick }
+        @objc func handleDoubleClick() { onDoubleClick() }
     }
 }

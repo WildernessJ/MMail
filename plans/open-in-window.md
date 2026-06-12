@@ -116,7 +116,8 @@ Temporarily wire a debug trigger (e.g. a `.onAppear` call to `model.requestDetac
 
 > Phase goal: all three entry points open the targeted id; reopening focuses (no duplicate); ⌘O is single-owner and a no-op with no selection. Live-verified.
 
-### T011 — Trigger 1: double-click a list row opens it, preserving single-click (SC-001, INV-3)
+### T011 — [x] Trigger 1: double-click a list row opens it, preserving single-click (SC-001, INV-3)
+> Shipped the AppKit path per the T001b DEFAULT decision: a `DoubleClickCatcher` NSViewRepresentable wrapping `NSClickGestureRecognizer(numberOfClicksRequired: 2, delaysPrimaryMouseButtonEvents: false)`, placed as a `.background` behind the row's existing single `.onTapGesture`. Needs LIVE verify (single-click selects + double-click opens, no swallow/double-fire).
 Implement per the **recorded T001b decision** — this task does NOT assert that any particular mechanism works; T001b already settled that empirically.
 - **If T001b recorded "pure-SwiftUI dual-gesture PROVEN":** on the message-list row add `.onTapGesture(count: 2) { model.requestDetachedWindow(email.id) }` alongside the existing single-tap (`EmailListView.swift:421-423`), keeping the single `.onTapGesture` (count:1) so `model.activate(email.id)` (and the `selectionActive` multi-select branch) still fire.
 - **If T001b recorded "SwiftUI dual-gesture UNRELIABLE":** ship the AppKit fallback instead — overlay an `NSClickGestureRecognizer` with `numberOfClicksRequired = 2` via a tiny `NSViewRepresentable` on the row (e.g. as a `.background`/`.overlay`), whose action calls `model.requestDetachedWindow(email.id)`. Configure it so it claims ONLY the double-click and does NOT delay or cancel the existing SwiftUI single-click selection (the single `.onTapGesture` must keep firing immediately for select + read-mark).
@@ -125,25 +126,27 @@ Implement per the **recorded T001b decision** — this task does NOT assert that
 - `Expected (LIVE-verify):` single-click still selects + starts the read-mark immediately (no swallowed single-tap, no double-firing of `activate`); double-click opens a detached window for THAT row's id (SC-001). No regression to multi-select tap (`selectionActive` branch).
 - **Files:** `MMail/Views/EmailListView.swift`
 
-### T012 — Trigger 3: "Open in New Window" Message-menu item, ⌘O hint as TEXT (SC-001)
+### T012 — [x] Trigger 3: "Open in New Window" Message-menu item, ⌘O hint as TEXT (SC-001)
 Add a `Command(id: "open-window", group: "Mail", label: "Open in New Window", icon: "...", shortcut: "⌘O") { [weak self] in if let id = self?.selectedId { self?.requestDetachedWindow(id) } }` to `buildCommands()` (`AppModel.swift:1505`). It flows through `MenuModel.build(from:)` into the Message menu automatically and renders the `⌘O` hint as trailing TEXT via `titleWithHint` (no `.keyboardShortcut` attached — consistent with the existing menu convention, `MMailApp.swift:24-30`). `⌘O` with nil selection ⇒ the guard makes it a no-op (SC-006 menu arm).
 - `Run:` build into Dock app, ⌘Q + relaunch; open the Message menu.
 - `Expected:` "Open in New Window    ⌘O" item present; selecting it opens a detached window for the selection; with nothing selected it does nothing.
 - **Files:** `MMail/State/AppModel.swift`
 
-### T013 — Trigger 2: bind `⌘O` as a SINGLE owner via `handleKeyDown` (INV-5, SC-006)
+### T013 — [x] Trigger 2: bind `⌘O` as a SINGLE owner via `handleKeyDown` (INV-5, SC-006)
 Add a `⌘O` case to `handleKeyDown` (`AppModel.swift:3261`): `if cmd && !shift && lower == "o" { if let id = selectedId, emails.contains(where: {$0.id == id}) { requestDetachedWindow(id) }; return true }`. **CRITICAL placement — insert it ABOVE the vimNav guard.** `handleKeyDown` has a hard gate `if isTyping || anyOverlayOpen || onboarding || !vimNav { return false }` at `AppModel.swift:3299`. All the existing `cmd` combos that must work regardless of vim-mode (`⌘K` at line 3269, the `⌘0–9` block at 3272, the `⌘⇧` block at 3278) live ABOVE that gate. Put the `⌘O` case in that same band, right next to the `⌘K` case (~line 3269–3285) — NEVER below line 3299. If it were placed after the gate it would silently no-op whenever the user has `vimNav` off, which is a supported state. **Mechanism justification:** the menu item (T012) attaches NO `.keyboardShortcut` (the whole menu is text-hint-only by `MMailApp.swift:24-27`), so `handleKeyDown` is the SOLE place `⌘O` is bound → no double-fire (INV-5). Returning `true` consumes the event. With no selection the guard opens nothing and still returns `true` (no system beep) — `⌘O`-no-op (SC-006).
 - `Run:` build into Dock app, ⌘Q + relaunch; select a message, press ⌘O; then deselect/empty-folder and press ⌘O.
 - `Expected:` ⌘O opens exactly ONE detached window for the selection (no double-fire); ⌘O with no selection opens nothing and no error (SC-006).
 - **Files:** `MMail/State/AppModel.swift`
 
-### T014 — LIVE E2E: dedup-focus on reopen + two different emails coexist (SC-004, INV-6)
+### T014 — [pending-verify] LIVE E2E: dedup-focus on reopen + two different emails coexist (SC-004, INV-6)
+> Relies on SwiftUI native same-value dedup (Phase A DEFAULT). Code builds; on-screen confirmation that reopening focuses (no duplicate) is a verify-stage step. T020 registry intentionally NOT built (YAGNI — only needed if live verify shows duplicate windows).
 Using the recorded Phase A decision: if native dedup HELD (T001), this task is pure live-verification of it; if the decision was "registry required", do T020 FIRST then return here.
 - `Run:` build into Dock app, ⌘Q + relaunch; open email A (any trigger), trigger open for A again; separately open A and B.
 - `Expected:` reopening A FOCUSES the existing A window — no second A window (INV-6/SC-004); A and B can be open simultaneously, each bound to its own id.
 - **Files:** none (verification) — OR `MMail/...` if T020 was required.
 
-### T020 — (CONDITIONAL — only if T001 found native dedup does NOT hold) explicit open-window-id registry fallback (INV-6, SC-004)
+### T020 — [not built — conditional] (CONDITIONAL — only if T001 found native dedup does NOT hold) explicit open-window-id registry fallback (INV-6, SC-004)
+> NOT built. Native same-value dedup is the chosen DEFAULT; the registry is only built if live verify (T014) shows duplicate windows.
 Add `@Published var openDetachedIds: Set<String>` to `AppModel`, inserted on window appear and removed on window disappear (via `DetachedReaderView.onAppear/onDisappear`). In `requestDetachedWindow(_:)`, if the id is already in `openDetachedIds`, route to a `focusRequest: String?` state that `RootView` consumes with `openWindow(id:"reader", value:id)` (presenting an open value focuses it even when value-dedup is off, OR uses `NSApp` window-title match as a last resort) instead of requesting a new one. Sits BEFORE T014's verification.
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`, then live re-verify per T014.
 - `Expected:` BUILD SUCCEEDED; reopen focuses, no duplicate.

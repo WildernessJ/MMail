@@ -1535,6 +1535,7 @@ final class AppModel: ObservableObject {
             Command(id: "reply", group: "Mail", label: "Reply to current message", icon: "reply", shortcut: "R") { [weak self] in self?.reply() },
             Command(id: "replyAll", group: "Mail", label: "Reply all", icon: "replyAll", shortcut: "A") { [weak self] in self?.replyAll() },
             Command(id: "forward", group: "Mail", label: "Forward", icon: "forward", shortcut: "F") { [weak self] in self?.forward() },
+            Command(id: "open-window", group: "Mail", label: "Open in New Window", icon: "window", shortcut: "⌘O") { [weak self] in if let id = self?.selectedId { self?.requestDetachedWindow(id) } },
             Command(id: "archive", group: "Triage", label: "Archive", icon: "archive", shortcut: "E") { [weak self] in self?.archive() },
             Command(id: "done", group: "Triage", label: "Mark as done", icon: "check", shortcut: "H") { [weak self] in self?.markDone() },
             Command(id: "snooze", group: "Triage", label: "Snooze", icon: "clock", shortcut: "Z") { [weak self] in self?.snooze() },
@@ -3294,6 +3295,15 @@ final class AppModel: ObservableObject {
 
         // ⌘K — always
         if cmd && lower == "k" { palette.toggle(); return true }
+
+        // ⌘O — open the current selection in a detached window (INV-5: handleKeyDown is the
+        // SOLE ⌘O owner — the menu item attaches no `.keyboardShortcut`, so no double-fire).
+        // Placed ABOVE the vimNav gate so it works regardless of vim-mode. No selection ⇒
+        // opens nothing but still consumes the event (no system beep), the SC-006 no-op.
+        if cmd && !shift && lower == "o" {
+            if let id = selectedId, emails.contains(where: { $0.id == id }) { requestDetachedWindow(id) }
+            return true
+        }
 
         // ⌘0..9 — switch account
         if cmd && !shift, chars.count == 1, let n = Int(chars) {
