@@ -61,8 +61,13 @@ import Foundation
     }
 
     @Test func clampSidebarBelowMinimum() {
-        #expect(clampSidebarWidth(100) < 232)
-        #expect(clampSidebarWidth(100) == clampSidebarWidth(0))
+        // A sub-floor input is clamped UP to a positive lower bound (falsifies a
+        // missing/zero floor) and two sub-floor inputs collapse to that same bound.
+        // Asserts the floor's existence + position relative to the 232 default without
+        // hardcoding the tunable bound itself.
+        #expect(clampSidebarWidth(0) > 0)
+        #expect(clampSidebarWidth(0) == clampSidebarWidth(-100))
+        #expect(clampSidebarWidth(0) < 232)
     }
 
     @Test func clampSidebarAboveMaximum() {
