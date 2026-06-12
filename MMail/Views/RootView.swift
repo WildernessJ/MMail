@@ -36,6 +36,7 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.2), value: model.sidebarVisible)
         .animation(.easeOut(duration: 0.2), value: model.readingPane)
+        .animation(.easeOut(duration: 0.2), value: model.sidebarSize)
     }
 
     // MARK: - Body content
@@ -53,6 +54,7 @@ struct RootView: View {
                 OutboxView()
             } else if model.readingPane {
                 EmailListView()
+                ListDragHandle()
                 ReaderView()
             } else if model.readerFullScreen {
                 ReaderView()
@@ -153,5 +155,48 @@ struct RootView: View {
             model.searchActive = true
             searchFocused = true
         }
+    }
+}
+
+/// Thin draggable divider between the mail list and the reader (reading-pane mode only).
+/// Resizes `model.listWidth` live during the drag and persists once on release.
+private struct ListDragHandle: View {
+    @EnvironmentObject var model: AppModel
+    @State private var dragStart: CGFloat?
+    @State private var pushed = false
+
+    var body: some View {
+        Rectangle()
+            .fill(.clear)
+            .contentShape(Rectangle())
+            .frame(width: 6)
+            .frame(maxHeight: .infinity)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { v in
+                        if dragStart == nil { dragStart = model.listWidth }
+                        guard let ds = dragStart else { return }
+                        model.listWidth = clampListWidth(ds + v.translation.width)
+                    }
+                    .onEnded { _ in
+                        model.setListWidth(model.listWidth)
+                        dragStart = nil
+                    }
+            )
+            .onHover { inside in
+                if inside && !pushed {
+                    NSCursor.resizeLeftRight.push()
+                    pushed = true
+                } else if !inside && pushed {
+                    NSCursor.pop()
+                    pushed = false
+                }
+            }
+            .onDisappear {
+                if pushed {
+                    NSCursor.pop()
+                    pushed = false
+                }
+            }
     }
 }

@@ -27,8 +27,8 @@ struct EmailListView: View {
             }
             list
         }
-        .frame(width: model.readingPane ? 380 : nil)
-        .frame(maxWidth: model.readingPane ? 380 : .infinity, maxHeight: .infinity)
+        .frame(width: model.readingPane ? model.listWidth : nil)
+        .frame(maxWidth: model.readingPane ? model.listWidth : .infinity, maxHeight: .infinity)
         .background(p.bg1)
         .overlay(Rectangle().fill(p.border).frame(width: 1), alignment: .trailing)
     }

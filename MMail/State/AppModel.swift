@@ -3291,6 +3291,7 @@ final class AppModel: ObservableObject {
             case "s": setSidebar(!sidebarVisible); return true
             case "r": setReadingPane(!readingPane); return true
             case "d": setDark(!dark); return true
+            case "l": cycleSidebarSize(); return true
             default: break
             }
         }

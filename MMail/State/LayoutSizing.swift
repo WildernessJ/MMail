@@ -67,5 +67,6 @@ func loadSidebarSize(_ d: UserDefaults) -> SidebarSize {
 /// so a corrupt/out-of-range stored value can never produce an unusable layout.
 /// View/`AppModel`-free; delegates clamping entirely to `clampListWidth`.
 func loadListWidth(_ d: UserDefaults) -> CGFloat {
+    // `object(forKey:) as? Double` (not `double(forKey:)`) so a MISSING key is nil → 380, since `double(forKey:)` would return 0.0 and defeat the `?? 380` default.
     clampListWidth((d.object(forKey: LayoutDefaultsKey.listWidth) as? Double).map { CGFloat($0) } ?? 380)
 }

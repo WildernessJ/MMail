@@ -37,6 +37,14 @@ struct MMailApp: App {
                 ForEach(menuModel.viewInsertion, id: \.commandId) { item in
                     Button(titleWithHint(item)) { model.run(item.commandId) }
                 }
+                Menu("Sidebar Size") {
+                    Picker("Sidebar Size", selection: Binding(get: { model.sidebarSize }, set: { model.setSidebarSize($0) })) {
+                        Text("Small").tag(SidebarSize.small)
+                        Text("Medium").tag(SidebarSize.medium)
+                        Text("Large").tag(SidebarSize.large)
+                    }
+                    .pickerStyle(.inline)
+                }
             }
 
             // The ONLY accelerator this feature adds: Settings ⌘, in the application menu.
