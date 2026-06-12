@@ -93,6 +93,7 @@ final class AppModel: ObservableObject {
     private let kTodos = "mmail.todos"
     private let kJournal = "mmail.journal.today"
     private let kDark = "mmail.dark"
+    private let kAppearanceMode = "mmail.appearanceMode"
     private let kSidebar = "mmail.sidebar"
     private let kReadingPane = "mmail.readingPane"
     private let kJournalRecent = "mmail.journal.recent"
@@ -121,6 +122,12 @@ final class AppModel: ObservableObject {
     var selectionActive: Bool { !selectedIds.isEmpty }
 
     // Tweaks / appearance
+    // Persisted source of truth for the three-way System / Light / Dark setting
+    // (written only by setAppearanceMode). `dark` below is DERIVED from this plus
+    // the live OS appearance (INV-1, INV-3).
+    @Published var appearanceMode: AppearanceMode
+    // Derived render source of truth — recomputed from `appearanceMode` + the live
+    // OS appearance; every existing reader observes it unchanged (INV-1).
     @Published var dark: Bool
     @Published var sidebarVisible: Bool
     @Published var readingPane: Bool
@@ -236,11 +243,24 @@ final class AppModel: ObservableObject {
     private var keyMonitor: Any?
     private var toastWorkItem: DispatchWorkItem?
     private var pendingSendWork: DispatchWorkItem?
+    // Retains the DistributedNotificationCenter observer token; releasing it
+    // auto-removes the observer (so System mode would silently stop following the
+    // OS). Load-bearing by retention — do NOT delete as "unused".
+    private var appearanceObserver: NSObjectProtocol?
 
     init() {
         let d = UserDefaults.standard
         onboarding = true
-        dark = d.object(forKey: kDark) as? Bool ?? false
+        // Migrate the appearance setting (read-only on load): new key wins; else the
+        // legacy `mmail.dark` bool migrates; else `.system` (INV-3). The legacy key is
+        // read exactly once here. Seed the derived `dark` by reading the system-wide
+        // `AppleInterfaceStyle` INLINE — the systemIsDark()/recomputeDark() helpers
+        // can't be called before `self` is fully initialized.
+        let storedMode = d.string(forKey: kAppearanceMode).flatMap { AppearanceMode(rawValue: $0) }
+        let legacy = d.object(forKey: kDark) as? Bool
+        let migratedMode = AppearanceMode.migrate(stored: storedMode, legacyDark: legacy)
+        appearanceMode = migratedMode
+        dark = migratedMode.resolvedDark(systemIsDark: d.string(forKey: "AppleInterfaceStyle") == "Dark")
         sidebarVisible = d.object(forKey: kSidebar) as? Bool ?? true
         readingPane = d.object(forKey: kReadingPane) as? Bool ?? true
         railSize = loadRailSize(d)
@@ -527,7 +547,9 @@ final class AppModel: ObservableObject {
     func persistOnboarded() { UserDefaults.standard.set(true, forKey: kOnboarded) }
     func persistTweaks() {
         let d = UserDefaults.standard
-        d.set(dark, forKey: kDark)
+        // The legacy `kDark` write is intentionally GONE — `dark` is derived and
+        // `mmail.appearanceMode` is the persisted source of truth, written only by
+        // setAppearanceMode. Re-writing the legacy bool here could shadow the new key (INV-3).
         d.set(sidebarVisible, forKey: kSidebar)
         d.set(readingPane, forKey: kReadingPane)
         d.set(railSize.rawValue, forKey: LayoutDefaultsKey.railSize)
@@ -1555,7 +1577,7 @@ final class AppModel: ObservableObject {
             Command(id: "search", group: "App", label: "Search mail", icon: "search", shortcut: "/") { [weak self] in self?.activateSearch() },
             Command(id: "help", group: "App", label: "Show keyboard shortcuts", icon: "command", shortcut: "?") { [weak self] in self?.help = true },
             Command(id: "settings", group: "App", label: "Open settings", icon: "settings", shortcut: "⌘,") { [weak self] in self?.settings = true },
-            Command(id: "dark", group: "App", label: "Toggle dark mode (now \(dark ? "on" : "off"))", icon: "zap", shortcut: "⌘⇧D") { [weak self] in self?.setDark(!(self?.dark ?? false)) },
+            Command(id: "dark", group: "App", label: "Toggle dark mode (now \(dark ? "on" : "off"))", icon: "zap", shortcut: "⌘⇧D") { [weak self] in guard let self else { return }; self.setAppearanceMode(AppearanceMode.toggledExplicit(currentDark: self.dark)) },
             Command(id: "sidebar", group: "App", label: "Toggle sidebar (now \(sidebarVisible ? "shown" : "hidden"))", icon: "sidebar", shortcut: "⌘⇧S") { [weak self] in self?.setSidebar(!(self?.sidebarVisible ?? true)) },
             Command(id: "reading", group: "App", label: "Toggle reading pane (now \(readingPane ? "on" : "off"))", icon: "panel", shortcut: "⌘⇧R") { [weak self] in self?.setReadingPane(!(self?.readingPane ?? true)) },
             Command(id: "palette", group: "App", label: "Command palette", icon: "command", shortcut: "⌘K") { [weak self] in self?.palette.toggle() },
@@ -1575,9 +1597,31 @@ final class AppModel: ObservableObject {
         buildCommands().first { $0.id == id }?.run()
     }
 
+    // MARK: - Appearance (three-way System / Light / Dark)
+
+    /// The live system-wide OS appearance signal — the global domain `AppleInterfaceStyle`
+    /// (`"Dark"` → true, nil/anything else → false). NOT `NSApp.effectiveAppearance`,
+    /// which reflects MMail's forced `.preferredColorScheme` rather than the OS setting
+    /// (INV-4).
+    private func systemIsDark() -> Bool { UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark" }
+
+    /// The single bridge from `appearanceMode` + the live OS appearance → the derived
+    /// `dark`. Assigning `dark` republishes so every existing reader re-renders (INV-1/INV-2).
+    private func recomputeDark() { dark = appearanceMode.resolvedDark(systemIsDark: systemIsDark()) }
+
+    /// The ONLY writer of `mmail.appearanceMode`: persist the mode, then recompute the
+    /// derived `dark` (INV-3). Runs on the main actor (AppModel is the main-actor model).
+    func setAppearanceMode(_ m: AppearanceMode) {
+        appearanceMode = m
+        UserDefaults.standard.set(m.rawValue, forKey: kAppearanceMode)
+        recomputeDark()
+    }
+
     // MARK: - Tweak setters (persist)
 
-    func setDark(_ v: Bool) { dark = v; persistTweaks() }
+    /// Thin shim — routes through `setAppearanceMode` so no caller writes `dark`
+    /// directly out from under the derived recompute.
+    func setDark(_ v: Bool) { setAppearanceMode(v ? .dark : .light) }
     func setSidebar(_ v: Bool) { sidebarVisible = v; persistTweaks() }
     func setReadingPane(_ v: Bool) { readingPane = v; readerFullScreen = false; persistTweaks() }
     func setRailSize(_ v: RailSize) { railSize = v; persistTweaks() }
@@ -3320,7 +3364,7 @@ final class AppModel: ObservableObject {
             switch lower {
             case "s": setSidebar(!sidebarVisible); return true
             case "r": setReadingPane(!readingPane); return true
-            case "d": setDark(!dark); return true
+            case "d": setAppearanceMode(AppearanceMode.toggledExplicit(currentDark: dark)); return true
             case "l": cycleRailSize(); return true
             default: break
             }
