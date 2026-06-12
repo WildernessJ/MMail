@@ -35,8 +35,8 @@ enum RailSize: String, CaseIterable {
     var tileSize: CGFloat {
         switch self {
         case .small: return 38
-        case .medium: return 48
-        case .large: return 48
+        case .medium: return 56
+        case .large: return 56
         }
     }
 
