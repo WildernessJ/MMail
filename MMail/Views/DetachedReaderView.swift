@@ -8,12 +8,24 @@ import SwiftUI
 /// `ReaderContent` for full render parity (INV-7).
 ///
 /// On first appear it captures the email's current `folder` as its opener folder (INV-9) —
-/// at fresh-open AND at relaunch-restore — which the auto-close predicate (Phase E) consumes.
-/// If the id resolves to nil it renders an empty surface; the nil-lookup self-dismiss and the
-/// folder-change/expunge auto-close wiring land in Phase E (T019/T022), not here.
+/// at fresh-open AND at relaunch-restore. The window auto-closes (INV-9, SC-005) when the
+/// email's current folder differs from that opener folder OR the email is expunged from the
+/// shared model, via the pure `AppModel.shouldCloseDetached(id:openerFolder:in:)` predicate.
+///
+/// Dismissal goes through the VIEW LAYER (`@Environment(\.dismiss)`), never AppModel (INV-4),
+/// and is always deferred onto the next runloop turn (`Task { @MainActor }`) — calling it
+/// synchronously from `.onChange` is a "modifying state during view update" hazard.
+///
+/// Relaunch race (SC-008): on cold launch `model.emails` loads asynchronously, so a restored
+/// window may appear before emails populate and the lookup is transiently nil. A nil lookup
+/// self-dismisses ONLY once `model.emailsLoaded` is true (bootstrap's cache seed has run) —
+/// a nil-while-loading window waits for the email to resolve rather than killing itself.
 struct DetachedReaderView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
+    /// Dismisses THIS WindowGroup window. The view layer owns window lifecycle (INV-4);
+    /// AppModel never references `dismiss`/`dismissWindow`/`openWindow`.
+    @Environment(\.dismiss) private var dismiss
 
     let emailId: String
 
@@ -23,6 +35,13 @@ struct DetachedReaderView: View {
 
     private var email: Email? { AppModel.email(withId: emailId, in: model.emails) }
 
+    /// Narrow auto-close observation token: this email's CURRENT folder, or nil if its row is
+    /// gone. Changes on BOTH an in-place folder mutation (archive/delete/move keep the row but
+    /// rewrite `folder`, AppModel.swift:645-684 → folder string changes) AND row removal
+    /// (external expunge, AppModel.swift:2552-2555 → nil). So a single `.onChange` on it covers
+    /// the folder-change arm and the expunge arm of `shouldCloseDetached`.
+    private var folderToken: String? { model.emails.first(where: { $0.id == emailId })?.folder }
+
     var body: some View {
         Group {
             if let email {
@@ -30,19 +49,54 @@ struct DetachedReaderView: View {
                     .id(email.id)
                     .onAppear {
                         // Capture the opener folder once, on the content's first appear
-                        // (covers fresh-open AND relaunch-restore, INV-9).
+                        // (covers fresh-open AND relaunch-restore, INV-9). A window restored
+                        // for an email MOVED while the app was closed captures its CURRENT
+                        // folder here, so it does NOT auto-close on launch — only on a later
+                        // in-session move/expunge (SC-008 moved-while-closed scenario).
                         if openerFolder == nil { openerFolder = email.folder }
                         // Trigger the shared body-load path for THIS id (not the selection,
                         // INV-3) so an unloaded body loads in the detached window (SC-007a).
                         model.loadBodyIfNeeded(forId: emailId)
                     }
             } else {
-                // Lookup nil (e.g. a relaunch-restored window for an expunged id). Render
-                // empty; self-dismiss wiring is Phase E (T022).
+                // Lookup nil. Either (b) the model is still loading on relaunch (wait — the
+                // email may resolve) or (c) it is loaded and the email is truly gone (dismiss).
+                // No placeholder (SC-005): render an empty surface; the dismiss-if-gone check
+                // runs in `.onAppear` and on `emailsLoaded` flipping true.
                 Color.clear
+                    .onAppear { dismissIfTrulyGone() }
             }
         }
+        // Folder-change + expunge auto-close (T019, INV-9, SC-005). Re-evaluate the close
+        // predicate whenever this email's folder changes or its row is removed. Only fires
+        // once the opener folder is captured (predicate needs it).
+        .onChange(of: folderToken) { _, _ in
+            guard let opener = openerFolder else { return }
+            if AppModel.shouldCloseDetached(id: emailId, openerFolder: opener, in: model.emails) {
+                deferredDismiss()
+            }
+        }
+        // Relaunch truly-gone check (T022, SC-008): if this window appeared while the model
+        // was still loading (nil lookup, no opener captured), re-check once the cache seed
+        // completes. A still-nil lookup now means the email is genuinely gone → dismiss.
+        .onChange(of: model.emailsLoaded) { _, _ in dismissIfTrulyGone() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(p.bg2)
+    }
+
+    /// Dismiss only when the lookup is nil AND the model has finished its cold-launch cache
+    /// seed (`emailsLoaded`). Guards against killing a relaunch-restored window during the
+    /// transient nil window before `emails` populates (SC-008). Deferred (INV-4 view layer +
+    /// no synchronous dismiss inside a view-update pass).
+    private func dismissIfTrulyGone() {
+        guard email == nil, model.emailsLoaded else { return }
+        deferredDismiss()
+    }
+
+    /// Close THIS window via the view layer, on the NEXT runloop turn. `.onChange`/`.onAppear`
+    /// fire during a SwiftUI update pass; calling `dismiss()` synchronously there is a
+    /// "modifying state during view update" hazard (same deferral the RootView open-drain uses).
+    private func deferredDismiss() {
+        Task { @MainActor in dismiss() }
     }
 }

@@ -118,6 +118,13 @@ final class AppModel: ObservableObject {
     /// are not coalesced — a scalar `@Published` would overwrite, dropping the first request.
     /// `AppModel` only enqueues; it never calls SwiftUI window APIs (INV-4).
     @Published var detachQueue: [String] = []
+    /// Cold-launch "emails loaded" signal (INV-9 relaunch race). Flips true ONCE, after
+    /// `bootstrapRealAccounts()` finishes seeding `emails` from the on-disk cache. A
+    /// detached window restored on relaunch may appear BEFORE this fires, so a transiently
+    /// nil id lookup must NOT self-dismiss while `emailsLoaded == false` (the email may still
+    /// resolve once the cache loads). Only once it is true does a still-nil lookup mean the
+    /// email is truly gone (expunged while closed) → dismiss. (T022/SC-008.)
+    @Published var emailsLoaded = false
     @Published var filter: InboxFilter = .all
     // When the reading pane is off, this opens the selected message full-width.
     @Published var readerFullScreen = false
@@ -2221,6 +2228,11 @@ final class AppModel: ObservableObject {
             loadFolder(cfg.id, "inbox", silent: true)
         }
         if selectedId == nil { selectedId = filteredEmails.first?.id }
+        // The synchronous cache seed above has run; `emails` now reflects whatever was on
+        // disk. Signal "loaded" so a relaunch-restored detached window can distinguish a
+        // truly-gone id (dismiss) from a still-loading one (wait). Set AFTER the seed so a
+        // detached window observing this flag never sees true with an un-seeded `emails`.
+        emailsLoaded = true
     }
 
     func loadFolder(_ accountId: String, _ folderId: String, silent: Bool = false, incremental: Bool = false, force: Bool = false) {

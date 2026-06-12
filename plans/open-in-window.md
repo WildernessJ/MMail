@@ -160,19 +160,19 @@ Add `@Published var openDetachedIds: Set<String>` to `AppModel`, inserted on win
 
 > Phase goal: a compose/reader action invoked from a detached window targets THAT window's email id, never the live main-window selection (INV-10). Includes the same `selectedEmail`-coupling fix for the unloaded-body load path.
 
-### T015 — id-targeted reply/replyAll/forward variants (INV-10, SC-003 reply scenario)
+### T015 — [x] id-targeted reply/replyAll/forward variants (INV-10, SC-003 reply scenario)
 Add id-parameter overloads on `AppModel` mirroring the selection-based ones (`AppModel.swift:1401-1420`): `reply(_ id: String)`, `replyAll(_ id: String)`, `forward(_ id: String)`, each resolving `emails.first{$0.id==id}` (instead of `guard let e = selectedEmail`) then calling the existing `startCompose(...)`. DRY: have the existing no-arg forms delegate to the id form with `selectedId` to avoid duplicated compose-string logic where practical. These do NOT read/mutate `selectedId` (INV-3/10).
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED.
 - **Files:** `MMail/State/AppModel.swift`
 
-### T016 — id-targeted body-load for the unloaded-body detached path (SC-007a, INV-3)
+### T016 — [x] id-targeted body-load for the unloaded-body detached path (SC-007a, INV-3)
 `loadBodyIfNeeded()` guards on `selectedEmail` (`AppModel.swift:2795-2796`), so a detached window showing an UNLOADED email cannot trigger a load without selecting it. Add `func loadBodyIfNeeded(forId id: String)` resolving the email by id (not `selectedEmail`) and running the same fetch path; call it from `DetachedReaderView.onAppear` (alongside the opener-folder capture). DRY: refactor the existing no-arg form to delegate to the id form with `selectedId`.
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED.
 - **Files:** `MMail/State/AppModel.swift`, `MMail/Views/DetachedReaderView.swift`
 
-### T017 — Point the detached window's reader actions at its own id (INV-10)
+### T017 — [x] Point the detached window's reader actions at its own id (INV-10)
 Add an opt-in flag to `ReaderContent` (`var detached: Bool = false`, defaulting false so the inline reader is **byte-unchanged**) that, when `detached == true`, routes EVERY selection-coupled reader-toolbar/moreMenu action to its id form. `DetachedReaderView` instantiates `ReaderContent(email:account:detached:true)`.
 - **CRITICAL — the reader toolbar's TRIAGE calls are NOT id-keyed and DO leak to the main selection.** `ReaderContent` calls `model.markDone()` (`ReaderView.swift:140`), `model.archive()` (`:185`), `model.markSpam()` (`:197`), and `model.delete()` (`:218`) with NO argument. Each AppModel method already accepts an optional id (`archive(_ id: String? = nil)`, `markDone(_:)`, `markSpam(_:)`, `delete(_:)`, verified `AppModel.swift:663,670,677,686`) and falls back to `selectedId` when called bare — so from a detached window these would triage the MAIN window's selection (INV-10 violation). The fix is at the CALL SITE: when `detached`, call `model.markDone(email.id)` (`:140`), `model.archive(email.id)` (`:185`), `model.markSpam(email.id)` (`:197`), `model.delete(email.id)` (`:218`). (The LIST-ROW triage at `EmailListView.swift:429` already passes `email.id` and is fine — it is NOT a `ReaderContent` call site; do not touch it.)
 - **Reply/forward call sites (also no-arg, fall back to `selectedEmail`)** — when `detached`, route to the T015 id forms (`model.reply(email.id)` / `model.replyAll(email.id)` / `model.forward(email.id)`). Verified call sites in `ReaderContent`: `model.replyAll()` (`:141`), `model.reply()` (`:182`), `model.forward()` (`:183`), `model.reply()` (`:562`), `model.replyAll()` (`:563`), `model.reply()` (`:650`).
@@ -181,7 +181,7 @@ Add an opt-in flag to `ReaderContent` (`var detached: Bool = false`, defaulting 
 - `Expected:` BUILD SUCCEEDED; inline reader behavior byte-unchanged when `detached == false` (every routed call collapses to the original no-arg form).
 - **Files:** `MMail/Views/ReaderView.swift`, `MMail/Views/DetachedReaderView.swift`
 
-### T018 — LIVE E2E: reply/triage from A's window while B is selected targets A, not B (INV-10, SC-003)
+### T018 — [pending-verify] LIVE E2E: reply/triage from A's window while B is selected targets A, not B (INV-10, SC-003)
 - `Run:` build into Dock app, ⌘Q + relaunch; open email A detached, then select email B in the main window; invoke Reply (and Reply All / Forward) from A's detached toolbar/moreMenu.
 - `Expected:` the compose draft is a reply to A (A's sender/subject/quoted body), NOT B (INV-10).
 - **Also verify the detached TRIAGE path (T017's main fix):** with A detached and B selected in the main window, invoke Archive / Mark Spam / Delete (and Mark Done) from A's detached toolbar/moreMenu → the action hits A (A leaves its folder / is removed), and B is untouched (B stays selected and in place). Before T017, these bare calls would have hit B — confirm they no longer do.
@@ -196,30 +196,30 @@ Add an opt-in flag to `ReaderContent` (`var detached: Bool = false`, defaulting 
 
 > Phase goal: the window closes on ALL THREE removal sources (own toolbar, main window, external expunge) via the opener-folder/absence predicate, removing A doesn't close B, relaunch tolerates stale/moved ids; then xcodegen + full build. The deferred seam-suite RUN (T030) is a VERIFY-STAGE / post-merge step — NOT runnable from `main` pre-merge (the test file doesn't exist there yet).
 
-### T019 — Wire auto-close: observe the close predicate, dismiss via the view layer (INV-9, SC-005, INV-4)
+### T019 — [x] Wire auto-close: observe the close predicate, dismiss via the view layer (INV-9, SC-005, INV-4)
 In `DetachedReaderView`, once `openerFolder` is captured, observe the shared model so that whenever `emails` changes, evaluate `AppModel.shouldCloseDetached(id: emailId, openerFolder: openerFolder!, in: model.emails)` (the T003 seam). When it returns true, request dismissal of THIS window through the view layer's `@Environment(\.dismissWindow)` (or `dismiss`) — NOT through AppModel (INV-4). Use `.onChange(of: model.emails.map{ "\($0.id):\($0.folder)" })` (or a derived token) so in-place folder mutation (which keeps the row, `AppModel.swift:645-684`) and row removal (expunge, `AppModel.swift:2552-2555`) both trigger re-evaluation. Render no placeholder.
 - **CRITICAL — defer the dismiss out of the view-update cycle.** `.onChange` fires DURING a view update; calling `dismissWindow(...)` (or setting state that triggers it) synchronously inside the `.onChange` closure is a "modifying state during view update" hazard → SwiftUI runtime warning and a glitchy or failed dismiss. Wrap the dismiss so it runs on the NEXT runloop turn: `Task { @MainActor in dismissWindow(...) }` (or `DispatchQueue.main.async { dismissWindow(...) }`). The predicate evaluation may stay inline; only the actual dismiss call is deferred. Apply the same deferral to the T022 nil-lookup self-dismiss path.
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED.
 - **Files:** `MMail/Views/DetachedReaderView.swift`
 
-### T021 — LIVE E2E: auto-close from all three sources + removing-A-doesn't-close-B (SC-005, INV-9)
+### T021 — [pending-verify] LIVE E2E: auto-close from all three sources + removing-A-doesn't-close-B (SC-005, INV-9)
 - `Run:` build into Dock app, ⌘Q + relaunch. (a) Open A detached, archive/delete/move A FROM A's own toolbar. (b) Open A detached, archive/delete/move A from the MAIN window. (c) Open A detached, trigger/simulate an external IMAP expunge of A (or use a folder whose next sync drops the row). Separately: open A and B, then remove A.
 - `Expected:` in (a) and (b) A's window auto-closes because A's current folder ≠ opener folder (row + id persist); in (c) it closes because the row is physically removed (id-absence arm); NO "no longer available" placeholder ever appears (SC-005). Removing A closes ONLY A — B's window stays open showing B (INV-9 isolation).
 - **Files:** none (verification)
 
-### T022 — Relaunch restoration: stale id self-dismiss + moved-while-closed captures current folder (SC-008, INV-9)
+### T022 — [x] Relaunch restoration: stale id self-dismiss + moved-while-closed captures current folder (SC-008, INV-9)
 Confirm the `DetachedReaderView` nil-lookup path (T008) self-dismisses on restore when the id is gone (lookup nil ⇒ request dismiss via the SAME deferred view-layer path as T019 — `Task { @MainActor in dismissWindow(...) }`, never a synchronous dismiss inside a view update) — no crash, no placeholder. Confirm opener-folder capture happens at restore `.onAppear` (already T008/INV-9), so a window restored for an email moved WHILE THE APP WAS CLOSED renders it in its current folder and captures THAT as opener (does not retroactively close), closing only on a subsequent in-session move/expunge.
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED.
 - **Files:** `MMail/Views/DetachedReaderView.swift` (if any gap vs T008/T019)
 
-### T023 — LIVE E2E: relaunch restores in-cache window; gone-id self-dismisses; moved-while-closed renders (SC-008, SC-007b)
+### T023 — [pending-verify] LIVE E2E: relaunch restores in-cache window; gone-id self-dismisses; moved-while-closed renders (SC-008, SC-007b)
 - `Run:` open A (and optionally B) detached, ⌘Q. Relaunch with A still cached. Separately: arrange A to be gone after relaunch (expunged while closed). Separately: move A to another folder while the app is closed, then relaunch.
 - `Expected:` (1) restored A window renders A as a full reader from cache (SC-008, SC-007b); (2) a restored window whose email is gone self-dismisses with no crash/placeholder; (3) a window for an email moved-while-closed renders it and does NOT auto-close on launch, but DOES close on a subsequent in-session move/expunge.
 - **Files:** none (verification)
 
-### T024 — No-schema-change inspection + project regen + full build (SC-010, INV-8)
+### T024 — [x] No-schema-change inspection + project regen + full build (SC-010, INV-8)
 Confirm by diff/inspection that `MailCache` on-disk schema and `Email` `Codable` shape are byte-for-byte unchanged (this feature added no stored properties to `Email`, no cache keys). Run `xcodegen generate` to ensure every new file (`DetachedReaderView.swift`, `OpenInWindowSeamsTests.swift`) is registered, commit `project.pbxproj`, then full build.
 - `Run:` `git diff -- MMail/Models/Models.swift MMail/Mail/MailCache.swift` ; then `xcodegen generate` ; then `xcodebuild -project MMail.xcodeproj -scheme MMail -configuration Debug build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` no `Email`/cache schema changes in the diff (SC-010); BUILD SUCCEEDED.
