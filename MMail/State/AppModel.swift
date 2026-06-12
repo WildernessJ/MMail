@@ -226,6 +226,10 @@ final class AppModel: ObservableObject {
     private var pageLimits: [String: Int] = [:]
     @Published var weather: WeatherInfo?
     @Published var weatherCity = ""   // empty = auto (IP geolocation)
+    /// Raised ONLY when an explicit user-submitted typed city yields not-found
+    /// (INV-5). Never set on automatic launch/refresh or the IP path. The Home
+    /// view binds this to the "Couldn't find that city" alert.
+    @Published var weatherNotFound = false
     @Published var peopleOpen = false
     private let kWeatherCity = "mmail.weatherCity"
 
@@ -1175,14 +1179,29 @@ final class AppModel: ObservableObject {
     func setWeatherCity(_ city: String) {
         weatherCity = city.trimmingCharacters(in: .whitespaces)
         UserDefaults.standard.set(weatherCity, forKey: kWeatherCity)
-        refreshWeather()
+        refreshWeather(userInitiated: true)
     }
 
-    func refreshWeather() {
+    /// `userInitiated` true only for an explicit "Set"/"Use my location" submit;
+    /// the automatic launch/refresh caller leaves it false so a stale bad
+    /// persisted city never re-alerts on relaunch (INV-5).
+    func refreshWeather(userInitiated: Bool = false) {
         let city = weatherCity
         Task {
-            let w = await WeatherService.fetch(city: city.isEmpty ? nil : city)
-            await MainActor.run { if let w { self.weather = w } }
+            let result = await WeatherService.fetch(city: city.isEmpty ? nil : city)
+            await MainActor.run {
+                switch result {
+                case .success(let w):
+                    self.weather = w
+                    self.weatherNotFound = false   // success clears any prior not-found
+                case .notFound:
+                    // Preserve prior weather (INV-5); alert only on explicit submit.
+                    if userInitiated { self.weatherNotFound = true }
+                case .error:
+                    // Transient network/decode blip: no change, no alert (INV-4).
+                    break
+                }
+            }
         }
     }
 
