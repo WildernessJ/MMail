@@ -6,6 +6,7 @@ struct HomeView: View {
     @State private var draftTodo = ""
     @State private var cityPromptOpen = false
     @State private var cityDraft = ""
+    @State private var notFoundAlertOpen = false
     @State private var rowWidth: CGFloat = 0
 
     private let cols = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
@@ -158,6 +159,12 @@ struct HomeView: View {
                 Button("Set") { model.setWeatherCity(cityDraft) }
             } message: {
                 Text("Enter a city to show its weather, or use your approximate location.")
+            }
+            .onChange(of: model.weatherNotFound) { _, v in notFoundAlertOpen = v }
+            .alert("Couldn't find that city", isPresented: $notFoundAlertOpen) {
+                Button("OK", role: .cancel) { model.weatherNotFound = false }
+            } message: {
+                Text("Try \"City, ST\" — e.g. \"Kingsville, MD\".")
             }
             Spacer(minLength: 0)
             WeatherGlyph(size: 66)
