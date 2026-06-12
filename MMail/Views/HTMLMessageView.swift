@@ -254,13 +254,18 @@ struct HTMLMessageView: NSViewRepresentable {
         /// measure so a darkening layout shift never leaves a stale height.
         /// When NOT `applyDark`: measure `scrollHeight` immediately (today's path).
         ///
-        /// Settle escalation ladder (build-time tunable, only if a LIVE T015 verify
-        /// shows height still samples early): `DispatchQueue.main.async` →
-        /// `asyncAfter(deadline: .now() + ~0.016–0.032)` (one frame) → a
-        /// double-`requestAnimationFrame` in the injected JS posting the settled height
-        /// back via a `WKScriptMessageHandler`. `DispatchQueue.main.async` is the
-        /// starting rung.
+        /// Settle escalation (resolved at T015 live verify): the single-runloop
+        /// `DispatchQueue.main.async` deferral sampled height BEFORE DarkReader's
+        /// restyle + relayout had painted on heavier emails, clipping the first render.
+        /// The dark paths now measure via `measureHeightAfterPaint` — a double
+        /// `requestAnimationFrame` awaited inside `callAsyncJavaScript`, so the read
+        /// fires post-paint. The light / define-fail paths keep the immediate
+        /// `measureHeight` (no transform → nothing to settle).
         private func applyDarkAndMeasure(_ web: WKWebView) {
+            // Capture the generation up front: `didFinish` can be followed by a new
+            // `load()` that bumps `generation` while this enable→measure chain is in
+            // flight, so the dark measure must be generation-guarded too.
+            let myGen = generation
             // Read the dark state from `lastApplyDark` — the value `load()` just recorded
             // for the page now being measured — NOT `parent.applyDark`, which is the
             // first-render struct snapshot and goes stale after an in-session toggle.
@@ -284,12 +289,9 @@ struct HTMLMessageView: NSViewRepresentable {
                     if let enableErr {
                         print("⚠️ MMail dark-engine: DarkReader.enable failed: \(enableErr)")
                     }
-                    // Defer the height read one runloop turn so the synchronously-injected
-                    // styles + first layout have applied (see the escalation ladder above).
-                    DispatchQueue.main.async { [weak self, weak web] in
-                        guard let self, let web else { return }
-                        self.measureHeight(web)
-                    }
+                    // Measure AFTER the dark transform paints (double-rAF) so the
+                    // settled relayout height is read, not a pre/mid-transform one.
+                    self.measureHeightAfterPaint(web, generation: myGen)
                 }
             }
         }
@@ -333,13 +335,10 @@ struct HTMLMessageView: NSViewRepresentable {
                 if let err {
                     print("⚠️ MMail dark-engine: in-place toggle failed: \(err)")
                 }
-                // Re-measure on the next runloop turn so the restyle + relayout has
-                // applied (DarkReader's effect is not synchronous on completion).
-                DispatchQueue.main.async { [weak self, weak web] in
-                    guard let self, let web else { return }
-                    guard self.generation == myGen else { return }
-                    self.measureHeight(web)
-                }
+                // Re-measure AFTER the restyle + relayout paints (double-rAF) so the
+                // settled height is read. Covers BOTH enable (ON) and disable (OFF) —
+                // each relayouts. Generation-guarded inside `measureHeightAfterPaint`.
+                self.measureHeightAfterPaint(web, generation: myGen)
             }
         }
 
@@ -350,6 +349,30 @@ struct HTMLMessageView: NSViewRepresentable {
             web.evaluateJavaScript("document.body.scrollHeight") { result, _ in
                 if let h = result as? CGFloat, h > 0 {
                     DispatchQueue.main.async { self.parent.height = ceil(h) }
+                }
+            }
+        }
+
+        /// Measure `scrollHeight` AFTER the dark transform has painted: await two
+        /// animation frames (so DarkReader's restyle + relayout has applied), then read.
+        /// `callAsyncJavaScript` awaits the returned promise, so the completion fires
+        /// post-paint — eliminating the first-render clipping the single-runloop deferral
+        /// (DispatchQueue.main.async) caused. Generation-guarded so a stale measure from a
+        /// superseded load/toggle cannot clobber a newer page's height. `.page` content
+        /// world is required so the JS sees the page's `document` / `requestAnimationFrame`.
+        private func measureHeightAfterPaint(_ web: WKWebView, generation myGen: Int) {
+            let js = "await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); return document.body.scrollHeight;"
+            // The completion handler is @MainActor, so the height write runs on the
+            // main thread directly (no DispatchQueue.main.async hop needed here).
+            web.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { [weak self] result in
+                guard let self, self.generation == myGen else { return }
+                if case .success(let value) = result {
+                    if let h = value as? CGFloat, h > 0 {
+                        self.parent.height = ceil(h)
+                    } else if let n = value as? NSNumber {
+                        let h = CGFloat(truncating: n)
+                        if h > 0 { self.parent.height = ceil(h) }
+                    }
                 }
             }
         }
