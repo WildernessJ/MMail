@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
+    @Environment(\.openWindow) private var openWindow
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -33,6 +34,17 @@ struct RootView: View {
         }
         .onChange(of: model.currentAccount) { _, id in
             model.didSelectAccount(id)
+        }
+        // Drain the detached-window open queue (INV-4). AppModel only enqueues ids; this view
+        // layer owns `openWindow`. CRITICAL: defer the open+drain out of the view-update cycle
+        // — mutating `detachQueue` synchronously inside `.onChange` is a "modifying state during
+        // view update" violation. The `Task { @MainActor }` runs it on the next runloop turn.
+        .onChange(of: model.detachQueue) { _, q in
+            guard !q.isEmpty else { return }
+            Task { @MainActor in
+                for id in q { openWindow(id: "reader", value: id) }
+                model.detachQueue.removeAll()
+            }
         }
         .animation(.easeOut(duration: 0.2), value: model.sidebarVisible)
         .animation(.easeOut(duration: 0.2), value: model.readingPane)

@@ -76,32 +76,33 @@ Remove the throwaway dedup spike scene + trigger from `MMailApp` (T001) AND the 
 
 > Phase goal: a detached window that RENDERS a fixed email at full parity, opened only via a hardcoded debug path; triggers come in Phase C. Live-verified for render parity (INV-7) and selection-decoupling (INV-3).
 
-### T006 — Make `ReaderContent` accessible beyond `ReaderView.swift` (INV-7, SC-003)
+### T006 — [x] Make `ReaderContent` accessible beyond `ReaderView.swift` (INV-7, SC-003)
 Un-`private` `struct ReaderContent` (`MMail/Views/ReaderView.swift:36`) to internal (drop the `private` keyword) so a detached view in another file can instantiate it. Keep its `@State` reader toggles (`loadImages:48`, `showOriginal:52`) intact (session-scoped per-window, by spec). No other change.
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED (proves `ReaderContent` still compiles + no accidental name clash).
 - **Files:** `MMail/Views/ReaderView.swift`
 
-### T007 — Add observable open-window state to `AppModel` (INV-4)
+### T007 — [x] Add observable open-window state to `AppModel` (INV-4)
 Add `@Published var detachQueue: [String]` (a FIFO of ids the view layer should `openWindow(value:)` for) and a setter `func requestDetachedWindow(_ id: String)` that APPENDS the id. A queue (not a scalar `String?`) avoids dropping a request when two opens arrive before `RootView.onChange` fires — a scalar `@Published` would overwrite, losing the first open. AppModel does NOT import/call SwiftUI window APIs. (Close state is added in Phase E; this slice only opens.)
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED.
 - **Files:** `MMail/State/AppModel.swift`
 
-### T008 — Create `DetachedReaderView` rendering a fixed id, capturing opener folder on appear (INV-1/2/3/9, SC-002)
+### T008 — [x] Create `DetachedReaderView` rendering a fixed id, capturing opener folder on appear (INV-1/2/3/9, SC-002)
 New file. `DetachedReaderView` takes `let emailId: String`, reads `@EnvironmentObject AppModel`, looks the email up via the T002 seam (`AppModel.email(withId:in:model.emails)`), and renders `ReaderContent(email:account:)` (account via `model.accountsById[email.account]`) — NEVER touching `selectedId`/`selectedEmail` (INV-3). Hold `@State private var openerFolder: String?`; on the content's `.onAppear`, if still nil, capture the looked-up email's current `folder` (covers fresh-open AND relaunch-restore, INV-9). If lookup is nil, render an empty `Color.clear` (self-dismiss wired in Phase E). Apply the same `.preferredColorScheme`/`.environment(\.palette)` the main `WindowGroup` does (`MMailApp.swift:12-13`).
 - New file ⇒ `Run: xcodegen generate`, commit `project.pbxproj`.
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED.
 - **Files:** `MMail/Views/DetachedReaderView.swift` (new), `MMail.xcodeproj/project.pbxproj` (regen)
 
-### T009 — Add the second `WindowGroup(id:for:String.self)` scene + drive it from `detachQueue` (INV-2/4)
+### T009 — [x] Add the second `WindowGroup(id:for:String.self)` scene + drive it from `detachQueue` (INV-2/4)
 In `MMailApp.body`, add a second scene: `WindowGroup(id: "reader", for: String.self) { $emailId in if let id = emailId { DetachedReaderView(emailId: id).environmentObject(model)... } }`, same model instance, same `.frame`/`colorScheme`/`palette` modifiers as the main group. In `RootView` (the view layer that owns the environment actions), add `@Environment(\.openWindow) private var openWindow` and `.onChange(of: model.detachQueue)` → if the queue is non-empty, drain it. **CRITICAL (same hazard as T019):** mutating `@Published var detachQueue` synchronously inside `.onChange` is a "modifying state during view update" violation (the `.onChange` fires during a SwiftUI update pass; the `removeAll()` republishes mid-update → runtime warning / dropped update). Defer the open+drain out of the update cycle: `.onChange(of: model.detachQueue) { _, q in guard !q.isEmpty else { return }; Task { @MainActor in for id in q { openWindow(id:"reader", value:id) }; model.detachQueue.removeAll() } }` (open each captured id, then clear the queue — both inside the `Task { @MainActor }`). (INV-4: AppModel only enqueues state; RootView performs the opens and drains the queue, deferred.)
 - `Run:` `xcodebuild ... build CODE_SIGNING_ALLOWED=NO`
 - `Expected:` BUILD SUCCEEDED.
 - **Files:** `MMail/MMailApp.swift`, `MMail/Views/RootView.swift`
 
-### T010 — LIVE E2E: detached window renders full parity + is selection-decoupled (SC-002, SC-003, SC-007b, INV-7)
+### T010 — [pending-verify] LIVE E2E: detached window renders full parity + is selection-decoupled (SC-002, SC-003, SC-007b, INV-7)
+> Underlying code (scene + queue drain + DetachedReaderView) builds. No throwaway debug trigger was added (Phase C ships the real triggers). On-screen observation deferred to verify.
 Temporarily wire a debug trigger (e.g. a `.onAppear` call to `model.requestDetachedWindow(model.selectedId ?? "")` behind a keypress, or reuse the moreMenu) to open the CURRENT selection in a detached window. Build into the Dock app DerivedData path, ⌘Q + relaunch (so the body is cache-loaded — the relaunch-with-cached-data path, SC-007b).
 - `Run:` open email A in a detached window; then in the MAIN window click several other rows.
 - `Expected:` the detached window shows A's body, headers, thread stack, "Show original" + "Load images" affordances (INV-7 image-blocking identical to inline); it KEEPS showing A while the main selection moves (INV-3 / SC-002). Remove the debug trigger before commit (real triggers land in Phase C).

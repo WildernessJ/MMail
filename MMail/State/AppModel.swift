@@ -113,6 +113,11 @@ final class AppModel: ObservableObject {
     @Published var folder: String = "home"
     @Published var emails: [Email] = [] { didSet { refreshDockBadge() } }
     @Published var selectedId: String?
+    /// Open-in-window FIFO (INV-4): ids a view layer should `openWindow(value:)` for. A
+    /// QUEUE (not a scalar `String?`) so two opens arriving before `RootView.onChange` fires
+    /// are not coalesced — a scalar `@Published` would overwrite, dropping the first request.
+    /// `AppModel` only enqueues; it never calls SwiftUI window APIs (INV-4).
+    @Published var detachQueue: [String] = []
     @Published var filter: InboxFilter = .all
     // When the reading pane is off, this opens the selected message full-width.
     @Published var readerFullScreen = false
@@ -325,6 +330,12 @@ final class AppModel: ObservableObject {
     static func shouldCloseDetached(id: String, openerFolder: String, in emails: [Email]) -> Bool {
         guard let e = email(withId: id, in: emails) else { return true }
         return e.folder != openerFolder
+    }
+
+    /// Request a detached reader window for `id` by appending it to `detachQueue` (INV-4).
+    /// A view layer (`RootView`) observes the queue and performs the actual `openWindow`.
+    func requestDetachedWindow(_ id: String) {
+        detachQueue.append(id)
     }
 
     // MARK: - Derived

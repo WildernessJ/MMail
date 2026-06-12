@@ -33,7 +33,7 @@ struct ReaderView: View {
 
 // MARK: - Reader content (per-email; resets state via .id)
 
-private struct ReaderContent: View {
+struct ReaderContent: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.palette) private var p
     let email: Email
