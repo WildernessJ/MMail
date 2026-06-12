@@ -164,6 +164,7 @@ private struct ListDragHandle: View {
     @EnvironmentObject var model: AppModel
     @State private var dragStart: CGFloat?
     @State private var pushed = false
+    @State private var dragging = false
 
     var body: some View {
         Rectangle()
@@ -174,20 +175,24 @@ private struct ListDragHandle: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in
+                        dragging = true
                         if dragStart == nil { dragStart = model.listWidth }
                         guard let ds = dragStart else { return }
                         model.listWidth = clampListWidth(ds + v.translation.width)
                     }
                     .onEnded { _ in
-                        model.setListWidth(model.listWidth)
+                        if dragStart != nil { model.setListWidth(model.listWidth) }
                         dragStart = nil
+                        dragging = false
                     }
             )
             .onHover { inside in
                 if inside && !pushed {
                     NSCursor.resizeLeftRight.push()
                     pushed = true
-                } else if !inside && pushed {
+                } else if !inside && pushed && !dragging {
+                    // Don't pop mid-drag: SwiftUI can fire hover-out as the pointer
+                    // drifts off the 6pt handle while dragging — keep the resize cursor.
                     NSCursor.pop()
                     pushed = false
                 }
