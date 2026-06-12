@@ -1425,23 +1425,31 @@ final class AppModel: ObservableObject {
             .map { "> \($0)" }.joined(separator: "\n")
         return "\n\n\(header)\n\(quoted)"
     }
-    func reply() {
-        guard let e = selectedEmail else { return }
+    // The no-arg forms target the live selection; the id forms (INV-10) resolve a FIXED
+    // email by id from `emails` (NEVER `selectedEmail`/`selectedId`) so a detached window's
+    // compose action drafts against its own email regardless of the main selection. The
+    // no-arg forms delegate to the id form with `selectedId` to keep the compose-string
+    // logic single-sourced (DRY). A nil/unresolvable id is a no-op in both paths.
+    func reply() { selectedEmail.map { reply($0.id) } }
+    func reply(_ id: String) {
+        guard let e = emails.first(where: { $0.id == id }) else { return }
         let s = e.resolvedSender
         startCompose(to: s.email, subject: e.subject.hasPrefix("Re:") ? e.subject : "Re: \(e.subject)",
                      body: quotedBody(e),
                      titleLabel: "Reply · \(s.name)", fromId: e.account)
     }
-    func replyAll() {
-        guard let e = selectedEmail else { return }
+    func replyAll() { selectedEmail.map { replyAll($0.id) } }
+    func replyAll(_ id: String) {
+        guard let e = emails.first(where: { $0.id == id }) else { return }
         let s = e.resolvedSender
         let recipients = ([s.email] + (e.to ?? [])).filter { !$0.isEmpty }.joined(separator: ", ")
         startCompose(to: recipients, subject: e.subject.hasPrefix("Re:") ? e.subject : "Re: \(e.subject)",
                      body: quotedBody(e),
                      titleLabel: "Reply all · \(s.name)", fromId: e.account)
     }
-    func forward() {
-        guard let e = selectedEmail else { return }
+    func forward() { selectedEmail.map { forward($0.id) } }
+    func forward(_ id: String) {
+        guard let e = emails.first(where: { $0.id == id }) else { return }
         startCompose(subject: e.subject.hasPrefix("Fwd:") ? e.subject : "Fwd: \(e.subject)",
                      body: "\n\n--- Forwarded message ---\n\(e.body)",
                      titleLabel: "Forward", fromId: e.account)
@@ -2820,8 +2828,12 @@ final class AppModel: ObservableObject {
         inlinePartsByEmailID[emailID] ?? [:]
     }
 
-    func loadBodyIfNeeded() {
-        guard let e = selectedEmail, isRealAccount(e.account) else { return }
+    // The no-arg form targets the live selection; the id form (INV-3) resolves a FIXED email
+    // by id from `emails` so a detached window showing an UNLOADED body can trigger the same
+    // fetch path WITHOUT selecting it (SC-007a). The no-arg form delegates with `selectedId`.
+    func loadBodyIfNeeded() { selectedEmail.map { loadBodyIfNeeded(forId: $0.id) } }
+    func loadBodyIfNeeded(forId id: String) {
+        guard let e = emails.first(where: { $0.id == id }), isRealAccount(e.account) else { return }
         // Fetch when the body is missing/truncated (`needsFullFetch`) OR when the body
         // references a `cid:` inline image but THIS SESSION has no inline-parts entry yet
         // (`needsInlineParts`). The latter rehydrates a cached-complete email (loaded from

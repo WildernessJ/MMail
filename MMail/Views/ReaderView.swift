@@ -38,6 +38,10 @@ struct ReaderContent: View {
     @Environment(\.palette) private var p
     let email: Email
     let account: Account?
+    /// When true (detached window), reader-toolbar/moreMenu actions target THIS view's own
+    /// `email.id` instead of the live main-window selection (INV-10). Default false ⇒ the
+    /// inline reader's call sites collapse to the original no-arg forms (byte-unchanged).
+    var detached: Bool = false
 
     @State private var expanded = false
     @State private var contactOpen = false
@@ -137,8 +141,8 @@ struct ReaderContent: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                PrimaryToolbarButton(icon: "check", label: "Done", kbd: "H") { model.markDone() }
-                PrimaryToolbarButton(icon: "replyAll", label: "Reply all", kbd: "A") { model.replyAll() }
+                PrimaryToolbarButton(icon: "check", label: "Done", kbd: "H") { detached ? model.markDone(email.id) : model.markDone() }
+                PrimaryToolbarButton(icon: "replyAll", label: "Reply all", kbd: "A") { detached ? model.replyAll(email.id) : model.replyAll() }
             }
             Button { model.toggleStar(email.id) } label: {
                 Icon(name: email.starred ? "star.fill" : "star", size: 15)
@@ -179,10 +183,10 @@ struct ReaderContent: View {
 
     private var moreMenu: some View {
         Menu {
-            Button { model.reply() } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
-            Button { model.forward() } label: { Label("Forward", systemImage: "arrowshape.turn.up.right") }
+            Button { detached ? model.reply(email.id) : model.reply() } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
+            Button { detached ? model.forward(email.id) : model.forward() } label: { Label("Forward", systemImage: "arrowshape.turn.up.right") }
             Divider()
-            Button { model.archive() } label: { Label("Archive", systemImage: "archivebox") }
+            Button { detached ? model.archive(email.id) : model.archive() } label: { Label("Archive", systemImage: "archivebox") }
             Menu {
                 ForEach(model.snoozePresets()) { preset in
                     Button(preset.label) { model.snooze(email.id, until: preset.date, label: "· \(preset.label)") }
@@ -194,7 +198,7 @@ struct ReaderContent: View {
                     snoozePickerOpen = true
                 }
             } label: { Label("Snooze", systemImage: "clock") }
-            Button { model.markSpam() } label: { Label("Mark as Spam", systemImage: "exclamationmark.triangle") }
+            Button { detached ? model.markSpam(email.id) : model.markSpam() } label: { Label("Mark as Spam", systemImage: "exclamationmark.triangle") }
             let folders = model.folderNames(for: email.account)
             if !folders.isEmpty {
                 Menu {
@@ -215,7 +219,7 @@ struct ReaderContent: View {
                 }
             }
             Divider()
-            Button(role: .destructive) { model.delete() } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { detached ? model.delete(email.id) : model.delete() } label: { Label("Delete", systemImage: "trash") }
         } label: {
             HStack(spacing: 6) {
                 Icon(name: "more", size: 16)
@@ -559,8 +563,8 @@ struct ReaderContent: View {
             }
 
             HStack(spacing: 6) {
-                contactAct("reply", "Reply") { contactOpen = false; model.reply() }
-                contactAct("replyAll", "Reply all") { contactOpen = false; model.replyAll() }
+                contactAct("reply", "Reply") { contactOpen = false; detached ? model.reply(email.id) : model.reply() }
+                contactAct("replyAll", "Reply all") { contactOpen = false; detached ? model.replyAll(email.id) : model.replyAll() }
             }
             .padding(.top, 10)
         }
@@ -647,7 +651,7 @@ struct ReaderContent: View {
     }
 
     private var replyStrip: some View {
-        Button { model.reply() } label: {
+        Button { detached ? model.reply(email.id) : model.reply() } label: {
             HStack(spacing: 12) {
                 Icon(name: "reply", size: 16).foregroundStyle(p.fg3)
                 Text("Reply to \(sender?.firstName ?? "sender")…").font(.system(size: 13)).foregroundStyle(p.fg3)

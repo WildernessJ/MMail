@@ -26,12 +26,15 @@ struct DetachedReaderView: View {
     var body: some View {
         Group {
             if let email {
-                ReaderContent(email: email, account: model.accountsById[email.account])
+                ReaderContent(email: email, account: model.accountsById[email.account], detached: true)
                     .id(email.id)
                     .onAppear {
                         // Capture the opener folder once, on the content's first appear
                         // (covers fresh-open AND relaunch-restore, INV-9).
                         if openerFolder == nil { openerFolder = email.folder }
+                        // Trigger the shared body-load path for THIS id (not the selection,
+                        // INV-3) so an unloaded body loads in the detached window (SC-007a).
+                        model.loadBodyIfNeeded(forId: emailId)
                     }
             } else {
                 // Lookup nil (e.g. a relaunch-restored window for an expunged id). Render
