@@ -36,6 +36,8 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.2), value: model.sidebarVisible)
         .animation(.easeOut(duration: 0.2), value: model.readingPane)
+        .animation(.easeOut(duration: 0.2), value: model.railSize)
+        .animation(.easeOut(duration: 0.2), value: model.sidebarLabelsVisible)
     }
 
     // MARK: - Body content
@@ -46,6 +48,12 @@ struct RootView: View {
             if model.sidebarVisible {
                 SidebarView()
                     .transition(.move(edge: .leading).combined(with: .opacity))
+                // Sidebar↔list drag handle: only between the folder sidebar and the
+                // mail list, i.e. when the sidebar is shown AND we're not in the
+                // home/outbox branches (which don't show a mail list).
+                if model.folder != "home" && model.folder != "outbox" {
+                    SidebarDragHandle()
+                }
             }
             if model.folder == "home" {
                 HomeView()
@@ -53,6 +61,7 @@ struct RootView: View {
                 OutboxView()
             } else if model.readingPane {
                 EmailListView()
+                ListDragHandle()
                 ReaderView()
             } else if model.readerFullScreen {
                 ReaderView()
@@ -153,5 +162,113 @@ struct RootView: View {
             model.searchActive = true
             searchFocused = true
         }
+    }
+}
+
+/// Thin draggable divider between the folder sidebar and the mail list (sidebar-visible,
+/// non-home/outbox views only). Resizes `model.sidebarWidth` live during the drag and
+/// persists once on release. Mirrors `ListDragHandle` exactly, on `sidebarWidth` /
+/// `clampSidebarWidth` / `setSidebarWidth`.
+private struct SidebarDragHandle: View {
+    @EnvironmentObject var model: AppModel
+    @State private var dragStart: CGFloat?
+    @State private var pushed = false
+    @State private var dragging = false
+
+    var body: some View {
+        Rectangle()
+            .fill(.clear)
+            .contentShape(Rectangle())
+            .frame(width: 6)
+            .frame(maxHeight: .infinity)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { v in
+                        dragging = true
+                        if dragStart == nil { dragStart = model.sidebarWidth }
+                        guard let ds = dragStart else { return }
+                        model.sidebarWidth = clampSidebarWidth(ds + v.translation.width)
+                    }
+                    .onEnded { _ in
+                        if dragStart != nil { model.setSidebarWidth(model.sidebarWidth) }
+                        dragStart = nil
+                        dragging = false
+                        // Reset the cursor on release: a drag that ends with the pointer
+                        // off the handle gets no onHover(false) (it was suppressed mid-drag),
+                        // so pop here. If still over the handle, the next onHover(true) re-pushes.
+                        if pushed { NSCursor.pop(); pushed = false }
+                    }
+            )
+            .onHover { inside in
+                if inside && !pushed {
+                    NSCursor.resizeLeftRight.push()
+                    pushed = true
+                } else if !inside && pushed && !dragging {
+                    // Don't pop mid-drag: SwiftUI can fire hover-out as the pointer
+                    // drifts off the 6pt handle while dragging — keep the resize cursor.
+                    NSCursor.pop()
+                    pushed = false
+                }
+            }
+            .onDisappear {
+                // Toggling the sidebar off while hovering removes this view with no
+                // onHover(false), so pop here to avoid leaking the resize cursor.
+                if pushed {
+                    NSCursor.pop()
+                    pushed = false
+                }
+            }
+    }
+}
+
+/// Thin draggable divider between the mail list and the reader (reading-pane mode only).
+/// Resizes `model.listWidth` live during the drag and persists once on release.
+private struct ListDragHandle: View {
+    @EnvironmentObject var model: AppModel
+    @State private var dragStart: CGFloat?
+    @State private var pushed = false
+    @State private var dragging = false
+
+    var body: some View {
+        Rectangle()
+            .fill(.clear)
+            .contentShape(Rectangle())
+            .frame(width: 6)
+            .frame(maxHeight: .infinity)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { v in
+                        dragging = true
+                        if dragStart == nil { dragStart = model.listWidth }
+                        guard let ds = dragStart else { return }
+                        model.listWidth = clampListWidth(ds + v.translation.width)
+                    }
+                    .onEnded { _ in
+                        if dragStart != nil { model.setListWidth(model.listWidth) }
+                        dragStart = nil
+                        dragging = false
+                        // Reset the cursor on release: a drag that ends with the pointer
+                        // off the handle gets no onHover(false) (it was suppressed mid-drag),
+                        // so pop here. If still over the handle, the next onHover(true) re-pushes.
+                        if pushed { NSCursor.pop(); pushed = false }
+                    }
+            )
+            .onHover { inside in
+                if inside && !pushed {
+                    NSCursor.resizeLeftRight.push()
+                    pushed = true
+                } else if !inside && pushed && !dragging {
+                    // Don't pop mid-drag: SwiftUI can fire hover-out as the pointer
+                    // drifts off the 6pt handle while dragging — keep the resize cursor.
+                    NSCursor.pop()
+                    pushed = false
+                }
+            }
+            .onDisappear {
+                if pushed {
+                    NSCursor.pop()
+                    pushed = false
+                }
+            }
     }
 }

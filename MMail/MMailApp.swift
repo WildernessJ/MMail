@@ -37,6 +37,15 @@ struct MMailApp: App {
                 ForEach(menuModel.viewInsertion, id: \.commandId) { item in
                     Button(titleWithHint(item)) { model.run(item.commandId) }
                 }
+                Menu("Account Rail Size") {
+                    Picker("Account Rail Size", selection: Binding(get: { model.railSize }, set: { model.setRailSize($0) })) {
+                        Text("Small").tag(RailSize.small)
+                        Text("Medium").tag(RailSize.medium)
+                        Text("Large").tag(RailSize.large)
+                    }
+                    .pickerStyle(.inline)
+                }
+                Toggle("Show Folder Labels", isOn: Binding(get: { model.sidebarLabelsVisible }, set: { model.setSidebarLabels($0) }))
             }
 
             // The ONLY accelerator this feature adds: Settings ⌘, in the application menu.
