@@ -9,6 +9,14 @@ import Foundation
 /// keyless load accessors keep read and write keyed identically (a write/read key
 /// mismatch becomes structurally impossible).
 
+/// Shared pane content-inset constants. Pure, SwiftUI-free namespace so the reader and
+/// the mail list cannot drift their horizontal content inset. `paneContentInset` is the
+/// single authority for the `20pt` horizontal inset shared by the mail-list content sites
+/// (header, day-section headers, rows), the reader content, and the reader toolbar.
+enum LayoutSizing {
+    static let paneContentInset: CGFloat = 20
+}
+
 /// Account-rail size preset. `String`-`RawRepresentable` for UserDefaults persistence,
 /// `CaseIterable` for completeness. `small` reproduces today's rail exactly (56pt column,
 /// 38pt icon-only tiles); `medium` is bigger tiles still icon-only; `large` adds account
@@ -81,6 +89,7 @@ enum LayoutDefaultsKey {
     static let sidebarLabels = "mmail.sidebarLabels"
     static let sidebarWidth = "mmail.sidebarWidth"
     static let listWidth = "mmail.listWidth"
+    static let listSort = "mmail.listSort"
 }
 
 /// Load the persisted rail size, falling back to `.small` for a missing or unrecognized
@@ -110,4 +119,13 @@ func loadSidebarWidth(_ d: UserDefaults) -> CGFloat {
 func loadListWidth(_ d: UserDefaults) -> CGFloat {
     // `object(forKey:) as? Double` (not `double(forKey:)`) so a MISSING key is nil → 380, since `double(forKey:)` would return 0.0 and defeat the `?? 380` default.
     clampListWidth((d.object(forKey: LayoutDefaultsKey.listWidth) as? Double).map { CGFloat($0) } ?? 380)
+}
+
+/// Load the persisted list-sort selection, falling back to `ListSort.default`
+/// (Date / Newest-first = the pre-feature order) for a MISSING or unparseable
+/// stored value. Uses `object(forKey:) as? String` so a missing key yields nil
+/// (→ default) rather than an empty-string parse attempt. View/`AppModel`-free;
+/// delegates parsing to `ListSort(rawValue:)`.
+func loadListSort(_ d: UserDefaults) -> ListSort {
+    (d.object(forKey: LayoutDefaultsKey.listSort) as? String).flatMap { ListSort(rawValue: $0) } ?? .default
 }

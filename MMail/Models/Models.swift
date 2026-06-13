@@ -81,6 +81,13 @@ struct Email: Identifiable, Codable {
     /// `nil` (sorts via the UID/id fallback), NOT a decode failure that would
     /// discard the whole cached folder.
     var sortDate: Date? = nil
+    /// All `Cc` recipients parsed from the IMAP envelope (formatted like `to`:
+    /// `"Name <email>"` or a bare address). Set post-init by `AppModel.makeEmail`;
+    /// `nil` for demo data and for mail with no `Cc`. Optional so it is additively
+    /// decodable: a cache written before this feature has no key → decodes as
+    /// `nil` (no `Cc` line shown), NOT a decode failure that would discard the
+    /// whole cached folder.
+    var cc: [String]? = nil
     var messageID: String?
     var inReplyTo: String?
     var unsubscribe: String?   // raw List-Unsubscribe header, when present

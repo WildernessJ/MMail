@@ -15,7 +15,7 @@ struct ReaderView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(p.bg2)
+        .background(p.bg1)
     }
 
     private var emptyState: some View {
@@ -56,6 +56,11 @@ struct ReaderContent: View {
     @State private var showOriginal = false
     @State private var snoozePickerOpen = false
     @State private var snoozeDate = Date()
+    // Per-message recipient-line expansion (T017, SC-003). Both reset to false per
+    // message via the parent's `.id(email.id)` (ReaderView:12) — a fresh
+    // ReaderContent per selected message.
+    @State private var toExpanded = false
+    @State private var ccExpanded = false
 
     private var sender: Sender? { email.resolvedSender }
     private var thread: [ThreadItem] { email.thread ?? model.relatedThread(for: email) }
@@ -77,7 +82,7 @@ struct ReaderContent: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 40).padding(.top, 28).padding(.bottom, 96)
+                .padding(.horizontal, LayoutSizing.paneContentInset).padding(.top, 16).padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -155,7 +160,7 @@ struct ReaderContent: View {
             Spacer()
             moreMenu
         }
-        .padding(.horizontal, 24).padding(.vertical, 10)
+        .padding(.horizontal, LayoutSizing.paneContentInset).padding(.vertical, 10)
     }
 
     private var labelMenu: some View {
@@ -379,12 +384,7 @@ struct ReaderContent: View {
 
             replyStrip.padding(.top, 24)
         }
-        .padding(EdgeInsets(top: 32, leading: 40, bottom: 28, trailing: 40))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(p.bg1)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(p.border, lineWidth: 1))
-        .shadow(color: .black.opacity(p.isDark ? 0.4 : 0.08), radius: 12, y: 6)
         .zIndex(10)
     }
 
@@ -513,7 +513,12 @@ struct ReaderContent: View {
                 .buttonStyle(.plain)
                 .popover(isPresented: $contactOpen, arrowEdge: .bottom) { contactCard }
 
-                Text(toLine).font(.system(size: 12)).foregroundStyle(p.fg3).lineLimit(1)
+                recipientLineView(label: "To:", recipients: toRecipients,
+                                  expanded: $toExpanded)
+                if let cc = email.cc, !cc.isEmpty {
+                    recipientLineView(label: "Cc:", recipients: cc,
+                                      expanded: $ccExpanded)
+                }
             }
             Spacer(minLength: 12)
             Text(email.day == "today" ? "Today, \(email.time)" : email.time)
@@ -762,8 +767,38 @@ struct ReaderContent: View {
 
     // MARK: Helpers
 
-    private var toLine: String {
-        AppModel.recipientLine(for: email, account: account)
+    /// The effective `To:` recipients to display: the parsed `email.to` when
+    /// present, else the pre-feature fallback — `(no recipient)` in
+    /// sent/drafts/outbox, otherwise the account address (or `me`). Mirrors
+    /// `AppModel.recipientLine`'s fallback so an empty-To message reads the same.
+    private var toRecipients: [String] {
+        let recips = (email.to ?? []).filter { !$0.isEmpty }
+        if !recips.isEmpty { return recips }
+        if ["sent", "drafts", "outbox"].contains(email.folder) { return ["(no recipient)"] }
+        return [account?.email ?? "me"]
+    }
+
+    /// A `To:` / `Cc:` recipient line: a label, the first-3 recipients (or all
+    /// when `expanded`), and a tappable `+N` expander when more exist. Matches
+    /// `metaRow`'s sub-line style (12pt, `p.fg3`).
+    @ViewBuilder
+    private func recipientLineView(label: String, recipients: [String],
+                                   expanded: Binding<Bool>) -> some View {
+        let collapsed = RecipientDisplay.collapsed(recipients, limit: 3)
+        let shown = expanded.wrappedValue ? recipients : collapsed.shown
+        HStack(spacing: 4) {
+            Text(label).font(.system(size: 12, weight: .medium)).foregroundStyle(p.fg3)
+            Text(shown.joined(separator: ", "))
+                .font(.system(size: 12)).foregroundStyle(p.fg3)
+                .lineLimit(expanded.wrappedValue ? nil : 1)
+            if !expanded.wrappedValue && collapsed.overflow > 0 {
+                Button { expanded.wrappedValue = true } label: {
+                    Text("+\(collapsed.overflow)")
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(p.brandBlue)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private func copyEmail(_ addr: String) {
