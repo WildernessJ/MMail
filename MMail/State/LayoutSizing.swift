@@ -9,6 +9,14 @@ import Foundation
 /// keyless load accessors keep read and write keyed identically (a write/read key
 /// mismatch becomes structurally impossible).
 
+/// Shared pane content-inset constants. Pure, SwiftUI-free namespace so the reader and
+/// the mail list cannot drift their horizontal content inset. `paneContentInset` is the
+/// single authority for the `20pt` horizontal inset shared by the mail-list content sites
+/// (header, day-section headers, rows), the reader content, and the reader toolbar.
+enum LayoutSizing {
+    static let paneContentInset: CGFloat = 20
+}
+
 /// Account-rail size preset. `String`-`RawRepresentable` for UserDefaults persistence,
 /// `CaseIterable` for completeness. `small` reproduces today's rail exactly (56pt column,
 /// 38pt icon-only tiles); `medium` is bigger tiles still icon-only; `large` adds account

@@ -93,7 +93,7 @@ struct EmailListView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, LayoutSizing.paneContentInset)
         .padding(.top, 16)
         .padding(.bottom, 12)
     }
@@ -174,7 +174,7 @@ struct EmailListView: View {
                                     .tracking(0.6)
                                     .foregroundStyle(p.fg4)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 20)
+                                    .padding(.horizontal, LayoutSizing.paneContentInset)
                                     .padding(.top, 14)
                                     .padding(.bottom, 6)
                                 ForEach(items) { e in
@@ -439,7 +439,7 @@ struct EmailRowView: View {
                 }
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, LayoutSizing.paneContentInset)
         .padding(.vertical, 14)
         .background(rowBackground)
         .overlay(alignment: .leading) {

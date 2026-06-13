@@ -169,4 +169,12 @@ import Foundation
         d.set(420.0, forKey: LayoutDefaultsKey.listWidth)
         #expect(loadListWidth(d) == 420)
     }
+
+    // MARK: - Shared pane content inset (SC-001)
+
+    /// The single shared horizontal content inset (`20pt`) referenced by the mail-list
+    /// content sites, the reader content, and the reader toolbar so the panes can't drift.
+    @Test func paneContentInsetIsTwenty() {
+        #expect(LayoutSizing.paneContentInset == 20)
+    }
 }

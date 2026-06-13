@@ -15,7 +15,7 @@ struct ReaderView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(p.bg2)
+        .background(p.bg1)
     }
 
     private var emptyState: some View {
@@ -77,7 +77,7 @@ struct ReaderContent: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 40).padding(.top, 28).padding(.bottom, 96)
+                .padding(.horizontal, LayoutSizing.paneContentInset).padding(.top, 16).padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -155,7 +155,7 @@ struct ReaderContent: View {
             Spacer()
             moreMenu
         }
-        .padding(.horizontal, 24).padding(.vertical, 10)
+        .padding(.horizontal, LayoutSizing.paneContentInset).padding(.vertical, 10)
     }
 
     private var labelMenu: some View {
@@ -379,12 +379,7 @@ struct ReaderContent: View {
 
             replyStrip.padding(.top, 24)
         }
-        .padding(EdgeInsets(top: 32, leading: 40, bottom: 28, trailing: 40))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(p.bg1)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(p.border, lineWidth: 1))
-        .shadow(color: .black.opacity(p.isDark ? 0.4 : 0.08), radius: 12, y: 6)
         .zIndex(10)
     }
 
