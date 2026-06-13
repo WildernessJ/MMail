@@ -2936,9 +2936,8 @@ final class AppModel: ObservableObject {
     static func makeEmail(_ m: IMAPMessage, accountId: String, folder: String) -> Email {
         let (day, time) = dayAndTime(m.date)
         let fromKey = m.fromEmail.isEmpty ? "imap-unknown" : m.fromEmail
-        let recipient = m.toName.isEmpty ? m.toEmail : "\(m.toName) <\(m.toEmail)>"
         var email = Email(id: "\(accountId)#\(folder)#\(m.uid)", account: accountId, from: fromKey,
-                          to: m.toEmail.isEmpty ? nil : [recipient],
+                          to: m.to.isEmpty ? nil : m.to,
                           subject: m.subject.isEmpty ? "(no subject)" : m.subject,
                           preview: "", body: "", time: time, day: day,
                           unread: !m.seen, starred: m.flagged, hasAttachment: false,
@@ -2947,6 +2946,7 @@ final class AppModel: ObservableObject {
         email.messageID = m.messageID.isEmpty ? nil : m.messageID
         email.inReplyTo = m.inReplyTo.isEmpty ? nil : m.inReplyTo
         email.sortDate = m.date
+        email.cc = m.cc.isEmpty ? nil : m.cc
         return email
     }
 

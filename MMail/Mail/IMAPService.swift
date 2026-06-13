@@ -27,8 +27,12 @@ struct IMAPMessage {
     var subject: String
     var fromName: String
     var fromEmail: String
-    var toName: String
-    var toEmail: String
+    /// ALL `To` recipients from the envelope, each formatted `"Name <email>"`
+    /// (or a bare address when the personal name is absent). Replaces the prior
+    /// singular `toName`/`toEmail`, which kept only the first recipient.
+    var to: [String]
+    /// ALL `Cc` recipients from the envelope, formatted like `to`.
+    var cc: [String]
     var date: Date
     var seen: Bool
     var flagged: Bool
@@ -585,8 +589,8 @@ final class IMAPService {
         var subject = ""
         var fromName = ""
         var fromEmail = ""
-        var toName = ""
-        var toEmail = ""
+        var to: [String] = []
+        var cc: [String] = []
         var date = Date()
         var seen = false
         var flagged = false
@@ -595,7 +599,7 @@ final class IMAPService {
         var keywords: [String] = []
 
         func reset() {
-            uid = 0; subject = ""; fromName = ""; fromEmail = ""; toName = ""; toEmail = ""; date = Date()
+            uid = 0; subject = ""; fromName = ""; fromEmail = ""; to = []; cc = []; date = Date()
             seen = false; flagged = false; messageID = ""; inReplyTo = ""; keywords = []
         }
 
@@ -620,12 +624,24 @@ final class IMAPService {
                         let hostPart = addr.host.map { String(buffer: $0) } ?? ""
                         if !mailbox.isEmpty { fromEmail = hostPart.isEmpty ? mailbox : "\(mailbox)@\(hostPart)" }
                     }
-                    if let first = env.to.first, case .singleAddress(let addr) = first {
-                        if let pn = addr.personName { toName = MIME.decodeHeader(String(buffer: pn)) }
-                        let mailbox = addr.mailbox.map { String(buffer: $0) } ?? ""
-                        let hostPart = addr.host.map { String(buffer: $0) } ?? ""
-                        if !mailbox.isEmpty { toEmail = hostPart.isEmpty ? mailbox : "\(mailbox)@\(hostPart)" }
+                    // Format every single-address element as "Name <email>" (or a
+                    // bare address when there is no personal name). Group elements
+                    // and addresses with an empty mailbox are skipped.
+                    func formatRecipients(_ elements: [EmailAddressListElement]) -> [String] {
+                        var out: [String] = []
+                        for el in elements {
+                            guard case .singleAddress(let addr) = el else { continue }
+                            let name = addr.personName.map { MIME.decodeHeader(String(buffer: $0)) } ?? ""
+                            let mailbox = addr.mailbox.map { String(buffer: $0) } ?? ""
+                            let hostPart = addr.host.map { String(buffer: $0) } ?? ""
+                            guard !mailbox.isEmpty else { continue }
+                            let address = hostPart.isEmpty ? mailbox : "\(mailbox)@\(hostPart)"
+                            out.append(name.isEmpty ? address : "\(name) <\(address)>")
+                        }
+                        return out
                     }
+                    to = formatRecipients(env.to)
+                    cc = formatRecipients(env.cc)
                     if let d = env.date, let parsed = Self.parseRFC2822(String(d)) { date = parsed }
                     if let mid = env.messageID { messageID = String(mid) }
                     if let irt = env.inReplyTo { inReplyTo = String(irt) }
@@ -637,7 +653,7 @@ final class IMAPService {
             case .finish:
                 if uid > 0 {
                     out.append(IMAPMessage(uid: uid, subject: subject, fromName: fromName,
-                                           fromEmail: fromEmail, toName: toName, toEmail: toEmail,
+                                           fromEmail: fromEmail, to: to, cc: cc,
                                            date: date, seen: seen, flagged: flagged,
                                            messageID: messageID, inReplyTo: inReplyTo, keywords: keywords))
                 }
