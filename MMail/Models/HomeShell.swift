@@ -81,8 +81,20 @@ struct InboxGlanceResult: Equatable {
 /// widget. `now` is injected so the "new today" computation is testable without the
 /// device clock.
 enum InboxGlance {
-    /// STUB (T001): returns zero-value result; real projection lands in T005.
+    /// Projects the unread INBOX for `account` (unified across accounts when
+    /// `account == "all"`, mirroring `homeEmails`): `unread` is the count;
+    /// `newToday` counts only those whose `sortDate` falls on the same calendar day
+    /// as `now` (nil-`sortDate` counts toward `unread` but NOT `newToday`); `peek` is
+    /// the unread set sorted newest-first via `AppModel.isNewerFirst`, capped at 5.
+    /// Read-only: no triage, no mutation, no network.
     static func project(emails: [Email], account: String, now: Date) -> InboxGlanceResult {
-        InboxGlanceResult(unread: 0, newToday: 0, peek: [])
+        let unreadInbox = emails.filter {
+            $0.unread && $0.folder == "inbox" && (account == "all" || $0.account == account)
+        }
+        let newToday = unreadInbox.filter {
+            $0.sortDate.map { Calendar.current.isDate($0, inSameDayAs: now) } == true
+        }.count
+        let peek = Array(unreadInbox.sorted(by: AppModel.isNewerFirst).prefix(5))
+        return InboxGlanceResult(unread: unreadInbox.count, newToday: newToday, peek: peek)
     }
 }

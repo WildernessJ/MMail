@@ -83,3 +83,116 @@ import Foundation
         #expect(v[.date] == true)
     }
 }
+
+// MARK: - InboxGlance.project (T004/T005 — SC-004/005)
+
+@Suite struct InboxGlanceProjectTests {
+
+    /// Builds an `Email` varying the fields the projection reads. `sortDate`, `uid`,
+    /// `unread`, `folder`, `account` are all set post-init (the init takes no `sortDate`).
+    private func email(_ id: String, account: String = "A", unread: Bool = true,
+                       folder: String = "inbox", sortDate: Date? = nil,
+                       uid: UInt32? = nil) -> Email {
+        var e = Email(id: id, account: account, from: "f", subject: "s",
+                      preview: "", body: "", time: "", day: "today",
+                      unread: unread, folder: folder)
+        e.sortDate = sortDate
+        e.uid = uid
+        return e
+    }
+
+    /// A fixed reference "now" so the new-today calendar comparison is deterministic.
+    private let now = Date(timeIntervalSince1970: 1_700_000_000)  // 2023-11-14 UTC
+
+    @Test func unreadCountsUnreadInboxForAccount() {
+        // RED until T005: 3 unread inbox on A → unread == 3 for account "A".
+        let emails = [
+            email("a1", account: "A", unread: true, folder: "inbox"),
+            email("a2", account: "A", unread: true, folder: "inbox"),
+            email("a3", account: "A", unread: true, folder: "inbox"),
+            email("a4", account: "A", unread: false, folder: "inbox"),  // read
+            email("b1", account: "B", unread: true, folder: "inbox"),   // other account
+        ]
+        let r = InboxGlance.project(emails: emails, account: "A", now: now)
+        #expect(r.unread == 3)
+    }
+
+    @Test func newTodaySameCalendarDayOnly() {
+        // RED until T005: only unread inbox whose sortDate is the SAME calendar day
+        // as `now` count as new-today.
+        let earlier = now.addingTimeInterval(-86_400 * 3)  // 3 days before
+        let emails = [
+            email("today1", sortDate: now),
+            email("today2", sortDate: now.addingTimeInterval(-3600)),  // same day, 1h earlier
+            email("old1", sortDate: earlier),
+        ]
+        let r = InboxGlance.project(emails: emails, account: "A", now: now)
+        #expect(r.unread == 3)
+        #expect(r.newToday == 2)
+    }
+
+    @Test func nilSortDateCountsUnreadButNotNewToday() {
+        // RED until T005: a nil-sortDate unread inbox message counts toward unread
+        // but NOT toward newToday.
+        let emails = [
+            email("today1", sortDate: now),
+            email("nodate", sortDate: nil),
+        ]
+        let r = InboxGlance.project(emails: emails, account: "A", now: now)
+        #expect(r.unread == 2)
+        #expect(r.newToday == 1)
+    }
+
+    @Test func peekIsNewestFirstCappedAtFive() {
+        // RED until T005: 8 unread with descending sortDates → peek is exactly the 5
+        // newest, in newest-first order (AppModel.isNewerFirst).
+        var emails: [Email] = []
+        for i in 0..<8 {
+            // i=0 is newest (offset 0), i=7 is oldest (offset -7 days).
+            emails.append(email("e\(i)", sortDate: now.addingTimeInterval(Double(-86_400 * i))))
+        }
+        let r = InboxGlance.project(emails: emails, account: "A", now: now)
+        #expect(r.peek.count == 5)
+        #expect(r.peek.map(\.id) == ["e0", "e1", "e2", "e3", "e4"])
+    }
+
+    @Test func allAccountAggregatesSingleAccountFilters() {
+        // RED until T005: account == "all" aggregates across accounts; a single
+        // account filters to just that account.
+        let emails = [
+            email("a1", account: "A", folder: "inbox"),
+            email("a2", account: "A", folder: "inbox"),
+            email("b1", account: "B", folder: "inbox"),
+        ]
+        let all = InboxGlance.project(emails: emails, account: "all", now: now)
+        #expect(all.unread == 3)
+        let onlyB = InboxGlance.project(emails: emails, account: "B", now: now)
+        #expect(onlyB.unread == 1)
+    }
+
+    @Test func inboxZeroIsAllZero() {
+        // RED until T005: no unread inbox → (0, 0, []).
+        let emails = [
+            email("read1", unread: false, folder: "inbox"),
+            email("arch1", unread: true, folder: "archive"),
+        ]
+        let r = InboxGlance.project(emails: emails, account: "A", now: now)
+        #expect(r.unread == 0)
+        #expect(r.newToday == 0)
+        #expect(r.peek.isEmpty)
+    }
+
+    @Test func excludesNonInboxAndReadMessages() {
+        // RED until T005: messages outside inbox OR already read are excluded entirely.
+        let emails = [
+            email("i1", unread: true, folder: "inbox", sortDate: now),     // counts
+            email("i2", unread: false, folder: "inbox", sortDate: now),    // read → excluded
+            email("ar", unread: true, folder: "archive", sortDate: now),   // not inbox → excluded
+            email("se", unread: true, folder: "sent", sortDate: now),      // not inbox → excluded
+        ]
+        let r = InboxGlance.project(emails: emails, account: "A", now: now)
+        #expect(r.unread == 1)
+        #expect(r.newToday == 1)
+        #expect(r.peek.map(\.id) == ["i1"])
+    }
+}
