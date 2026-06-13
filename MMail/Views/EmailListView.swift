@@ -63,6 +63,9 @@ struct EmailListView: View {
                 Text(title).font(.system(size: 22, weight: .bold))
                     .foregroundStyle(p.fg1)
                 Spacer()
+                if !isSearch {
+                    sortMenu
+                }
                 if scopeIsRealMail {
                     Button { model.userRefresh() } label: {
                         if model.refreshing || scopeLoading {
@@ -96,6 +99,61 @@ struct EmailListView: View {
         .padding(.horizontal, LayoutSizing.paneContentInset)
         .padding(.top, 16)
         .padding(.bottom, 12)
+    }
+
+    // MARK: Sort control
+
+    /// Direction labels are key-dependent per the spec: Date reads as a timeline
+    /// (Newest / Oldest first); Sender & Subject read alphabetically (A–Z / Z–A).
+    private func directionLabel(_ key: SortKey, _ dir: SortDirection) -> String {
+        switch key {
+        case .date:
+            return dir == .forward ? "Newest first" : "Oldest first"
+        case .sender, .subject:
+            return dir == .forward ? "A–Z" : "Z–A"
+        }
+    }
+
+    private func keyLabel(_ key: SortKey) -> String {
+        switch key {
+        case .date: return "Date"
+        case .sender: return "Sender"
+        case .subject: return "Subject"
+        }
+    }
+
+    /// Header sort control (Date / Sender / Subject + direction), bound to the
+    /// global `model.listSort`. Shown only outside active search (the caller gates
+    /// on `!isSearch`, mirroring the filter-chip gate). Selecting a key keeps the
+    /// current direction; selecting a direction keeps the current key.
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort by", selection: keyBinding) {
+                ForEach(SortKey.allCases, id: \.self) { k in
+                    Text(keyLabel(k)).tag(k)
+                }
+            }
+            Divider()
+            Picker("Order", selection: directionBinding) {
+                ForEach(SortDirection.allCases, id: \.self) { d in
+                    Text(directionLabel(model.listSort.key, d)).tag(d)
+                }
+            }
+        } label: {
+            Icon(name: "sort", size: 14).foregroundStyle(p.fg3)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Sort: \(keyLabel(model.listSort.key)) · \(directionLabel(model.listSort.key, model.listSort.direction))")
+    }
+
+    private var keyBinding: Binding<SortKey> {
+        Binding(get: { model.listSort.key },
+                set: { model.listSort = ListSort($0, model.listSort.direction) })
+    }
+
+    private var directionBinding: Binding<SortDirection> {
+        Binding(get: { model.listSort.direction },
+                set: { model.listSort = ListSort(model.listSort.key, $0) })
     }
 
     private var selectionBar: some View {
@@ -168,21 +226,26 @@ struct EmailListView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 0, pinnedViews: []) {
-                            ForEach(groupByDay(visible), id: \.0) { day, items in
-                                Text(day.uppercased())
-                                    .font(.system(size: 10.5, weight: .bold))
-                                    .tracking(0.6)
-                                    .foregroundStyle(p.fg4)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, LayoutSizing.paneContentInset)
-                                    .padding(.top, 14)
-                                    .padding(.bottom, 6)
-                                ForEach(items) { e in
-                                    EmailRowView(email: e,
-                                                 selected: e.id == model.selectedEmail?.id,
-                                                 showAccountDot: model.currentAccount == "all",
-                                                 accountColor: model.accountsById[e.account]?.color)
-                                        .id(e.id)
+                            if EmailSort.groupsByDay(for: model.listSort) {
+                                // Date sort: day-section headers in the seam's order.
+                                ForEach(groupByDay(visible), id: \.0) { day, items in
+                                    Text(day.uppercased())
+                                        .font(.system(size: 10.5, weight: .bold))
+                                        .tracking(0.6)
+                                        .foregroundStyle(p.fg4)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, LayoutSizing.paneContentInset)
+                                        .padding(.top, 14)
+                                        .padding(.bottom, 6)
+                                    ForEach(items) { e in
+                                        row(e)
+                                    }
+                                }
+                            } else {
+                                // Sender / Subject sort: one flat list, no day or
+                                // letter headers (the comparator owns the order).
+                                ForEach(visible) { e in
+                                    row(e)
                                 }
                             }
                             if model.canLoadMore || model.downloadingAllOlder {
@@ -302,8 +365,21 @@ struct EmailListView: View {
 
     // MARK: Grouping
 
+    /// One list row, shared by the day-sectioned and the flat render paths.
+    private func row(_ e: Email) -> some View {
+        EmailRowView(email: e,
+                     selected: e.id == model.selectedEmail?.id,
+                     showAccountDot: model.currentAccount == "all",
+                     accountColor: model.accountsById[e.account]?.color)
+            .id(e.id)
+    }
+
+    /// Bucket emails into day sections, rendered in the order the pure
+    /// `EmailSort.orderedSections` seam decides (calendar order for Date/Newest,
+    /// reversed for Date/Oldest, snoozed always last). The View renders the seam's
+    /// order verbatim — NO reversal logic lives here.
     private func groupByDay(_ emails: [Email]) -> [(String, [Email])] {
-        let order = ["today", "yesterday", "earlier", "snoozed"]
+        let order = EmailSort.orderedSections(for: model.listSort)
         let labels = ["today": "Today", "yesterday": "Yesterday", "earlier": "Earlier", "snoozed": "Snoozed"]
         var buckets: [String: [Email]] = [:]
         for e in emails { buckets[e.day, default: []].append(e) }

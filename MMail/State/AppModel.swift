@@ -147,6 +147,17 @@ final class AppModel: ObservableObject {
     @Published var sidebarLabelsVisible: Bool
     @Published var sidebarWidth: CGFloat
     @Published var listWidth: CGFloat
+    /// The global, persisted list-sort selection. A `didSet` mirrors the new
+    /// value into UserDefaults so a direct binding write (the header sort `Menu`)
+    /// persists without a dedicated setter. Property observers do NOT fire for the
+    /// initial assignment in `init`, so the load itself never re-writes; the
+    /// `!= oldValue` guard avoids a redundant write on a no-op reselection.
+    @Published var listSort: ListSort {
+        didSet {
+            guard listSort != oldValue else { return }
+            UserDefaults.standard.set(listSort.rawValue, forKey: LayoutDefaultsKey.listSort)
+        }
+    }
     @Published var vimNav: Bool
     @Published var confirmDiscard: Bool
     @Published var notificationsEnabled: Bool
@@ -279,6 +290,7 @@ final class AppModel: ObservableObject {
         sidebarLabelsVisible = loadSidebarLabels(d)
         sidebarWidth = loadSidebarWidth(d)
         listWidth = loadListWidth(d)
+        listSort = loadListSort(d)
         vimNav = d.object(forKey: kVimNav) as? Bool ?? true
         confirmDiscard = d.object(forKey: kConfirmDiscard) as? Bool ?? false
         notificationsEnabled = d.object(forKey: kNotifications) as? Bool ?? true
@@ -467,7 +479,10 @@ final class AppModel: ObservableObject {
                 return e.folder == folder
             }
         }
-        return base.sorted(by: AppModel.isNewerFirst)
+        // The global sort governs every non-search folder (inbox AND label-filter
+        // base); only the search branch above is exempt. Date/forward delegates to
+        // the pre-feature `isNewerFirst`, so the default order is unchanged.
+        return base.sorted(by: EmailSort.comparator(for: listSort))
     }
 
     func isSnoozed(_ e: Email) -> Bool {
