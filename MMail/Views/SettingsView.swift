@@ -56,6 +56,14 @@ struct SettingsView: View {
                         toggleRow("Reading pane", "Read messages alongside the list (off goes full-width).",
                                   on: Binding(get: { model.readingPane }, set: { model.setReadingPane($0) }), last: true)
                     }
+                    section("Home") {
+                        homeWidgetRow(.date, "Date", "The day's date tile.")
+                        homeWidgetRow(.weather, "Weather", "Current conditions for your city.")
+                        homeWidgetRow(.inboxGlance, "Inbox glance", "Unread summary and a peek at your latest mail.")
+                        homeWidgetRow(.people, "People", "Quick-compose strip of frequent contacts.")
+                        homeWidgetRow(.journal, "Journal", "A daily note that autosaves.")
+                        homeWidgetRow(.todo, "To-do", "A short to-do list.", last: true)
+                    }
                     section("Image privacy proxy") {
                         toggleRow("Route remote images through privacy proxy",
                                   "Load images for trusted senders via a caching proxy so the sender sees the proxy's IP, not yours. Off falls back to direct loading.",
@@ -359,6 +367,15 @@ struct SettingsView: View {
             Text(title).font(.system(size: 13, weight: .bold)).foregroundStyle(p.fg1).padding(.bottom, 12)
             content()
         }
+    }
+
+    /// A Home-widget visibility toggle. Bound through `setHomeWidget` so the change
+    /// publishes (full-struct reassign) and persists; visibility is presentation-only
+    /// and never mutates the widget's underlying data.
+    private func homeWidgetRow(_ w: HomeWidget, _ label: String, _ desc: String, last: Bool = false) -> some View {
+        toggleRow(label, desc,
+                  on: Binding(get: { model.homeWidgets[w] }, set: { model.setHomeWidget(w, on: $0) }),
+                  last: last)
     }
 
     private func toggleRow(_ label: String, _ desc: String, on: Binding<Bool>, last: Bool = false) -> some View {
