@@ -20,6 +20,13 @@ settings:
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "MMail Dev"
     ENABLE_HARDENED_RUNTIME: YES
+    # Build a single monolithic binary instead of the thin-launcher +
+    # MMail.debug.dylib split. Under hardened runtime, library validation
+    # requires the launcher and the debug dylib to share a Team ID; a
+    # self-signed cert has an empty Team ID, so the split crashes at launch
+    # ("Library not loaded: @rpath/MMail.debug.dylib ... different Team IDs").
+    # One binary => one consistent signature, no cross-dylib team-id check.
+    ENABLE_DEBUG_DYLIB: NO
 
 packages:
   swift-nio:
