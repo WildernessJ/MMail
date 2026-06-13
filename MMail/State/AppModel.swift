@@ -110,9 +110,9 @@ final class AppModel: ObservableObject {
     // Core state
     @Published var onboarding: Bool
     @Published var accounts: [Account] = []
-    @Published var currentAccount: String = "all"
+    @Published var currentAccount: String = "all" { didSet { refreshHomeGlance() } }
     @Published var folder: String = "home"
-    @Published var emails: [Email] = [] { didSet { refreshDockBadge() } }
+    @Published var emails: [Email] = [] { didSet { refreshDockBadge(); refreshHomeGlance() } }
     @Published var selectedId: String?
     /// Open-in-window FIFO (INV-4): ids a view layer should `openWindow(value:)` for. A
     /// QUEUE (not a scalar `String?`) so two opens arriving before `RootView.onChange` fires
@@ -173,6 +173,12 @@ final class AppModel: ObservableObject {
     @Published var todos: [Todo]
     @Published var journal: String
     @Published var journalRecent: [JournalEntry]
+    /// Per-widget Home visibility (presentation-only; loaded additively in `init`).
+    @Published var homeWidgets: HomeWidgetVisibility
+    /// Cached Inbox-glance projection. Recomputed off the main thread via
+    /// `refreshHomeGlance()` (mirrors `refreshDockBadge`), so a bare per-render scan
+    /// of `emails` is avoided. The `@Published` write hops to main (see below).
+    @Published var homeGlance: InboxGlanceResult = .init(unread: 0, newToday: 0, peek: [])
 
     // Reply templates
     @Published var templates: [ReplyTemplate]
@@ -276,6 +282,7 @@ final class AppModel: ObservableObject {
         sidebarVisible = d.object(forKey: kSidebar) as? Bool ?? true
         readingPane = d.object(forKey: kReadingPane) as? Bool ?? true
         railSize = loadRailSize(d)
+        homeWidgets = HomeWidgetVisibility.load(d)
         sidebarLabelsVisible = loadSidebarLabels(d)
         sidebarWidth = loadSidebarWidth(d)
         listWidth = loadListWidth(d)
@@ -340,6 +347,9 @@ final class AppModel: ObservableObject {
         purgeSeedData()
         // Set the Dock badge correctly on launch (empty -> cleared when nothing unread).
         refreshDockBadge()
+        // Seed the cached Inbox glance once at launch (didSet doesn't fire for the
+        // initial `emails`/`currentAccount` values, so this is the first computation).
+        refreshHomeGlance()
         // Install the single lifetime OS-appearance observer (INV-4/INV-5). RETAIN the
         // returned token into appearanceObserver — discarding it releases the observer and
         // System mode would silently never follow the OS. queue: .main delivers the
@@ -574,6 +584,29 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Home dashboard
+
+    /// Toggle a Home widget's visibility and persist it. A FULL-STRUCT reassign so the
+    /// `@Published` change publishes unambiguously (mutating a field in place would not
+    /// reliably fire `objectWillChange` through the struct).
+    func setHomeWidget(_ w: HomeWidget, on: Bool) {
+        var v = homeWidgets
+        v[w] = on
+        homeWidgets = v
+        v.persist(.standard)
+    }
+
+    /// Recompute the cached Inbox-glance projection over `emails`. Reads `emails` only
+    /// (never mutates it — that would recurse via `didSet`). `AppModel` is NOT @MainActor
+    /// and `emails` can be mutated from background IMAP callbacks (the `emails` didSet
+    /// caller), so the `@Published` write MUST hop to main — mirrors `refreshDockBadge`.
+    /// The main-hop covers all three call sites uniformly (the `currentAccount`/`init`
+    /// paths are already main-thread; the `emails` path is the one that needs it).
+    private func refreshHomeGlance() {
+        let g = InboxGlance.project(emails: emails, account: currentAccount, now: Date())
+        DispatchQueue.main.async { self.homeGlance = g }
+    }
+
     // MARK: - Display formatting (pure seams)
 
     /// Pure formatter: the reader's recipient ("to …") line for a message.
@@ -687,6 +720,19 @@ final class AppModel: ObservableObject {
     func activate(_ id: String) {
         select(id)
         if !readingPane { readerFullScreen = true }
+    }
+
+    /// Open a message from the Inbox-glance widget using the EXISTING open path: navigate
+    /// to its folder, then select/open it in the reader. No triage, no new open behavior.
+    /// Order matters — `setFolder` MUST precede `activate`: `setFolder` calls
+    /// `clearSelection()` (which clears only the bulk `selectedIds` set, NOT the scalar
+    /// `selectedId` that `activate`→`select` sets next) and resets `readerFullScreen`,
+    /// which `activate` then re-sets for the reading-pane-off case. The single-pass
+    /// `guard` makes a click on an expunged/missing message a safe no-op.
+    func openHomeMessage(_ id: String) {
+        guard let email = emails.first(where: { $0.id == id }) else { return }
+        setFolder(email.folder)
+        activate(id)
     }
 
     // MARK: - Bulk selection

@@ -9,7 +9,6 @@ struct HomeView: View {
     @State private var notFoundAlertOpen = false
     @State private var rowWidth: CGFloat = 0
 
-    private let cols = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
     private let months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
     private let dows = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
 
@@ -41,6 +40,21 @@ struct HomeView: View {
         Set(homeEmails.filter { $0.unread && $0.folder == "inbox" }.map { $0.from })
     }
 
+    /// Which of the small square cards (Date / Weather) are enabled. Sizing the grid
+    /// to the visible count means a hidden card leaves NO empty column. Visibility is
+    /// presentation-only — it never gates a data write.
+    private var enabledSquareWidgets: [HomeWidget] {
+        [HomeWidget.date, .weather].filter { model.homeWidgets[$0] }
+    }
+    private var showPeople: Bool { model.homeWidgets[.people] }
+    private var showJournal: Bool { model.homeWidgets[.journal] }
+    private var showTodo: Bool { model.homeWidgets[.todo] }
+    private var showGlance: Bool { model.homeWidgets[.inboxGlance] }
+
+    private var anyWidgetVisible: Bool {
+        HomeWidget.allCases.contains { model.homeWidgets[$0] }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -51,23 +65,11 @@ struct HomeView: View {
                     .font(.system(size: 14)).foregroundStyle(p.fg3)
                     .padding(.bottom, 28)
 
-                LazyVGrid(columns: cols, alignment: .leading, spacing: 16) {
-                    dateCard
-                    weatherCard
-                    peopleCard
+                if anyWidgetVisible {
+                    widgetStack
+                } else {
+                    emptyState
                 }
-                HStack(alignment: .top, spacing: 16) {
-                    journalCard
-                        .frame(width: rowWidth > 0 ? (rowWidth - 16) * 2 / 3 : nil)
-                    todoCard
-                        .frame(width: rowWidth > 0 ? (rowWidth - 16) / 3 : nil)
-                }
-                .padding(.top, 16)
-                .background(GeometryReader { geo in
-                    Color.clear
-                        .onAppear { rowWidth = geo.size.width }
-                        .onChange(of: geo.size.width) { _, w in rowWidth = w }
-                })
             }
             .frame(maxWidth: 1100, alignment: .leading)
             .padding(.horizontal, 40).padding(.top, 32).padding(.bottom, 56)
@@ -77,7 +79,129 @@ struct HomeView: View {
         .background(p.bg2)
     }
 
+    /// The reskinned dashboard, top to bottom (each section conditionally INCLUDED so a
+    /// hidden widget contributes nothing — no reserved frame / gap):
+    ///   1. Inbox glance — the focal widget, full width, most visual weight.
+    ///   2. Date + Weather — small square cards in a row sized to the enabled count.
+    ///   3. People — a compact full-width strip.
+    ///   4. Journal (wide) + To-do (narrow) — the lower row.
+    @ViewBuilder
+    private var widgetStack: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if showGlance {
+                inboxGlanceCard
+            }
+
+            if !enabledSquareWidgets.isEmpty {
+                squareCardsRow
+            }
+
+            if showPeople {
+                peopleCard
+            }
+
+            if showJournal || showTodo {
+                bottomRow
+            }
+        }
+    }
+
+    /// The small square cards (Date / Weather). Columns are sized to the enabled count
+    /// so a disabled card leaves no empty column. A single enabled card is held to a
+    /// pleasant width rather than stretched full-bleed across the surface.
+    private var squareCardsRow: some View {
+        let count = enabledSquareWidgets.count
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: count)
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+            ForEach(enabledSquareWidgets, id: \.self) { w in
+                switch w {
+                case .date: dateCard
+                case .weather: weatherCard
+                default: EmptyView()
+                }
+            }
+        }
+        .frame(maxWidth: count == 1 ? 360 : .infinity, alignment: .leading)
+    }
+
+    /// Journal (wide) + To-do (narrow). When only one is enabled it spans the row.
+    @ViewBuilder
+    private var bottomRow: some View {
+        if showJournal && showTodo {
+            HStack(alignment: .top, spacing: 16) {
+                journalCard
+                    .frame(width: rowWidth > 0 ? (rowWidth - 16) * 2 / 3 : nil)
+                todoCard
+                    .frame(width: rowWidth > 0 ? (rowWidth - 16) / 3 : nil)
+            }
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { rowWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, w in rowWidth = w }
+            })
+        } else if showJournal {
+            journalCard
+        } else if showTodo {
+            todoCard
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Icon(name: "home", size: 28).foregroundStyle(p.fg4)
+            Text("Your Home is empty")
+                .font(.system(size: 16, weight: .semibold)).foregroundStyle(p.fg2)
+            Text("Enable widgets in Settings → Home.")
+                .font(.system(size: 13)).foregroundStyle(p.fg3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 80)
+    }
+
     // MARK: Cards
+
+    /// The focal Inbox-glance widget: a quiet unread summary plus up to 5 peek rows.
+    /// Read-only over `model.homeGlance`; a row click opens the message via the
+    /// existing `openHomeMessage` path (setFolder → activate). No triage.
+    private var inboxGlanceCard: some View {
+        let g = model.homeGlance
+        return card {
+            cardHead(icon: "inbox", title: "Inbox glance", trailing: "Go to inbox →") {
+                model.setFolder("inbox")
+            }
+            if g.unread == 0 {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Icon(name: "check", size: 16).foregroundStyle(p.success)
+                        Text("All caught up")
+                            .font(.system(size: 17, weight: .semibold)).foregroundStyle(p.fg1)
+                    }
+                    Text("No unread mail in your inbox.")
+                        .font(.system(size: 13)).foregroundStyle(p.fg3)
+                }
+                .padding(.vertical, 6)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text("\(g.unread)").font(.system(size: 34, weight: .heavy)).foregroundStyle(p.fg1)
+                        .monospacedDigit()
+                    Text("unread")
+                        .font(.system(size: 15, weight: .medium)).foregroundStyle(p.fg2)
+                    if g.newToday > 0 {
+                        Text("·").font(.system(size: 15)).foregroundStyle(p.fg4)
+                        Text("\(g.newToday) new today")
+                            .font(.system(size: 15, weight: .medium)).foregroundStyle(p.brandBlue)
+                    }
+                }
+                .padding(.bottom, 14)
+
+                VStack(spacing: 1) {
+                    ForEach(g.peek) { email in
+                        InboxGlanceRow(email: email)
+                    }
+                }
+            }
+        }
+    }
 
     private func cardHead(icon: String, title: String, trailing: String? = nil, trailingAction: (() -> Void)? = nil) -> some View {
         HStack(spacing: 8) {
@@ -182,32 +306,37 @@ struct HomeView: View {
         }
     }
 
+    /// People as a compact full-width strip: a horizontal row of quick-compose
+    /// avatars. Same actions as before (tap → startCompose; "View all" → peopleOpen).
     private var peopleCard: some View {
-        card(square: true) {
+        VStack(alignment: .leading, spacing: 0) {
             cardHead(icon: "user", title: "People", trailing: "View all →") { model.peopleOpen = true }
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+            HStack(alignment: .top, spacing: 18) {
                 ForEach(people) { person in
                     Button { model.startCompose(to: person.email, titleLabel: "To \(person.name)") } label: {
                         VStack(spacing: 8) {
                             ZStack(alignment: .topTrailing) {
-                                Avatar(sender: person, size: 56)
+                                Avatar(sender: person, size: 48)
                                 if unreadFrom.contains(person.id) {
-                                    Circle().fill(p.brandBlue).frame(width: 12, height: 12)
+                                    Circle().fill(p.brandBlue).frame(width: 11, height: 11)
                                         .overlay(Circle().stroke(p.bg1, lineWidth: 2))
                                         .offset(x: 2, y: -2)
                                 }
                             }
-                            Text(person.firstName).font(.system(size: 12)).foregroundStyle(p.fg1).lineLimit(1)
+                            Text(person.firstName).font(.system(size: 11.5)).foregroundStyle(p.fg1).lineLimit(1)
                         }
-                        .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
+                Spacer(minLength: 0)
             }
-            .frame(maxHeight: .infinity)
-            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(p.bg1)
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var journalCard: some View {
@@ -324,6 +453,46 @@ struct TodoRow: View {
         .padding(.horizontal, 4).padding(.vertical, 7)
         .background(hovered ? p.bg3 : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .onHover { hovered = $0 }
+    }
+}
+
+/// One peek row in the Inbox-glance widget. Clicking opens the message via the
+/// existing `openHomeMessage` path (setFolder → activate); no triage, no mutation.
+struct InboxGlanceRow: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.palette) private var p
+    let email: Email
+    @State private var hovered = false
+
+    private var sender: Sender { email.resolvedSender }
+
+    var body: some View {
+        Button { model.openHomeMessage(email.id) } label: {
+            HStack(alignment: .center, spacing: 10) {
+                Avatar(sender: sender, size: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text(sender.name)
+                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(p.fg1)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(email.time)
+                            .font(.system(size: 11, weight: .medium)).monospacedDigit()
+                            .foregroundStyle(p.fg3)
+                    }
+                    Text(email.subject)
+                        .font(.system(size: 12.5)).foregroundStyle(p.fg2)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.horizontal, 8).padding(.vertical, 8)
+            .background(hovered ? p.bg3 : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         .onHover { hovered = $0 }
     }
 }
