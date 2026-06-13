@@ -153,12 +153,46 @@ struct HomeView: View {
 
     // MARK: Cards
 
-    // Inbox-glance widget — fleshed out in T010.
+    /// The focal Inbox-glance widget: a quiet unread summary plus up to 5 peek rows.
+    /// Read-only over `model.homeGlance`; a row click opens the message via the
+    /// existing `openHomeMessage` path (setFolder → activate). No triage.
     private var inboxGlanceCard: some View {
-        card {
-            cardHead(icon: "inbox", title: "Inbox glance")
-            Text("\(model.homeGlance.unread) unread")
-                .font(.system(size: 14)).foregroundStyle(p.fg2)
+        let g = model.homeGlance
+        return card {
+            cardHead(icon: "inbox", title: "Inbox glance", trailing: "Go to inbox →") {
+                model.setFolder("inbox")
+            }
+            if g.unread == 0 {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Icon(name: "check", size: 16).foregroundStyle(p.success)
+                        Text("All caught up")
+                            .font(.system(size: 17, weight: .semibold)).foregroundStyle(p.fg1)
+                    }
+                    Text("No unread mail in your inbox.")
+                        .font(.system(size: 13)).foregroundStyle(p.fg3)
+                }
+                .padding(.vertical, 6)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(g.unread)").font(.system(size: 28, weight: .heavy)).foregroundStyle(p.fg1)
+                        .monospacedDigit()
+                    Text(g.unread == 1 ? "unread" : "unread")
+                        .font(.system(size: 14)).foregroundStyle(p.fg2)
+                    if g.newToday > 0 {
+                        Text("·").font(.system(size: 14)).foregroundStyle(p.fg4)
+                        Text("\(g.newToday) new today")
+                            .font(.system(size: 14)).foregroundStyle(p.brandBlue)
+                    }
+                }
+                .padding(.bottom, 12)
+
+                VStack(spacing: 1) {
+                    ForEach(g.peek) { email in
+                        InboxGlanceRow(email: email)
+                    }
+                }
+            }
         }
     }
 
@@ -407,6 +441,46 @@ struct TodoRow: View {
         .padding(.horizontal, 4).padding(.vertical, 7)
         .background(hovered ? p.bg3 : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .onHover { hovered = $0 }
+    }
+}
+
+/// One peek row in the Inbox-glance widget. Clicking opens the message via the
+/// existing `openHomeMessage` path (setFolder → activate); no triage, no mutation.
+struct InboxGlanceRow: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.palette) private var p
+    let email: Email
+    @State private var hovered = false
+
+    private var sender: Sender { email.resolvedSender }
+
+    var body: some View {
+        Button { model.openHomeMessage(email.id) } label: {
+            HStack(alignment: .center, spacing: 10) {
+                Avatar(sender: sender, size: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text(sender.name)
+                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(p.fg1)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(email.time)
+                            .font(.system(size: 11, weight: .medium)).monospacedDigit()
+                            .foregroundStyle(p.fg3)
+                    }
+                    Text(email.subject)
+                        .font(.system(size: 12.5)).foregroundStyle(p.fg2)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.horizontal, 8).padding(.vertical, 8)
+            .background(hovered ? p.bg3 : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         .onHover { hovered = $0 }
     }
 }
