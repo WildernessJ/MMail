@@ -12,8 +12,13 @@ settings:
     MARKETING_VERSION: "1.1.1"
     CURRENT_PROJECT_VERSION: "3"
     DEVELOPMENT_TEAM: ""
-    CODE_SIGN_STYLE: Automatic
-    CODE_SIGN_IDENTITY: "-"
+    # Sign with a self-signed "MMail Dev" code-signing cert (create once in Keychain Access →
+    # Certificate Assistant → Create a Certificate, Identity Type: Self-Signed Root, Type: Code
+    # Signing). A stable identity across rebuilds means the macOS Keychain "Always Allow" sticks,
+    # so mail-credential access stops re-prompting (vs. the old ad-hoc "-", which re-signs every
+    # build with a new identity). Harness builds pass CODE_SIGNING_ALLOWED=NO and bypass signing.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "MMail Dev"
     ENABLE_HARDENED_RUNTIME: YES
 
 packages:
