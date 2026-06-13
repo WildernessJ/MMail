@@ -1622,7 +1622,8 @@ final class AppModel: ObservableObject {
     private func recomputeDark() { dark = appearanceMode.resolvedDark(systemIsDark: systemIsDark()) }
 
     /// The ONLY writer of `mmail.appearanceMode`: persist the mode, then recompute the
-    /// derived `dark` (INV-3). Runs on the main actor (AppModel is the main-actor model).
+    /// derived `dark` (INV-3). All callers reach this on the main thread (UI bindings, the
+    /// `queue:.main` appearance observer, the local key monitor) — AppModel is not @MainActor.
     func setAppearanceMode(_ m: AppearanceMode) {
         appearanceMode = m
         UserDefaults.standard.set(m.rawValue, forKey: kAppearanceMode)
