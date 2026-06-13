@@ -41,6 +41,20 @@ struct HomeView: View {
         Set(homeEmails.filter { $0.unread && $0.folder == "inbox" }.map { $0.from })
     }
 
+    /// Which of the small square top cards (Date / Weather / People) are enabled.
+    /// Computing this lets the grid size its columns to the visible count so a hidden
+    /// card leaves NO empty column. Visibility is presentation-only.
+    private var enabledTopWidgets: [HomeWidget] {
+        [HomeWidget.date, .weather, .people].filter { model.homeWidgets[$0] }
+    }
+    private var showJournal: Bool { model.homeWidgets[.journal] }
+    private var showTodo: Bool { model.homeWidgets[.todo] }
+    private var showGlance: Bool { model.homeWidgets[.inboxGlance] }
+
+    private var anyWidgetVisible: Bool {
+        HomeWidget.allCases.contains { model.homeWidgets[$0] }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -51,23 +65,11 @@ struct HomeView: View {
                     .font(.system(size: 14)).foregroundStyle(p.fg3)
                     .padding(.bottom, 28)
 
-                LazyVGrid(columns: cols, alignment: .leading, spacing: 16) {
-                    dateCard
-                    weatherCard
-                    peopleCard
+                if anyWidgetVisible {
+                    widgetStack
+                } else {
+                    emptyState
                 }
-                HStack(alignment: .top, spacing: 16) {
-                    journalCard
-                        .frame(width: rowWidth > 0 ? (rowWidth - 16) * 2 / 3 : nil)
-                    todoCard
-                        .frame(width: rowWidth > 0 ? (rowWidth - 16) / 3 : nil)
-                }
-                .padding(.top, 16)
-                .background(GeometryReader { geo in
-                    Color.clear
-                        .onAppear { rowWidth = geo.size.width }
-                        .onChange(of: geo.size.width) { _, w in rowWidth = w }
-                })
             }
             .frame(maxWidth: 1100, alignment: .leading)
             .padding(.horizontal, 40).padding(.top, 32).padding(.bottom, 56)
@@ -77,7 +79,88 @@ struct HomeView: View {
         .background(p.bg2)
     }
 
+    /// The reskinned dashboard: Inbox glance as the focal widget on top, the small
+    /// Date/Weather/People cards reflowing in a row sized to the enabled count, then
+    /// Journal + To-do as the lower row. Each section is conditionally INCLUDED — a
+    /// hidden widget contributes nothing (no reserved frame / gap).
+    @ViewBuilder
+    private var widgetStack: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if showGlance {
+                inboxGlanceCard
+            }
+
+            if !enabledTopWidgets.isEmpty {
+                topCardsRow
+            }
+
+            if showJournal || showTodo {
+                bottomRow
+            }
+        }
+    }
+
+    /// The small square cards (Date / Weather / People). Columns are sized to the
+    /// enabled count so a disabled card leaves no empty column.
+    private var topCardsRow: some View {
+        let count = enabledTopWidgets.count
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: count)
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+            ForEach(enabledTopWidgets, id: \.self) { w in
+                switch w {
+                case .date: dateCard
+                case .weather: weatherCard
+                case .people: peopleCard
+                default: EmptyView()
+                }
+            }
+        }
+    }
+
+    /// Journal (wide) + To-do (narrow). When only one is enabled it spans the row.
+    @ViewBuilder
+    private var bottomRow: some View {
+        if showJournal && showTodo {
+            HStack(alignment: .top, spacing: 16) {
+                journalCard
+                    .frame(width: rowWidth > 0 ? (rowWidth - 16) * 2 / 3 : nil)
+                todoCard
+                    .frame(width: rowWidth > 0 ? (rowWidth - 16) / 3 : nil)
+            }
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { rowWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, w in rowWidth = w }
+            })
+        } else if showJournal {
+            journalCard
+        } else if showTodo {
+            todoCard
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Icon(name: "home", size: 28).foregroundStyle(p.fg4)
+            Text("Your Home is empty")
+                .font(.system(size: 16, weight: .semibold)).foregroundStyle(p.fg2)
+            Text("Enable widgets in Settings → Home.")
+                .font(.system(size: 13)).foregroundStyle(p.fg3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 80)
+    }
+
     // MARK: Cards
+
+    // Inbox-glance widget — fleshed out in T010.
+    private var inboxGlanceCard: some View {
+        card {
+            cardHead(icon: "inbox", title: "Inbox glance")
+            Text("\(model.homeGlance.unread) unread")
+                .font(.system(size: 14)).foregroundStyle(p.fg2)
+        }
+    }
 
     private func cardHead(icon: String, title: String, trailing: String? = nil, trailingAction: (() -> Void)? = nil) -> some View {
         HStack(spacing: 8) {
