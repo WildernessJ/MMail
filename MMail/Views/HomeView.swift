@@ -9,7 +9,6 @@ struct HomeView: View {
     @State private var notFoundAlertOpen = false
     @State private var rowWidth: CGFloat = 0
 
-    private let cols = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
     private let months = ["January","February","March","April","May","June","July","August","September","October","November","December"]
     private let dows = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
 
@@ -41,12 +40,13 @@ struct HomeView: View {
         Set(homeEmails.filter { $0.unread && $0.folder == "inbox" }.map { $0.from })
     }
 
-    /// Which of the small square top cards (Date / Weather / People) are enabled.
-    /// Computing this lets the grid size its columns to the visible count so a hidden
-    /// card leaves NO empty column. Visibility is presentation-only.
-    private var enabledTopWidgets: [HomeWidget] {
-        [HomeWidget.date, .weather, .people].filter { model.homeWidgets[$0] }
+    /// Which of the small square cards (Date / Weather) are enabled. Sizing the grid
+    /// to the visible count means a hidden card leaves NO empty column. Visibility is
+    /// presentation-only — it never gates a data write.
+    private var enabledSquareWidgets: [HomeWidget] {
+        [HomeWidget.date, .weather].filter { model.homeWidgets[$0] }
     }
+    private var showPeople: Bool { model.homeWidgets[.people] }
     private var showJournal: Bool { model.homeWidgets[.journal] }
     private var showTodo: Bool { model.homeWidgets[.todo] }
     private var showGlance: Bool { model.homeWidgets[.inboxGlance] }
@@ -79,10 +79,12 @@ struct HomeView: View {
         .background(p.bg2)
     }
 
-    /// The reskinned dashboard: Inbox glance as the focal widget on top, the small
-    /// Date/Weather/People cards reflowing in a row sized to the enabled count, then
-    /// Journal + To-do as the lower row. Each section is conditionally INCLUDED — a
-    /// hidden widget contributes nothing (no reserved frame / gap).
+    /// The reskinned dashboard, top to bottom (each section conditionally INCLUDED so a
+    /// hidden widget contributes nothing — no reserved frame / gap):
+    ///   1. Inbox glance — the focal widget, full width, most visual weight.
+    ///   2. Date + Weather — small square cards in a row sized to the enabled count.
+    ///   3. People — a compact full-width strip.
+    ///   4. Journal (wide) + To-do (narrow) — the lower row.
     @ViewBuilder
     private var widgetStack: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -90,8 +92,12 @@ struct HomeView: View {
                 inboxGlanceCard
             }
 
-            if !enabledTopWidgets.isEmpty {
-                topCardsRow
+            if !enabledSquareWidgets.isEmpty {
+                squareCardsRow
+            }
+
+            if showPeople {
+                peopleCard
             }
 
             if showJournal || showTodo {
@@ -100,21 +106,22 @@ struct HomeView: View {
         }
     }
 
-    /// The small square cards (Date / Weather / People). Columns are sized to the
-    /// enabled count so a disabled card leaves no empty column.
-    private var topCardsRow: some View {
-        let count = enabledTopWidgets.count
+    /// The small square cards (Date / Weather). Columns are sized to the enabled count
+    /// so a disabled card leaves no empty column. A single enabled card is held to a
+    /// pleasant width rather than stretched full-bleed across the surface.
+    private var squareCardsRow: some View {
+        let count = enabledSquareWidgets.count
         let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: count)
         return LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
-            ForEach(enabledTopWidgets, id: \.self) { w in
+            ForEach(enabledSquareWidgets, id: \.self) { w in
                 switch w {
                 case .date: dateCard
                 case .weather: weatherCard
-                case .people: peopleCard
                 default: EmptyView()
                 }
             }
         }
+        .frame(maxWidth: count == 1 ? 360 : .infinity, alignment: .leading)
     }
 
     /// Journal (wide) + To-do (narrow). When only one is enabled it spans the row.
@@ -174,18 +181,18 @@ struct HomeView: View {
                 }
                 .padding(.vertical, 6)
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(g.unread)").font(.system(size: 28, weight: .heavy)).foregroundStyle(p.fg1)
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text("\(g.unread)").font(.system(size: 34, weight: .heavy)).foregroundStyle(p.fg1)
                         .monospacedDigit()
-                    Text(g.unread == 1 ? "unread" : "unread")
-                        .font(.system(size: 14)).foregroundStyle(p.fg2)
+                    Text("unread")
+                        .font(.system(size: 15, weight: .medium)).foregroundStyle(p.fg2)
                     if g.newToday > 0 {
-                        Text("·").font(.system(size: 14)).foregroundStyle(p.fg4)
+                        Text("·").font(.system(size: 15)).foregroundStyle(p.fg4)
                         Text("\(g.newToday) new today")
-                            .font(.system(size: 14)).foregroundStyle(p.brandBlue)
+                            .font(.system(size: 15, weight: .medium)).foregroundStyle(p.brandBlue)
                     }
                 }
-                .padding(.bottom, 12)
+                .padding(.bottom, 14)
 
                 VStack(spacing: 1) {
                     ForEach(g.peek) { email in
@@ -299,32 +306,37 @@ struct HomeView: View {
         }
     }
 
+    /// People as a compact full-width strip: a horizontal row of quick-compose
+    /// avatars. Same actions as before (tap → startCompose; "View all" → peopleOpen).
     private var peopleCard: some View {
-        card(square: true) {
+        VStack(alignment: .leading, spacing: 0) {
             cardHead(icon: "user", title: "People", trailing: "View all →") { model.peopleOpen = true }
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+            HStack(alignment: .top, spacing: 18) {
                 ForEach(people) { person in
                     Button { model.startCompose(to: person.email, titleLabel: "To \(person.name)") } label: {
                         VStack(spacing: 8) {
                             ZStack(alignment: .topTrailing) {
-                                Avatar(sender: person, size: 56)
+                                Avatar(sender: person, size: 48)
                                 if unreadFrom.contains(person.id) {
-                                    Circle().fill(p.brandBlue).frame(width: 12, height: 12)
+                                    Circle().fill(p.brandBlue).frame(width: 11, height: 11)
                                         .overlay(Circle().stroke(p.bg1, lineWidth: 2))
                                         .offset(x: 2, y: -2)
                                 }
                             }
-                            Text(person.firstName).font(.system(size: 12)).foregroundStyle(p.fg1).lineLimit(1)
+                            Text(person.firstName).font(.system(size: 11.5)).foregroundStyle(p.fg1).lineLimit(1)
                         }
-                        .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
+                Spacer(minLength: 0)
             }
-            .frame(maxHeight: .infinity)
-            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(p.bg1)
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(p.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var journalCard: some View {
