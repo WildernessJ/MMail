@@ -722,6 +722,19 @@ final class AppModel: ObservableObject {
         if !readingPane { readerFullScreen = true }
     }
 
+    /// Open a message from the Inbox-glance widget using the EXISTING open path: navigate
+    /// to its folder, then select/open it in the reader. No triage, no new open behavior.
+    /// Order matters — `setFolder` MUST precede `activate`: `setFolder` calls
+    /// `clearSelection()` (which clears only the bulk `selectedIds` set, NOT the scalar
+    /// `selectedId` that `activate`→`select` sets next) and resets `readerFullScreen`,
+    /// which `activate` then re-sets for the reading-pane-off case. The single-pass
+    /// `guard` makes a click on an expunged/missing message a safe no-op.
+    func openHomeMessage(_ id: String) {
+        guard let email = emails.first(where: { $0.id == id }) else { return }
+        setFolder(email.folder)
+        activate(id)
+    }
+
     // MARK: - Bulk selection
 
     func toggleSelect(_ id: String) {
