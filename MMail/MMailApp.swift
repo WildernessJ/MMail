@@ -58,6 +58,23 @@ struct MMailApp: App {
                     .keyboardShortcut(",", modifiers: .command)
             }
         }
+
+        // Detached reader scene (INV-1/INV-2): keyed on the email `id` String, shares the one
+        // `model`. Presenting an already-open value focuses its window — SwiftUI's native
+        // same-value dedup (INV-6). Same `.frame`/colorScheme/palette modifiers as the main
+        // group so render parity holds (INV-7). RootView drives opens from `model.detachQueue`.
+        WindowGroup(id: "reader", for: String.self) { $emailId in
+            if let id = emailId {
+                DetachedReaderView(emailId: id)
+                    .environmentObject(model)
+                    .frame(minWidth: 920, minHeight: 600)
+                    .preferredColorScheme(model.dark ? .dark : .light)
+                    .environment(\.palette, model.dark ? .dark : .light)
+            }
+        }
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
+        .defaultSize(width: 1340, height: 860)
     }
 
     /// The current menu projection. Re-derived from `buildCommands()` so the menu and the

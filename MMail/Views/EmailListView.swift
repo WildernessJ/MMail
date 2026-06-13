@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct EmailListView: View {
     @EnvironmentObject var model: AppModel
@@ -421,6 +422,12 @@ struct EmailRowView: View {
             .onTapGesture {
                 if model.selectionActive { model.toggleSelect(email.id) } else { model.activate(email.id) }
             }
+            // Double-click opens the row in a detached window (SC-001, INV-3). A SwiftUI
+            // simultaneous count:2 tap coexists with the single-tap above — it does NOT block
+            // selection (single-click still selects + read-marks), and also fires on a double.
+            .simultaneousGesture(TapGesture(count: 2).onEnded {
+                model.requestDetachedWindow(email.id)
+            })
             if hovered || selected {
                 VStack {
                     HStack(spacing: 2) {
@@ -526,3 +533,4 @@ struct EmailRowView: View {
         .help(help)
     }
 }
+

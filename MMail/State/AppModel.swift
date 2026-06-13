@@ -113,6 +113,18 @@ final class AppModel: ObservableObject {
     @Published var folder: String = "home"
     @Published var emails: [Email] = [] { didSet { refreshDockBadge() } }
     @Published var selectedId: String?
+    /// Open-in-window FIFO (INV-4): ids a view layer should `openWindow(value:)` for. A
+    /// QUEUE (not a scalar `String?`) so two opens arriving before `RootView.onChange` fires
+    /// are not coalesced — a scalar `@Published` would overwrite, dropping the first request.
+    /// `AppModel` only enqueues; it never calls SwiftUI window APIs (INV-4).
+    @Published var detachQueue: [String] = []
+    /// Cold-launch "emails loaded" signal (INV-9 relaunch race). Flips true ONCE, after
+    /// `bootstrapRealAccounts()` finishes seeding `emails` from the on-disk cache. A
+    /// detached window restored on relaunch may appear BEFORE this fires, so a transiently
+    /// nil id lookup must NOT self-dismiss while `emailsLoaded == false` (the email may still
+    /// resolve once the cache loads). Only once it is true does a still-nil lookup mean the
+    /// email is truly gone (expunged while closed) → dismiss. (T022/SC-008.)
+    @Published var emailsLoaded = false
     @Published var filter: InboxFilter = .all
     // When the reading pane is off, this opens the selected message full-width.
     @Published var readerFullScreen = false
@@ -317,6 +329,64 @@ final class AppModel: ObservableObject {
         let seedJournalIds: Set<String> = ["jr-yesterday", "jr-mar-18"]
         let cleanJournal = journalRecent.filter { !seedJournalIds.contains($0.id) }
         if cleanJournal.count != journalRecent.count { journalRecent = cleanJournal; persistJournalRecent() }
+    }
+
+    // MARK: - Open-in-window pure seams (SC-009)
+
+    /// Pure lookup-by-id seam used by detached windows (INV-1/INV-3): given an id and the
+    /// shared model's `emails`, return the matching `Email` or nil. No selection coupling.
+    static func email(withId id: String, in emails: [Email]) -> Email? {
+        emails.first { $0.id == id }
+    }
+
+    /// Pure close-decision predicate (INV-9): a detached window should close when its email's
+    /// CURRENT `folder` differs from the opener folder (local triage mutates folder in place,
+    /// keeping the row) OR the email is absent from the model entirely (hard expunge).
+    static func shouldCloseDetached(id: String, openerFolder: String, in emails: [Email]) -> Bool {
+        guard let e = email(withId: id, in: emails) else { return true }
+        return e.folder != openerFolder
+    }
+
+    /// Request a detached reader window for `id` by appending it to `detachQueue` (INV-4).
+    /// A view layer (`RootView`) observes the queue and performs the actual `openWindow`.
+    func requestDetachedWindow(_ id: String) {
+        detachQueue.append(id)
+    }
+
+    /// Make a relaunch-restored detached window's email available even when it lives in a
+    /// non-inbox folder. `bootstrapRealAccounts()` synchronously seeds ONLY the inbox folder
+    /// into `emails` before flipping `emailsLoaded` true, so a window restored for an email in
+    /// done/sent/starred/spam/trash/label would find nil in `emails` and wrongly dismiss
+    /// (FIX 1). This seeds that ONE email from the on-disk cache so the existing lookup seam,
+    /// body-load, opener-folder capture, and toolbar all work unchanged.
+    ///
+    /// Returns true if the email is present in `emails` after the call (already there, or
+    /// freshly seeded from cache), false if it is genuinely absent from BOTH the model and the
+    /// cache (truly gone → the caller may dismiss). Stays SwiftUI-window-free (INV-4): pure
+    /// model/cache logic; the dismiss decision stays in the view.
+    ///
+    /// A moved-while-closed email keeps its original-folder id (`account#folder#uid`) but its
+    /// cached `folder` field reflects its CURRENT folder; matching on `id` finds it regardless,
+    /// and seeding the cache copy carries that current folder so opener-folder capture is correct.
+    @discardableResult
+    func resolveDetachedEmailFromCache(_ id: String) -> Bool {
+        // Already present (inbox seed, or an earlier resolve) — nothing to do.
+        if emails.contains(where: { $0.id == id }) { return true }
+        // id shape is `account#folder#uid`; the account is the first component. Scope the
+        // cache scan to that account so we never seed a foreign-account row.
+        guard let account = id.split(separator: "#", maxSplits: 1).first.map(String.init),
+              !account.isEmpty else { return false }
+        // Bounded scan of the on-disk cache across ALL folders for this account. `loadAll`
+        // reads every cached folder file; we keep only this account and find the one id.
+        guard let found = MailCache.loadAll().first(where: { $0.account == account && $0.id == id }) else {
+            return false
+        }
+        // Lean seed (mirror `insertBackfill`'s tail): append + register labels only. NO
+        // notify/auto-trash/merge side effects — this is a silent restore, not a sync.
+        // dedup-by-id is guaranteed by the early `contains` guard above.
+        emails.append(found)
+        registerLabels(from: [found])
+        return true
     }
 
     // MARK: - Derived
@@ -633,10 +703,13 @@ final class AppModel: ObservableObject {
     func closeFullReader() { readerFullScreen = false }
 
     func markSelectedReadSoon() {
-        guard let e = selectedEmail, e.unread else { return }
+        guard let e = selectedEmail, e.unread, !readMarkPending.contains(e.id) else { return }
         let id = e.id
+        readMarkPending.insert(id)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self, let i = self.emails.firstIndex(where: { $0.id == id }) else { return }
+            guard let self else { return }
+            self.readMarkPending.remove(id)
+            guard let i = self.emails.firstIndex(where: { $0.id == id }) else { return }
             self.emails[i].unread = false
             // Mark seen on the server here (not in loadBodyIfNeeded), so prefetched
             // messages — whose body is already loaded — still get marked read on open.
@@ -1410,23 +1483,31 @@ final class AppModel: ObservableObject {
             .map { "> \($0)" }.joined(separator: "\n")
         return "\n\n\(header)\n\(quoted)"
     }
-    func reply() {
-        guard let e = selectedEmail else { return }
+    // The no-arg forms target the live selection; the id forms (INV-10) resolve a FIXED
+    // email by id from `emails` (NEVER `selectedEmail`/`selectedId`) so a detached window's
+    // compose action drafts against its own email regardless of the main selection. The
+    // no-arg forms delegate to the id form with `selectedId` to keep the compose-string
+    // logic single-sourced (DRY). A nil/unresolvable id is a no-op in both paths.
+    func reply() { selectedEmail.map { reply($0.id) } }
+    func reply(_ id: String) {
+        guard let e = emails.first(where: { $0.id == id }) else { return }
         let s = e.resolvedSender
         startCompose(to: s.email, subject: e.subject.hasPrefix("Re:") ? e.subject : "Re: \(e.subject)",
                      body: quotedBody(e),
                      titleLabel: "Reply · \(s.name)", fromId: e.account)
     }
-    func replyAll() {
-        guard let e = selectedEmail else { return }
+    func replyAll() { selectedEmail.map { replyAll($0.id) } }
+    func replyAll(_ id: String) {
+        guard let e = emails.first(where: { $0.id == id }) else { return }
         let s = e.resolvedSender
         let recipients = ([s.email] + (e.to ?? [])).filter { !$0.isEmpty }.joined(separator: ", ")
         startCompose(to: recipients, subject: e.subject.hasPrefix("Re:") ? e.subject : "Re: \(e.subject)",
                      body: quotedBody(e),
                      titleLabel: "Reply all · \(s.name)", fromId: e.account)
     }
-    func forward() {
-        guard let e = selectedEmail else { return }
+    func forward() { selectedEmail.map { forward($0.id) } }
+    func forward(_ id: String) {
+        guard let e = emails.first(where: { $0.id == id }) else { return }
         startCompose(subject: e.subject.hasPrefix("Fwd:") ? e.subject : "Fwd: \(e.subject)",
                      body: "\n\n--- Forwarded message ---\n\(e.body)",
                      titleLabel: "Forward", fromId: e.account)
@@ -1520,6 +1601,7 @@ final class AppModel: ObservableObject {
             Command(id: "reply", group: "Mail", label: "Reply to current message", icon: "reply", shortcut: "R") { [weak self] in self?.reply() },
             Command(id: "replyAll", group: "Mail", label: "Reply all", icon: "replyAll", shortcut: "A") { [weak self] in self?.replyAll() },
             Command(id: "forward", group: "Mail", label: "Forward", icon: "forward", shortcut: "F") { [weak self] in self?.forward() },
+            Command(id: "open-window", group: "Mail", label: "Open in New Window", icon: "window", shortcut: "⌘O") { [weak self] in guard let self, let id = self.selectedId, self.emails.contains(where: { $0.id == id }) else { return }; self.requestDetachedWindow(id) },
             Command(id: "archive", group: "Triage", label: "Archive", icon: "archive", shortcut: "E") { [weak self] in self?.archive() },
             Command(id: "done", group: "Triage", label: "Mark as done", icon: "check", shortcut: "H") { [weak self] in self?.markDone() },
             Command(id: "snooze", group: "Triage", label: "Snooze", icon: "clock", shortcut: "Z") { [weak self] in self?.snooze() },
@@ -2207,6 +2289,11 @@ final class AppModel: ObservableObject {
             loadFolder(cfg.id, "inbox", silent: true)
         }
         if selectedId == nil { selectedId = filteredEmails.first?.id }
+        // The synchronous cache seed above has run; `emails` now reflects whatever was on
+        // disk. Signal "loaded" so a relaunch-restored detached window can distinguish a
+        // truly-gone id (dismiss) from a still-loading one (wait). Set AFTER the seed so a
+        // detached window observing this flag never sees true with an un-seeded `emails`.
+        emailsLoaded = true
     }
 
     func loadFolder(_ accountId: String, _ folderId: String, silent: Bool = false, incremental: Bool = false, force: Bool = false) {
@@ -2790,6 +2877,10 @@ final class AppModel: ObservableObject {
     /// Email ids whose body fetch is currently in flight. Prevents firing a
     /// duplicate fetch on every selection / re-render.
     private var bodyLoadInFlight: Set<String> = []
+    /// Email ids with a delayed read-mark already scheduled. A double-click fires the
+    /// row's single-tap select path twice inside the 0.4s window, which would otherwise
+    /// schedule the mark-read (and a redundant \Seen STORE) twice.
+    private var readMarkPending: Set<String> = []
 
     /// Render-time-only map of `Email.id` → referenced CID-token → embedded
     /// `InlinePart` bytes, used by `ReaderView` to rewrite `cid:` `<img>` refs to
@@ -2814,8 +2905,12 @@ final class AppModel: ObservableObject {
         inlinePartsByEmailID[emailID] ?? [:]
     }
 
-    func loadBodyIfNeeded() {
-        guard let e = selectedEmail, isRealAccount(e.account) else { return }
+    // The no-arg form targets the live selection; the id form (INV-3) resolves a FIXED email
+    // by id from `emails` so a detached window showing an UNLOADED body can trigger the same
+    // fetch path WITHOUT selecting it (SC-007a). The no-arg form delegates with `selectedId`.
+    func loadBodyIfNeeded() { selectedEmail.map { loadBodyIfNeeded(forId: $0.id) } }
+    func loadBodyIfNeeded(forId id: String) {
+        guard let e = emails.first(where: { $0.id == id }), isRealAccount(e.account) else { return }
         // Fetch when the body is missing/truncated (`needsFullFetch`) OR when the body
         // references a `cid:` inline image but THIS SESSION has no inline-parts entry yet
         // (`needsInlineParts`). The latter rehydrates a cached-complete email (loaded from
@@ -2912,11 +3007,19 @@ final class AppModel: ObservableObject {
 
     /// User clicked Retry on the reader's "Couldn't load message" state.
     /// Clears the failed flag and re-runs the body fetch on a fresh session.
+    /// No-arg form delegates to the id-targeted variant via the live selection.
     func retryBodyLoad() {
         guard let id = selectedEmail?.id else { return }
+        retryBodyLoad(forId: id)
+    }
+
+    /// Id-targeted Retry (INV-10): clears the failed/in-flight state for THIS id and
+    /// re-runs the body fetch for it, never the live selection. A detached window's Retry
+    /// button calls this so it retries its OWN email, not the main-window selection.
+    func retryBodyLoad(forId id: String) {
         bodyLoadFailed.remove(id)
         bodyLoadInFlight.remove(id)
-        loadBodyIfNeeded()
+        loadBodyIfNeeded(forId: id)
     }
 
     enum AttachmentOpenMode { case quickLook, defaultApp, app(URL), reveal, saveToDownloads }
@@ -3289,6 +3392,15 @@ final class AppModel: ObservableObject {
 
         // ⌘K — always
         if cmd && lower == "k" { palette.toggle(); return true }
+
+        // ⌘O — open the current selection in a detached window (INV-5: handleKeyDown is the
+        // SOLE ⌘O owner — the menu item attaches no `.keyboardShortcut`, so no double-fire).
+        // Placed ABOVE the vimNav gate so it works regardless of vim-mode. No selection ⇒
+        // opens nothing but still consumes the event (no system beep), the SC-006 no-op.
+        if cmd && !shift && lower == "o" {
+            if let id = selectedId, emails.contains(where: { $0.id == id }) { requestDetachedWindow(id) }
+            return true
+        }
 
         // ⌘0..9 — switch account
         if cmd && !shift, chars.count == 1, let n = Int(chars) {
