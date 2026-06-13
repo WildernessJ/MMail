@@ -23,19 +23,44 @@ struct HomeWidgetVisibility: Equatable {
     var journal: Bool
     var todo: Bool
 
-    /// STUB (T001): returns all-on; real absent-key-defaults-ON load lands in T003.
+    /// Reads each widget's namespaced key with `object(forKey:) as? Bool ?? true` so a
+    /// MISSING key resolves to ON — NEVER `bool(forKey:)`, which returns `false` for an
+    /// absent key and would wrongly default a widget OFF on a fresh/upgraded install.
     static func load(_ d: UserDefaults) -> HomeWidgetVisibility {
-        HomeWidgetVisibility(date: true, weather: true, inboxGlance: true,
-                             people: true, journal: true, todo: true)
+        func on(_ w: HomeWidget) -> Bool { d.object(forKey: w.defaultsKey) as? Bool ?? true }
+        return HomeWidgetVisibility(date: on(.date), weather: on(.weather),
+                                    inboxGlance: on(.inboxGlance), people: on(.people),
+                                    journal: on(.journal), todo: on(.todo))
     }
 
-    /// STUB (T001): no-op; real persistence lands in T003.
-    func persist(_ d: UserDefaults) {}
+    /// Writes all six widget flags under their namespaced keys.
+    func persist(_ d: UserDefaults) {
+        for w in HomeWidget.allCases { d.set(self[w], forKey: w.defaultsKey) }
+    }
 
-    /// STUB (T001): ergonomic access by widget; real get/set lands in T003.
+    /// Ergonomic per-widget access, used for SwiftUI bindings and the full-struct
+    /// reassign in `AppModel.setHomeWidget`.
     subscript(_ w: HomeWidget) -> Bool {
-        get { true }
-        set {}
+        get {
+            switch w {
+            case .date: return date
+            case .weather: return weather
+            case .inboxGlance: return inboxGlance
+            case .people: return people
+            case .journal: return journal
+            case .todo: return todo
+            }
+        }
+        set {
+            switch w {
+            case .date: date = newValue
+            case .weather: weather = newValue
+            case .inboxGlance: inboxGlance = newValue
+            case .people: people = newValue
+            case .journal: journal = newValue
+            case .todo: todo = newValue
+            }
+        }
     }
 }
 
