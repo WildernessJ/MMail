@@ -691,10 +691,13 @@ final class AppModel: ObservableObject {
     func closeFullReader() { readerFullScreen = false }
 
     func markSelectedReadSoon() {
-        guard let e = selectedEmail, e.unread else { return }
+        guard let e = selectedEmail, e.unread, !readMarkPending.contains(e.id) else { return }
         let id = e.id
+        readMarkPending.insert(id)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self, let i = self.emails.firstIndex(where: { $0.id == id }) else { return }
+            guard let self else { return }
+            self.readMarkPending.remove(id)
+            guard let i = self.emails.firstIndex(where: { $0.id == id }) else { return }
             self.emails[i].unread = false
             // Mark seen on the server here (not in loadBodyIfNeeded), so prefetched
             // messages — whose body is already loaded — still get marked read on open.
@@ -2852,6 +2855,10 @@ final class AppModel: ObservableObject {
     /// Email ids whose body fetch is currently in flight. Prevents firing a
     /// duplicate fetch on every selection / re-render.
     private var bodyLoadInFlight: Set<String> = []
+    /// Email ids with a delayed read-mark already scheduled. A double-click fires the
+    /// row's single-tap select path twice inside the 0.4s window, which would otherwise
+    /// schedule the mark-read (and a redundant \Seen STORE) twice.
+    private var readMarkPending: Set<String> = []
 
     /// Render-time-only map of `Email.id` → referenced CID-token → embedded
     /// `InlinePart` bytes, used by `ReaderView` to rewrite `cid:` `<img>` refs to
