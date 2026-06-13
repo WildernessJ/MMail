@@ -602,7 +602,7 @@ final class AppModel: ObservableObject {
     /// caller), so the `@Published` write MUST hop to main — mirrors `refreshDockBadge`.
     /// The main-hop covers all three call sites uniformly (the `currentAccount`/`init`
     /// paths are already main-thread; the `emails` path is the one that needs it).
-    func refreshHomeGlance() {
+    private func refreshHomeGlance() {
         let g = InboxGlance.project(emails: emails, account: currentAccount, now: Date())
         DispatchQueue.main.async { self.homeGlance = g }
     }
